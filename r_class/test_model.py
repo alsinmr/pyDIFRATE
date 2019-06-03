@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Apr  4 23:12:00 2019
+
+@author: albertsmith
+"""
+
+#importlib.reload(DynM)
+#importlib.reload(sens)
+
+
+file='../../../ssNMR/linear_approach/solution_state/aniso_proc/1d3z.pdb'
+rates=sens.rates(Type='R1',v0=[400,500,850],Nuc='15N')
+rates.molecule.load_struct(file)
+rates.molecule.select_atoms(Nuc='15N')
+rates.molecule.set_selection()
+
+rates.new_mdl(Model='AnisoDif',tM=4.84e-9,xi=4)
