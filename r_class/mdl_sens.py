@@ -17,7 +17,6 @@ import structure
 os.chdir('../r_class')
 from scipy.interpolate import interp1d as interp
 
-What happens on github if I edit this?
 
 class model(object):
     def __init__(self):
