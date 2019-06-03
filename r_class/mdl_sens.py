@@ -17,6 +17,7 @@ import structure
 os.chdir('../r_class')
 from scipy.interpolate import interp1d as interp
 
+
 class model(object):
     def __init__(self):
         
