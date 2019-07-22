@@ -37,9 +37,9 @@ class molecule(object):
                     sel=self.mda_object.select_atoms(kwargs.get('select'))
                 else:
                     sel=self.mda_object.select_atoms('name *')
-                    
-                self.sel1=sel.select_atoms('(name H or name HN) and bonded name N')
-                self.sel2=sel.select_atoms('name N and bonded (name H or name HN)')
+                
+                self.sel1=sel.select_atoms('(name H or name HN) and around 1.1 name N')
+                self.sel2=sel.select_atoms('name N and around 1.1 (name H or name HN)')
                 
                 self.label_in=self.sel1.resids                                
         else:

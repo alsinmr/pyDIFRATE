@@ -172,6 +172,7 @@ class detect(mdl.model):
         "Replace None with max of abs of sensitivity"
         index=a==None
         b=np.max(np.abs(np.mean(self.__R,axis=0)),axis=-1)
+        print(np.size(b))
         a[index]=b[index]
         self.norm=np.divide(1,a).astype('float64')
 
@@ -830,6 +831,7 @@ class detect(mdl.model):
         hdl=ax.plot(self.z(),a)
         
         if bond is not None and np.size(bond)==1 and np.atleast_1d(bond)[0]==-1:
+            print('Checkpoint')
             bond=None
             ntc=self.tc().size
             maxi=np.zeros([nd,ntc])

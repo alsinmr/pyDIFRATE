@@ -115,7 +115,7 @@ class rates(mdl.model):
         "Create the new pandas array"
         info=pd.concat([pd.DataFrame.from_dict(self.__exp),pd.DataFrame.from_dict(self.__sys)],axis=1)
         
-        try: #I don't love using try....but not sure what to do here
+        try: #I don't like using try....but not sure what to do here
             info=pd.concat([info0,info.T],axis=1,ignore_index=True)
         except:
             info=info.T
@@ -267,12 +267,12 @@ class rates(mdl.model):
 
 #%% Delete experiment
     def del_exp(self,exp_num):
-        if np.size(exp_num)>1:
-            for k in exp_num:
-                self.info=self.info.drop(k,axis=1)
-        else:
-            self.info=self.info.drop(exp_num,axis=1)
-            
+        exp_num=np.atleast_1d(exp_num)
+        for k in exp_num:
+            self.info=self.info.drop(k,axis=1)
+          
+        self.info.set_axis(np.arange(np.size(self.info.axes[1])),axis=1,inplace=True)
+                
 #%% Adjust a parameter
     "We can adjust all parameters of a given type, or just one with the experiment index"
     def set_par(self,type,index=None,value=None):
@@ -291,7 +291,11 @@ class rates(mdl.model):
     
 #%% Rate constant calculations
     "Calculate rate constants for given experiment"
-    def R(self,exp_num):
+    def R(self,exp_num=None):
+        
+        if exp_num is None:
+            exp_num=self.info.axes[1]
+        
         "Make sure we're working with numpy array"
         exp_num=np.atleast_1d(exp_num)
             

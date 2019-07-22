@@ -190,7 +190,6 @@ def get_vec(sel1,sel2,**kwargs):
     return vec       
     
 def alignCA(vec0,uni,tstep=1,**kwargs):
-    print('Aligning Ca positions')
     "reference CA positions"
     
     if 'align_ref' in kwargs:
@@ -228,7 +227,7 @@ def alignCA(vec0,uni,tstep=1,**kwargs):
         vec['Z'][:,k]=vec0['X'][:,k]*R[2,0]+vec0['Y'][:,k]*R[2,1]+vec0['Z'][:,k]*R[2,2]
 
         if k%int(nt/100)==0 or k+1==nt:
-            printProgressBar(k+1, nt, prefix = 'Aligning molecules:', suffix = 'Complete', length = 50)
+            printProgressBar(k+1, nt, prefix = 'Aligning CA positions:', suffix = 'Complete', length = 50)
             
     return vec
         
