@@ -62,6 +62,10 @@ class rates(mdl.model):
         self.__exper=['Type','v0','v1','vr','offset','stdev']
         "Names of the spin system variables that are available"
         self.__spinsys=['Nuc','Nuc1','dXY','CSA','QC','eta','theta']
+
+        "Initialize storage for rate constant calculation"
+        self.__R=list()
+        self.__RCSA=list()
     
         "We need to initialize self.info"
         self.info=None  
@@ -69,8 +73,9 @@ class rates(mdl.model):
         self.new_exp(**kwargs)
 
         "Initialize some storage for rate constant calculation"
-        self.__R=np.zeros([0,np.size(self.__tc)])
-        self.__info=pd.DataFrame(index=self.__exper+self.__spinsys)
+#        self.__R=np.zeros([0,np.size(self.__tc)])
+
+#        self.__info=pd.DataFrame(index=self.__exper+self.__spinsys)
         
         super().__init__()
     
@@ -80,7 +85,12 @@ class rates(mdl.model):
         for k in self.__exper:
             if k in kwargs:
                 ne=np.max([ne,np.size(kwargs.get(k))])
-                
+        
+        "Add a None type element in self.__R for each new experiment"
+        for k in range(0,ne):
+            self.__R.append(None)   
+            self.__RCSA.append(None)
+        
         "Move all input variables to __sys and __exp"
         "Defaults that don't depend on the observed nucleus can be set here"
         self.__exp=dict()
@@ -270,6 +280,8 @@ class rates(mdl.model):
         exp_num=np.atleast_1d(exp_num)
         for k in exp_num:
             self.info=self.info.drop(k,axis=1)
+            del self.__R[k]
+            del self.__RCSA[k]
           
         self.info.set_axis(np.arange(np.size(self.info.axes[1])),axis=1,inplace=True)
                 
@@ -291,7 +303,7 @@ class rates(mdl.model):
     
 #%% Rate constant calculations
     "Calculate rate constants for given experiment"
-    def R(self,exp_num=None):
+    def _rho(self,exp_num=None,bond=None):
         
         if exp_num is None:
             exp_num=self.info.axes[1]
@@ -304,22 +316,20 @@ class rates(mdl.model):
         R=np.zeros([ne,ntc])
         for k in range(0,ne):
             "Look to see if we've already calculated this sensitivity, return it if so"
-            count=0
-            test=False
-            n=self.__R.shape[0]
-            while count<n and not test:
-                if self.__info.iloc[:,count].eq(self.info.loc[:,exp_num[k]]).all():
-                    test=True
-                else:
-                    count=count+1
-                    
-            if test:
-                R[k,:]=self.__R[count,:]
+            if self.__R[exp_num[k]] is not None:
+                R[k,:]=self.__R[exp_num[k]]
             else:
                 "Otherwise, calculate the new sensitivity, and store it"
                 R[k,:]=dff.rate(self.__tc,self.info.loc[:,exp_num[k]])
-                self.__R=np.vstack([self.__R,R[k,:]])
-                self.__info=pd.concat([self.__info,self.info.loc[:,exp_num[k]]],axis=1,ignore_index=True)
+                self.__R[exp_num[k]]=R[k,:]
+#                self.__R=np.vstack([self.__R,R[k,:]])
+#                self.__info=pd.concat([self.__info,self.info.loc[:,exp_num[k]]],axis=1,ignore_index=True)
+              
+        print(self.molecule.vXY.shape[0]>0)
+        if (bond==-1 and (self.molecule.vXY.shape[0]>0)):
+            print('checkpoint')
+            nb=self.molecule.vXY.shape[0]
+            R=np.repeat([R],nb,axis=0)
         return R
     
     def _rhoCSA(self,exp_num,bond=None):
@@ -344,22 +354,27 @@ class rates(mdl.model):
             exper.at['QC']=0
             
             "Look to see if we've already calculated this sensitivity, return it if so"
-            count=0
-            test=False
-            n=self.__R.shape[0]
-            while count<n and not test:
-                if self.__info.iloc[:,count].eq(exper).all():
-                    test=True
-                else:
-                    count=count+1
+#            count=0
+#            test=False
+#            n=self.__R.shape[0]
+#            while count<n and not test:
+#                if self.__info.iloc[:,count].eq(exper).all():
+#                    test=True
+#                else:
+#                    count=count+1
                     
-            if test:
-                R[k,:]=self.__R[count,:]
+            if self.__RCSA[exp_num[k]] is not None:
+                R[k,:]=self.__RCSA[exp_num[k]]
             else:
                 "Otherwise, calculate the new sensitivity, and store it"
                 R[k,:]=dff.rate(self.__tc,exper)
-                self.__R=np.vstack([self.__R,R[k,:]])
-                self.__info=pd.concat([self.__info,exper],axis=1,ignore_index=True)
+                self.__RCSA[exp_num[k]]=R[k,:]
+#                self.__R=np.vstack([self.__R,R[k,:]])
+#                self.__info=pd.concat([self.__info,exper],axis=1,ignore_index=True)
+                
+            if bond==-1 & self.molecule.vXY.shape[0]>0:
+                nb=self.molecule.vXY.shape[0]
+                R=np.repeat([R],nb,axis=0)
         return R
     
     
@@ -399,14 +414,14 @@ class rates(mdl.model):
         return self.__exper
         
 #%% Hidden output of rates (semi-hidden, can be found if the user knows about it ;-) )
-    def _rho(self,exp_num,bond=None):
+    def R(self,exp_num=None):
         """The different children of mdl_sens will have different names for 
         their sensitivities. For example, this class returns R, which are the 
         rate constant sensitivities, but the correlation function class returns
         Ct, and the detector class returns rho. Then, we have a function, 
         _rho(self), that exists and functions the same way in all children
         """
-        return self.R(exp_num)
+        return self._rho(exp_num)
     
     def Reff(self,exp_num=None,mdl_num=0,bond=None):
         R,R0=self._rho_eff(exp_num,mdl_num,bond)

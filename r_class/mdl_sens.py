@@ -130,12 +130,16 @@ class model(object):
         calculation of the model and experiment
         """
         
+        if exp_num is not None:
+            exp_num=np.atleast_1d(exp_num)
+        
         if self.__Reff[mdl_num] is None:
             Reff,R0,ReffCSA,R0CSA=self.__apply_mdl(self.tMdl[mdl_num],self.AMdl[mdl_num])
             self.__Reff[mdl_num]=Reff
             self.__R0[mdl_num]=R0
             self.__ReffCSA[mdl_num]=ReffCSA
             self.__R0CSA[mdl_num]=R0CSA
+            
             
         
         if exp_num is None and bond is None:
@@ -144,95 +148,20 @@ class model(object):
         elif exp_num is None:
             R=self.__Reff[mdl_num][bond,:,:]
             R0=self.__R0[mdl_num][bond,:]
+        elif bond is None:
+            R=self.__Reff[mdl_num][:,exp_num,:]
+            R0=self.__R0[mdl_num][:,exp_num]
         else:
             R=self.__Reff[mdl_num][bond,exp_num,:]
             R0=self.__R0[mdl_num][bond,exp_num]
             
+        if self.MdlPar[mdl_num]['BondSpfc'].lower()=='no':
+            R=R[0]
+            R0=R0[0]
+        
+            
         return R,R0
         
-#        if np.size(exp_num)==1 and exp_num==None:
-#            exp_num=self.info.columns.values
-#        
-#        "Make sure we're working with numpy array for exp_num"
-#        if not isinstance(exp_num,np.ndarray):
-#            exp_num=np.array(exp_num)
-#        if exp_num.shape==():
-#            exp_num=np.array([exp_num])
-#        
-#        
-#        "Get tMdl and AMdl from the model array"
-#        if self.MdlPar[mdl_num].get('BondSpfc')=='yes':
-#            A=self.AMdl[mdl_num][bond]
-#        else:
-#            A=self.AMdl[mdl_num]
-#        """A bond-specific model still has all the same correlation times for
-#        every motion. Only the influence of each correlation time changes for 
-#        different bonds (that is, the amplitude changes, but not the 
-#        correlation time). Note, that for some orientations, an amplitude can
-#        become 0."""
-#        tMdl=self.tMdl[mdl_num]
-#        
-#
-#        if self._class=='Ct':
-#            
-#            count=0
-#            test=False
-#            n=self.__Reff.shape[0]
-#            while count<n and not test:
-#                if np.ndarray.tolist(tMdl)==np.ndarray.tolist(self.__tMdl[count]) \
-#                and np.ndarray.tolist(A)==np.ndarray.tolist(self.__AMdl[count]):
-#                    test=True
-#                else:
-#                    count=count+1
-#                    
-#            if test:
-#                R=self.__Reff[count,:,:]
-#                R0=self.__R0[count,:]
-#            else:
-#                print('It\'s slow to apply models directly to Ct objects- instead, calculate detectors first')
-#                "Otherwise, calculate the new sensitivity, and store it"
-#                R,R0=self.__apply_mdl(exp_num,tMdl,A)
-#                self.__Reff=np.vstack([self.__Reff,[R]])
-#                self.__R0=np.vstack([self.__R0,R0])
-#                self.__tMdl.append(tMdl)
-#                self.__AMdl.append(A)
-#                        
-#            
-#        else:
-#            ntc=np.size(self.tc())
-#            ne=exp_num.size
-#            R=np.zeros([ne,ntc])
-#            R0=np.zeros([ne,1])
-#            for k in range(0,ne):
-#                "Look to see if we've already calculated this sensitivity, return it if so"
-#                count=0
-#                test=False
-#                n=self.__Reff.shape[0]
-#    
-#                while count<n and not test:
-#                    if np.ndarray.tolist(tMdl)==np.ndarray.tolist(self.__tMdl[count]) \
-#                    and np.ndarray.tolist(A)==np.ndarray.tolist(self.__AMdl[count]):
-#                        if self.__mdlinfo.iloc[:,count].eq(self.info.loc[:,exp_num[k]]).all():
-#                            test=True
-#                        else:
-#                            count=count+1
-#                    else:
-#                        count=count+1
-#                        
-#                if test:
-#                    R[k,:]=self.__Reff[count,:]
-#                    R0[k]=self.__R0[count]
-#                else:
-#                    "Otherwise, calculate the new sensitivity, and store it"
-#                    a,b=self.__apply_mdl(exp_num[k],tMdl,A)
-#                    R[k,:]=a
-#                    R0[k]=b
-#                    self.__Reff=np.vstack([self.__Reff,R[k,:]])
-#                    self.__R0=np.vstack([self.__R0,R0[k]])
-#                    self.__mdlinfo=pd.concat([self.__mdlinfo,self.info.loc[:,exp_num[k]]],axis=1,ignore_index=True,sort=True)
-#                    self.__tMdl.append(tMdl)
-#                    self.__AMdl.append(A)
-#        return R,R0
     
     def _rho_effCSA(self,exp_num=None,mdl_num=0,bond=None):
         """Same as above, but only for the CSA interaction
@@ -252,104 +181,28 @@ class model(object):
         elif exp_num is None:
             R=self.__ReffCSA[mdl_num][bond,:,:]
             R0=self.__R0CSA[mdl_num][bond,:]
+        elif bond is None:
+            R=self.__ReffCSA[mdl_num][:,exp_num,:]
+            R0=self.__R0CSA[mdl_num][:,exp_num]
         else:
             R=self.__ReffCSA[mdl_num][bond,exp_num,:]
             R0=self.__R0CSA[mdl_num][bond,exp_num]
             
+        if self.MdlPar[mdl_num]['BondSpfc'].lower()=='no':
+            R=R[0]
+            R0=R0[0]
+        
+            
         return R,R0
-#
-#        
-#        if np.size(exp_num)==1 and exp_num==None:
-#            exp_num=self.info.columns.values
-#            
-#        "Make sure we're working with numpy array for exp_num"
-#        if not isinstance(exp_num,np.ndarray):
-#            exp_num=np.array(exp_num)
-#        if exp_num.shape==():
-#            exp_num=np.array([exp_num])
-#            
-#        ntc=np.size(self.tc())
-#        ne=exp_num.size
-#        
-#            
-#        if self._origin=='Ct':
-#            """Check if this is the correlation function class, where we do
-#            not need to account for CSA separately"""
-#            R=np.zeros([ne,ntc])
-#            R0=np.zeros([ne,1])
-#        else:
-#            "Get tMdl and AMdl from the model array"
-#            if self.MdlPar[mdl_num].get('BondSpfc')=='yes':
-#                A=self.AMdl[mdl_num][bond]
-#            else:
-#                A=self.AMdl[mdl_num]
-#            """A bond-specific model still has all the same correlation times for
-#            every motion. Only the influence of each correlation time changes for 
-#            different bonds (that is, the amplitude changes, but not the 
-#            correlation time). Note, that for some orientations, an amplitude can
-#            become 0."""
-#            tMdl=self.tMdl[mdl_num]
-#            
-#    
-#    
-#
-#            R=np.zeros([ne,ntc])
-#            R0=np.zeros([ne,1])
-#            for k in range(0,ne):
-#                "Look to see if we've already calculated this sensitivity, return it if so"
-#                count=0
-#                test=False
-#                n=self.__Reff.shape[0]
-#    
-#                exper=self.info.loc[:,exp_num[k]].copy()
-#                exper.at['dXY']=0
-#                exper.at['QC']=0
-#    
-#                while count<n and not test:
-#                    if np.ndarray.tolist(tMdl)==np.ndarray.tolist(self.__tMdl[count]) \
-#                    and np.ndarray.tolist(A)==np.ndarray.tolist(self.__AMdl[count]):
-#                        if self.__mdlinfo.iloc[:,count].eq(exper).all():
-#                            test=True
-#                        else:
-#                            count=count+1
-#                    else:
-#                        count=count+1
-#                        
-#                if test:
-#                    R[k,:]=self.__Reff[count,:]
-#                    R0[k]=self.__R0[count]
-#                else:
-#                    "Otherwise, calculate the new sensitivity, and store it"
-#                    """We'll do this by simply adding the new experiment to the 
-#                    list, calculating the effective sensitivity, and then deleting
-#                    the new experiment again. 
-#                    """
-#                    self.new_exp(info=exper)  #Add the new experiment
-#                    n=self.info.columns.values[-1] #Index of the new experiment
-#    
-#                    
-#    
-#                    a,b=self.__apply_mdl(n,tMdl,A)
-#                    R[k,:]=a
-#                    R0[k]=b
-#                    self.__Reff=np.vstack([self.__Reff,R[k,:]])
-#                    self.__R0=np.vstack([self.__R0,R0[k]])
-#                    self.__mdlinfo=pd.concat([self.__mdlinfo,exper],axis=1,ignore_index=True)
-#                    self.__tMdl.append(tMdl)
-#                    self.__AMdl.append(A)
-#                    
-#                    self.del_exp(n) #Delete the experiment to hide this operation from the user
-#                
-#        return R,R0
     
     def __apply_mdl(self,tMdl,A):
         "tMdl is a list of correlation times in the model, and A the amplitudes"
-        "Note that if A does not add to 1, we assume that S2 is non-zero"
+        "Note that if A does not add to 1, we assume that S2 is non-zero (S2=1-sum(A))"
         
         
         "Get the experimental sensitivities"
-        R=self._rho(self.info.axes[1])
-        RCSA=self._rhoCSA(self.info.axes[1])
+        R=self._rho(self.info.columns,bond=-1)
+        RCSA=self._rhoCSA(self.info.columns,bond=-1)
         R+=-RCSA #We operate on relaxation from dipole and CSA separately
         
         "Shapes of matrices, preallocation"
@@ -360,7 +213,8 @@ class model(object):
         else:
             iso=True
             
-        SZR=R.shape
+        SZR=R.shape[1:2]
+        print(SZR)
         SZeff=np.concatenate([np.atleast_1d(SZA),np.atleast_1d(SZR)])
         SZ0=np.concatenate([np.atleast_1d(SZA),[SZR[0]]])
         
@@ -371,6 +225,8 @@ class model(object):
         else:
             S2=1-np.sum(A)
             S2CSA=S2
+            
+        "START EDITING HERE! WE NEED TO USE ELEMENT-WISE MULTIPLICATION INSTEAD OF DOT PRODUCTS TO ACCOUNT FOR DIFFERENT RATE CONSTANTS IN THE INPUT MODELS"
         Reff=np.reshape(np.dot(np.transpose([S2]),np.reshape(R,[1,np.prod(SZR)])),SZeff)
         ReffCSA=np.reshape(np.dot(np.transpose([S2CSA]),np.reshape(RCSA,[1,np.prod(SZR)])),SZeff)
         
@@ -401,11 +257,6 @@ class model(object):
                 ReffCSA+=np.reshape(np.dot(np.transpose([A0]),ReffCSA0),SZeff)
                 R0CSA+=np.reshape(np.dot(np.transpose([A0]),[R0CSA0]),SZ0)
             
-        if iso:
-            Reff=Reff[0]
-            R0=R0[0]
-            ReffCSA=ReffCSA[0]
-            R0CSA=R0CSA[0]
         
         return Reff,R0,ReffCSA,R0CSA
         
@@ -488,12 +339,13 @@ class model(object):
             mini=np.min(a,axis=0)
             a=np.mean(a,axis=0)
             pltrange=True
+            maxi=maxi.T
+            mini=mini.T
         else:
             pltrange=False
         
         a=a.T
-        maxi=maxi.T
-        mini=mini.T
+
         if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
             norm=np.max(np.abs(a),axis=0)
             a=a/np.tile(norm,[np.size(self.tc()),1])      
@@ -513,7 +365,6 @@ class model(object):
             
         if pltrange:
             x=np.concatenate([self.z(),self.z()[-1::-1]],axis=0)
-            print(a.shape[0])
             for k in range(0,a.shape[1]):
                 y=np.concatenate([mini[:,k],maxi[-1::-1,k]],axis=0)
                 xy=np.concatenate(([x],[y]),axis=0).T

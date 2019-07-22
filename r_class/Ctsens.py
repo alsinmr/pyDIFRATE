@@ -148,11 +148,24 @@ class Ct(mdl.model):
         Ct, and the detector class returns rho. Then, we have a function, 
         __rho(self), that exists and functions the same way in all classes
         """
-        return self.Ct(exp_num)
+        
+        R=self.Ct(exp_num)
+        
+        if bond==-1 & self.molecule.vXY.shape[0]>0:
+            nb=self.molecule.vXY.shape[0]
+            R=np.repeat([R],nb,axis=0)
+        
+        return R
     
     def _rhoCSA(self,exp_num,bond=None):
-        
-        return np.zeros([np.size(exp_num),np.size(self.__tc)])
+        if bond==-1 & self.molecule.vXY.shape[0]>0:
+            nb=self.molecule.vXY.shape[0]
+            R=np.zeros([nb,np.size(exp_num),np.size(self.__tc)])
+        else:
+            R=np.zeros([np.size(exp_num),np.size(self.__tc)])    
+            
+            
+        return R
     
     def Cteff(self,exp_num=None,mdl_num=0,bond=None):
         R,R0=self._rho_eff(exp_num,mdl_num,bond)

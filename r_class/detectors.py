@@ -41,10 +41,7 @@ class detect(mdl.model):
             exp_num=sens.info.columns.values
                     
         "Make sure we're working with numpy array for exp_num"
-        if not isinstance(exp_num,np.ndarray):
-            exp_num=np.array(exp_num)
-        if exp_num.shape==():
-            exp_num=np.array([exp_num])
+        exp_num=np.atleast_1d(exp_num)
         
         ne=np.size(exp_num)
         
@@ -52,40 +49,52 @@ class detect(mdl.model):
             mdl_num=-1
 
         "Make sure we're working with numpy array for mdl_num"
-        if not isinstance(mdl_num,np.ndarray):
-            mdl_num=np.array(mdl_num)
-        if mdl_num.shape==():
-            mdl_num=np.array([mdl_num])
+        mdl_num=np.atleast_1d(mdl_num)
 
-        "If all mdl_num are the same, replace with a single entry"
-        if np.size(mdl_num)>1 and np.all(mdl_num[0]==mdl_num):
-            mdl_num=mdl_num[0]
-        
+#        "If all mdl_num are the same, replace with a single entry"
+#        if np.size(mdl_num)>1 and np.all(mdl_num[0]==mdl_num):
+#            mdl_num=mdl_num[0]
+#        
         
         "Store all the experiment and model information"
         self.info_in=sens.info.loc[:,exp_num].copy()
-        self.MdlPar=sens.MdlPar.copy()
-        nM=np.size(self.MdlPar)
+        self.MdlPar_in=sens.MdlPar.copy()
+        self.mdl_num=mdl_num.copy()
+        
+        
         k=0
+        nM=np.size(self.MdlPar_in)
         while k<nM:
-            if np.all(k!=mdl_num):
-                del self.MdlPar[k]
-                mdl_num[mdl_num>k]=mdl_num[mdl_num>k]-1
+            if not(np.any(self.mdl_num==k)):
+                del self.MdlPar_in[k]
+                self.mdl_num[self.mdl_num>k]=self.mdl_num[self.mdl_num>k]-1
                 nM=nM-1
             else:
-                k=k+1
+                k=k+1  
         
-        if np.size(mdl_num)==1:
-            self.mdl_num=np.ones(np.size(exp_num))*mdl_num
-        else:
-            self.mdl_num=mdl_num
+#        nM=np.size(self.MdlPar)
+#        k=0
+#        while k<nM:
+#            if np.all(k!=mdl_num):
+#                del self.MdlPar[k]
+#                mdl_num[mdl_num>k]=mdl_num[mdl_num>k]-1
+#                nM=nM-1
+#            else:
+#                k=k+1
+#        
+#        if np.size(mdl_num)==1:
+#            self.mdl_num=np.ones(np.size(exp_num))*mdl_num
+#            print(mdl_num)
+#        else:
+        self.mdl_num=mdl_num
         
         "Determine if any models are bond specific"
         self.BondSpfc='no'
-        for k in self.MdlPar:
+        for k in self.MdlPar_in:
             if k.get('BondSpfc')=='yes':
                 self.BondSpfc='yes'
         
+       
 
         "Pass the molecule object"
         """Note that this is not a copy, but rather a pointer to the same object.
@@ -110,13 +119,21 @@ class detect(mdl.model):
         "Load in the sensitivity of the selected experiments"
         if np.size(mdl_num)==1:
             if self.BondSpfc=='yes':
+#                for k in range(0,nb):
+#                    a,b=sens._rho_eff(exp_num=exp_num,mdl_num=mdl_num[0],bond=k)
+#                    self.__R.append(a)
+#                    self.__R0.append(b)
+#                    a,b=sens._rho_effCSA(exp_num=exp_num,mdl_num=mdl_num[0],bond=k)
+#                    self.__RCSA.append(a)
+#                    self.__R0CSA.append(b)
+
+                a,b=sens._rho_eff(exp_num=exp_num,mdl_num=mdl_num[0])
+                c,d=sens._rho_effCSA(exp_num=exp_num,mdl_num=mdl_num[0])
                 for k in range(0,nb):
-                    a,b=sens._rho_eff(exp_num=exp_num,mdl_num=mdl_num[0],bond=k)
-                    self.__R.append(a)
-                    self.__R0.append(b)
-                    a,b=sens._rho_effCSA(exp_num=exp_num,mdl_num=mdl_num[0],bond=k)
-                    self.__RCSA.append(a)
-                    self.__R0CSA.append(b)
+                    self.__R.append(a[k])
+                    self.__R0.append(b[k])
+                    self.__RCSA.append(c[k])
+                    self.__R0CSA.append(d[k])
             elif mdl_num!=-1:
                 a,b=sens._rho_eff(exp_num=exp_num,mdl_num=mdl_num[0])
                 self.__R.append(a)
@@ -172,7 +189,6 @@ class detect(mdl.model):
         "Replace None with max of abs of sensitivity"
         index=a==None
         b=np.max(np.abs(np.mean(self.__R,axis=0)),axis=-1)
-        print(np.size(b))
         a[index]=b[index]
         self.norm=np.divide(1,a).astype('float64')
 
@@ -409,6 +425,8 @@ class detect(mdl.model):
         for k in range(0,n):
             if (rhoz[k,0]>0.95*np.max(rhoz[k,:]) or rhoz[k,-1]>0.95*np.max(rhoz[k,:])) and Neg!=0:
 
+                reopt=True #Option to cancel the re-optimization in special cases
+                
                 if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
                     pm=1;
                 else:
@@ -425,7 +443,7 @@ class detect(mdl.model):
                 if np.size(mini)>=2 and np.size(maxi)>=2:
                     mini=mini[(temp[mini]<.9) & (temp[mini]<.05*np.max(-pm*np.diff(temp[maxi])))]
                 elif np.size(mini)>=2:
-                    mini=mini(temp[mini]<.9)
+                    mini=mini[temp[mini]<.9]
                     
                 if np.size(maxi)>=2:
                     maxi=maxi[(temp[maxi]<.9) & (temp[maxi]>0.0)]
@@ -435,43 +453,47 @@ class detect(mdl.model):
                 if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
                     "Calculation for the first detection vector"
 
-                    if np.size(maxi)>=2:
+                    if np.size(maxi)>=2 & np.size(mini)>=2:
                         step=int(np.round(np.diff(mini[0:2])/2))
                         slope2=-(temp[maxi[-1]]-temp[maxi[0]])*Neg/(maxi[-1]-maxi[0])
-                    elif np.size(maxi)==1:
+                    elif np.size(maxi)==1 and np.size(mini)>=1:
                         step=maxi[0]-mini[0]
                         slope2=temp[maxi[0]]*Neg/step
+                    else:
+                        reopt=False
                         
-                    
-                    a=np.max([1,mini[0]-step])
-                    slope1=-temp[maxi[0]]/step*Neg
-                    line1=np.arange(0,-temp[maxi[0]]*Neg-1e-12,slope1)
-                    line2=np.arange(-temp[maxi[0]]*Neg,1e-12,slope2)
-                    target=np.concatenate((np.zeros(a),line1,line2,np.zeros(ntc-a-np.size(line1)-np.size(line2))))
+                    if reopt:
+                        a=np.max([1,mini[0]-step])
+                        slope1=-temp[maxi[0]]/step*Neg
+                        line1=np.arange(0,-temp[maxi[0]]*Neg-1e-12,slope1)
+                        line2=np.arange(-temp[maxi[0]]*Neg,1e-12,slope2)
+                        target=np.concatenate((np.zeros(a),line1,line2,np.zeros(ntc-a-np.size(line1)-np.size(line2))))
                 else:
                     "Calculation otherwise (last detection vector)"
-                    if np.size(maxi)>=2:
+                    if np.size(maxi)>=2 & np.size(mini)>=2:
                         step=int(np.round(np.diff(mini[-2:])/2))
                         slope2=-(temp[maxi[0]]-temp[maxi[-1]])*Neg/(maxi[0]-maxi[-1])
-                    elif np.size(maxi)==1:
+                    elif np.size(maxi)==1 and np.size(mini)>=1:
                         step=mini[-1]-maxi[0]
                         slope2=-temp[maxi[0]]*Neg/step
+                    else:
+                        reopt=False
                         
+                    if reopt:
+                        a=np.min([ntc,mini[-1]+step])
+                        slope1=temp[maxi[-1]]/step*Neg
+    
+                        line1=np.arange(-temp[maxi[-1]]*Neg,1e-12,slope1)
+                        line2=np.arange(0,-temp[maxi[-1]]*Neg-1e-12,slope2)                    
+                        target=np.concatenate((np.zeros(a-np.size(line1)-np.size(line2)),line2,line1,np.zeros(ntc-a)))
                     
-                    a=np.min([ntc,mini[-1]+step])
-                    slope1=temp[maxi[-1]]/step*Neg
 
-                    line1=np.arange(-temp[maxi[-1]]*Neg,1e-12,slope1)
-                    line2=np.arange(0,-temp[maxi[-1]]*Neg-1e-12,slope2)                    
-                    target=np.concatenate((np.zeros(a-np.size(line1)-np.size(line2)),line2,line1,np.zeros(ntc-a)))
+                if reopt:
+                    Y=(Vt,pks[k],target)
                     
-
-                
-                Y=(Vt,pks[k],target)
-                
-                X=linprog_par(Y)
-                T[k,:]=X
-                rhoz[k,:]=np.dot(T[k,:],Vt)
+                    X=linprog_par(Y)
+                    T[k,:]=X
+                    rhoz[k,:]=np.dot(T[k,:],Vt)
                  
         "Save the results into the detect object"
         self.r0=self.__r
@@ -721,7 +743,10 @@ class detect(mdl.model):
             if np.size(self.__rho[bond])==1:
                 print('First generate the detectors for the selected bond')
             else:
-                return self.__rho[bond]
+                if bond==-1:
+                    return np.array(self.__rho)
+                else:
+                    return self.__rho[bond]
             
     def Rc(self,bond=None):
         nb=np.shape(self.__R)[0]
@@ -777,7 +802,7 @@ class detect(mdl.model):
     def z(self):
         return np.log10(self.__tc)
     
-    def _rho(self,exp_num,bond=None):
+    def _rho(self,exp_num=None,bond=None):
         """The different children of mdl_sens will have different names for 
         their sensitivities. For example, this class returns rho_z, which are the 
         rate constant sensitivities, but the correlation function class returns
@@ -785,12 +810,21 @@ class detect(mdl.model):
         _rho(self), that exists and functions the same way in all children
         """
         
+        if exp_num is None:
+            exp_num=self.info.columns
+        
         if bond is None:
             bond=0
         
-        return self.rhoz(bond)[exp_num,:]
+        if bond==-1:
+            rhoz=self.rhoz(bond)
+            rhoz=rhoz[:,exp_num,:]
+        else:
+            rhoz=self.rhoz(bond)[exp_num,:]
+                
+        return rhoz
     
-    def _rhoCSA(self,exp_num,bond=None):
+    def _rhoCSA(self,exp_num=None,bond=None):
         """The different children of mdl_sens will have different names for 
         their sensitivities. For example, this class returns R, which are the 
         rate constant sensitivities, but the correlation function class returns
@@ -798,8 +832,19 @@ class detect(mdl.model):
         _rho(self), that exists and functions the same way in all children
         """
         
+        if exp_num is None:
+            exp_num=self.info.columns
+        
         if bond is None:
             bond=0
+        
+        if bond==-1:
+            rhoz=np.array(self.__rhoCSA)
+            rhoz=rhoz[:,exp_num,:]
+        else:
+            rhoz=self.__rhoCSA[bond]
+            rhoz=rhoz[exp_num,:]
+            
         
         return self.__rhoCSA[bond][exp_num,:]
     
@@ -831,7 +876,6 @@ class detect(mdl.model):
         hdl=ax.plot(self.z(),a)
         
         if bond is not None and np.size(bond)==1 and np.atleast_1d(bond)[0]==-1:
-            print('Checkpoint')
             bond=None
             ntc=self.tc().size
             maxi=np.zeros([nd,ntc])
