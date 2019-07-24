@@ -93,7 +93,8 @@ class model(object):
                 print('Before defining an model with anisotropic motion, import a structure and select the desired bonds')
             else:
                 tMdl,AMdl,BndSp=dm.ModelSel(Model,'dXY',self.molecule,**kwargs)
-                if BndSp=='yes' and self._class!='Ct':
+#                if BndSp=='yes' and self._class!='Ct':
+                if BndSp=='yes':
                     _,A,_=dm.ModelSel(Model,'dCSA',self.molecule,**kwargs)
                     AMdl=[AMdl,A]
                     AMdl=np.swapaxes(AMdl,0,1)

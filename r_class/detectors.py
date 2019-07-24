@@ -1036,7 +1036,7 @@ def linprog_par(Y):
         target=np.zeros(ntc)
         
     try:
-        x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),method='revised simplex',options={'disp' :False,})
+        x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),method='interior-point',options={'disp' :False,})
         x=x['x']
     except:
         x=np.ones(Vt.shape[0])

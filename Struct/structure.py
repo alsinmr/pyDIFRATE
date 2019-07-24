@@ -15,6 +15,8 @@ class molecule(object):
         self.mda_object=None
         self.sel1=None
         self.sel2=None
+        self.sel1in=None
+        self.sel2in=None
         self.label_in=list()
         self.label=list()
         self.vXY=np.array([])
@@ -30,7 +32,7 @@ class molecule(object):
     def load_struct(self,*args):   
         self.mda_object=mda.Universe(*args)
         
-    def select_atoms(self,sel1=None,sel2=None,index1=None,index2=None,Nuc=None,**kwargs):
+    def select_atoms(self,sel1=None,sel2=None,index1=None,index2=None,Nuc=None,sel1in=None,sel2in=None,**kwargs):
         if Nuc!=None:
             if Nuc.lower()=='15n' or Nuc.lower()=='n':
                 if 'select' in kwargs:
@@ -53,7 +55,11 @@ class molecule(object):
                     self.sel2=self.mda_object.select_atoms(sel2)[index2]
                 else:
                     self.sel2=self.mda_object.select_atoms(sel2)
-                
+              
+            if sel1in is not None:
+                self.sel1in=sel1in
+            if sel2in is not None:
+                self.sel2in=sel2in
         
     
     def add_label(self,label=None):
@@ -87,7 +93,18 @@ class molecule(object):
                     for _ in range(0,tstep):
                         self.mda_object.trajectory.next()
     
-            vec+=self.sel1.positions-self.sel2.positions;
+            if self.sel1in is None and self.sel2in is None:
+                vec+=self.sel1.positions-self.sel2.positions
+            elif self.sel1in is None:
+                for m,q in enumerate(self.sel2in):
+                    vec[m,:]+=self.sel1[m].positions-self.sel2[q].positions
+            elif self.sel2in is None:
+                for m,q in enumerate(self.sel1in):
+                    vec[m,:]+=self.sel1[q].positions-self.sel2[m].positions
+            else:
+                for m,q in enuemerate(self.sel1in):
+                    vec[m,:]+=self.sel1[q].potions-self.sel2[self.sel2in[m]].positions
+                    
         
         len=np.sqrt(np.sum(np.power(vec,2),axis=1))
         vec=np.divide(vec,np.reshape(np.repeat(len,3),vec.shape)) #Normalize the vector

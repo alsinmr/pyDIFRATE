@@ -109,7 +109,7 @@ class Ct(mdl.model):
         
     def Ct(self,exp_num=None,**kwargs):
         
-        if np.size(exp_num)==1 and exp_num==None:
+        if exp_num is None:
             exp_num=self.info.columns.values
         
         "Make sure we're working with numpy array for exp_num"
@@ -141,7 +141,7 @@ class Ct(mdl.model):
         return self.__spinsys
  
     #%% Hidden output of rates (semi-hidden, can be found if the user knows about it ;-) )
-    def _rho(self,exp_num,bond=None):
+    def _rho(self,exp_num=None,bond=None):
         """The different children of mdl_sens will have different names for 
         their sensitivities. For example, this class returns R, which are the 
         rate constant sensitivities, but the correlation function class returns
@@ -149,12 +149,19 @@ class Ct(mdl.model):
         __rho(self), that exists and functions the same way in all classes
         """
         
+        if exp_num is None:
+            exp_num=self.info.columns.values
+        
         R=self.Ct(exp_num)
         
         
         return R
     
-    def _rhoCSA(self,exp_num,bond=None):
+    def _rhoCSA(self,exp_num=None,bond=None):
+        
+        if exp_num is None:
+            exp_num=self.info.columns.values
+            
         if bond==-1 & self.molecule.vXY.shape[0]>0:
             nb=self.molecule.vXY.shape[0]
             R=np.zeros([nb,np.size(exp_num),np.size(self.__tc)])
