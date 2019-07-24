@@ -86,6 +86,34 @@ def Ct_parfun(v):
             
     return ct
 
+def Ct_kj(vec,bond1,bond2,**kwargs):
+    #We can change the time axis here (should we move this into iRED_ana.get_vec?)
+    if 'dt' in kwargs:
+        dt=kwargs.get('dt')
+        nt=vec.get('t').size
+        t=np.arange(0,dt*nt,dt)
+    else:
+        t=vec.get('t')    
+    t=np.concatenate((-t[-1:0:-1],t))
+    
+    v1=np.array([vec.get('X')[bond1],vec.get('Y')[bond1],vec.get('Z')[bond1]])
+    v2=np.array([vec.get('X')[bond2],vec.get('Y')[bond2],vec.get('Z')[bond2]])
+    
+    nt=np.shape(v1)[1]
+    Ct=np.zeros([2*nt-1])
+    for k in range(0,nt):
+        v0=np.repeat(np.transpose([v1[:,k]]),nt,axis=1)
+        Ct[nt-k-1:2*nt-k-1]+=(3*np.sum(v0*v2,axis=0)**2-1)/2
+    
+    norm=np.arange(1,nt+1)
+    norm=np.concatenate((norm,norm[-2::-1]))
+    
+    Ct=Ct/norm
+    
+    ct={'t':t,'Ct':Ct}
+    
+    return ct
+
 #%% Calculate the order parameter
 def S2calc(vec):
     v=[vec.get('X'),vec.get('Y'),vec.get('Z')]
