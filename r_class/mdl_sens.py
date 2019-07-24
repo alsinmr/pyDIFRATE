@@ -130,8 +130,17 @@ class model(object):
         calculation of the model and experiment
         """
         
+#        if bond==-1:
+#            bond=None
+           
+        
         if exp_num is not None:
             exp_num=np.atleast_1d(exp_num)
+            
+        if (mdl_num is None) or (mdl_num==-1):
+            R=self._rho(exp_num,bond)
+            R0=np.zeros(R.shape[0:-1])
+            return R,R0
         
         if self.__Reff[mdl_num] is None:
             Reff,R0,ReffCSA,R0CSA=self.__apply_mdl(self.tMdl[mdl_num],self.AMdl[mdl_num])
@@ -140,22 +149,23 @@ class model(object):
             self.__ReffCSA[mdl_num]=ReffCSA
             self.__R0CSA[mdl_num]=R0CSA
             
-            
+        if np.shape(self.__Reff[mdl_num])[0]==1:
+            bond=None
         
-        if exp_num is None and bond is None:
+        if exp_num is None and (bond is None or bond==-1):
             R=self.__Reff[mdl_num]
             R0=self.__R0[mdl_num]
         elif exp_num is None:
             R=self.__Reff[mdl_num][bond,:,:]
             R0=self.__R0[mdl_num][bond,:]
-        elif bond is None:
+        elif bond is None or bond==-1:
             R=self.__Reff[mdl_num][:,exp_num,:]
             R0=self.__R0[mdl_num][:,exp_num]
         else:
             R=self.__Reff[mdl_num][bond,exp_num,:]
             R0=self.__R0[mdl_num][bond,exp_num]
             
-        if self.MdlPar[mdl_num]['BondSpfc'].lower()=='no':
+        if R.shape[0]==1:
             R=R[0]
             R0=R0[0]
         
@@ -167,6 +177,17 @@ class model(object):
         """Same as above, but only for the CSA interaction
         """
         
+#        if bond==-1:
+#            bond=None
+            
+        if exp_num is not None:
+            exp_num=np.atleast_1d(exp_num)
+        
+        if (mdl_num is None) or (mdl_num==-1):
+            R=self._rhoCSA(exp_num,bond)
+            R0=np.zeros(R.shape[0:-1])
+            return R,R0
+        
         if self.__ReffCSA[mdl_num] is None:
             Reff,R0,ReffCSA,R0CSA=self.__apply_mdl(self.tMdl[mdl_num],self.AMdl[mdl_num])
             self.__Reff[mdl_num]=Reff
@@ -174,21 +195,23 @@ class model(object):
             self.__ReffCSA[mdl_num]=ReffCSA
             self.__R0CSA[mdl_num]=R0CSA
             
+        if np.shape(self.__ReffCSA[mdl_num])[0]==1:
+            bond=None
         
-        if exp_num is None and bond is None:
+        if exp_num is None and (bond is None or bond==-1):
             R=self.__ReffCSA[mdl_num]
             R0=self.__R0CSA[mdl_num]
         elif exp_num is None:
             R=self.__ReffCSA[mdl_num][bond,:,:]
             R0=self.__R0CSA[mdl_num][bond,:]
-        elif bond is None:
+        elif bond is None or bond==-1:
             R=self.__ReffCSA[mdl_num][:,exp_num,:]
             R0=self.__R0CSA[mdl_num][:,exp_num]
         else:
             R=self.__ReffCSA[mdl_num][bond,exp_num,:]
             R0=self.__R0CSA[mdl_num][bond,exp_num]
             
-        if self.MdlPar[mdl_num]['BondSpfc'].lower()=='no':
+        if R.shape[0]==1:
             R=R[0]
             R0=R0[0]
         
@@ -203,6 +226,7 @@ class model(object):
         "Get the experimental sensitivities"
         R=self._rho(self.info.columns,bond=-1)
         RCSA=self._rhoCSA(self.info.columns,bond=-1)
+        
         R+=-RCSA #We operate on relaxation from dipole and CSA separately
         
         "Shapes of matrices, preallocation"
@@ -212,9 +236,21 @@ class model(object):
             iso=False
         else:
             iso=True
-            
-        SZR=R.shape[1:2]
-        print(SZR)
+            SZA=1
+        
+        "We repeat R and RCSA for every bond in A if R and RCSA are not already bond specific"
+        SZR=R.shape
+
+        if np.size(SZR)==3:
+            if iso:
+                A=np.repeat([np.repeat([A],2,axis=0)],SZR[0],axis=0)
+                SZA=SZR[0]
+                iso=False
+            SZR=SZR[1:]
+        else:
+            R=np.repeat([R],SZA,axis=0)
+            RCSA=np.repeat([RCSA],SZA,axis=0)
+        
         SZeff=np.concatenate([np.atleast_1d(SZA),np.atleast_1d(SZR)])
         SZ0=np.concatenate([np.atleast_1d(SZA),[SZR[0]]])
         
@@ -223,13 +259,21 @@ class model(object):
             S2=1-np.sum(A[:,0,:],axis=1)
             S2CSA=1-np.sum(A[:,1,:],axis=1)
         else:
-            S2=1-np.sum(A)
+            S2=[1-np.sum(A)]
             S2CSA=S2
             
-        "START EDITING HERE! WE NEED TO USE ELEMENT-WISE MULTIPLICATION INSTEAD OF DOT PRODUCTS TO ACCOUNT FOR DIFFERENT RATE CONSTANTS IN THE INPUT MODELS"
-        Reff=np.reshape(np.dot(np.transpose([S2]),np.reshape(R,[1,np.prod(SZR)])),SZeff)
-        ReffCSA=np.reshape(np.dot(np.transpose([S2CSA]),np.reshape(RCSA,[1,np.prod(SZR)])),SZeff)
+
+        SZ1=[SZeff[0],np.prod(SZeff[1:])]
+
         
+        Reff=np.multiply(np.repeat(np.transpose([S2]),SZ1[1],axis=1),np.reshape(R,SZ1))
+        ReffCSA=np.multiply(np.repeat(np.transpose([S2CSA]),SZ1[1],axis=1),np.reshape(RCSA,SZ1))
+        Reff=np.reshape(Reff,SZeff)
+        ReffCSA=np.reshape(ReffCSA,SZeff)
+        
+#        Reff=np.reshape(np.dot(np.transpose([S2]),np.reshape(R,[1,np.prod(SZR)])),SZeff)
+#        ReffCSA=np.reshape(np.dot(np.transpose([S2CSA]),np.reshape(RCSA,[1,np.prod(SZR)])),SZeff)
+#        
         R0=np.zeros(SZ0)
         R0CSA=np.zeros(SZ0)
         
@@ -239,10 +283,12 @@ class model(object):
             M,M0=self.z2zeff(tc)
             
             
-            R00=np.dot(M0,R.T)
-            R0CSA0=np.dot(M0,RCSA.T)
-            Reff0=np.reshape(np.dot(M,R.T).T-np.transpose([R00]),[1,np.prod(SZR)])
-            ReffCSA0=np.reshape(np.dot(M,RCSA.T).T-np.transpose([R0CSA0]),[1,np.prod(SZR)])
+            SZ1=[np.prod(SZeff[0:2]),SZeff[2]]
+            R00=np.dot(M0,np.reshape(R,SZ1).T)
+            R0CSA0=np.dot(M0,np.reshape(RCSA,SZ1).T)
+            
+            Reff0=np.reshape(np.dot(M,np.reshape(R,SZ1).T).T-np.transpose([R00]),[1,np.prod(SZeff)])
+            ReffCSA0=np.reshape(np.dot(M,np.reshape(RCSA,SZ1).T).T-np.transpose([R0CSA0]),[1,np.prod(SZeff)])
 
             if iso:
                 Reff+=A[k]*np.reshape(Reff0,SZeff)
@@ -251,11 +297,17 @@ class model(object):
                 R0CSA+=A[k]*np.reshape(R0CSA0,SZ0)
             else:
                 A0=A[:,0,k]
-                Reff+=np.reshape(np.dot(np.transpose([A0]),Reff0),SZeff)
-                R0+=np.reshape(np.dot(np.transpose([A0]),[R00]),SZ0)
+                Reff+=np.reshape(np.multiply(np.repeat(np.transpose([A0]),np.prod(SZR)),Reff0),SZeff)
+                R0+=np.reshape(np.multiply(np.repeat(np.transpose([A0]),SZR[0]),R00),SZ0)
+                
                 A0=A[:,1,k]
-                ReffCSA+=np.reshape(np.dot(np.transpose([A0]),ReffCSA0),SZeff)
-                R0CSA+=np.reshape(np.dot(np.transpose([A0]),[R0CSA0]),SZ0)
+                ReffCSA+=np.reshape(np.multiply(np.repeat(np.transpose([A0]),np.prod(SZR)),ReffCSA0),SZeff)
+                R0CSA+=np.reshape(np.multiply(np.repeat(np.transpose([A0]),SZR[0]),R0CSA0),SZ0)
+                
+#                R0+=np.reshape(np.dot(np.transpose([A0]),[R00]),SZ0)
+#                A0=A[:,1,k]
+#                ReffCSA+=np.reshape(np.dot(np.transpose([A0]),ReffCSA0),SZeff)
+#                R0CSA+=np.reshape(np.dot(np.transpose([A0]),[R0CSA0]),SZ0)
             
         
         return Reff,R0,ReffCSA,R0CSA
@@ -331,7 +383,9 @@ class model(object):
         
     def plot_eff(self,exp_num=None,mdl_num=0,bond=None,ax=None,**kwargs):
         
-            
+        if bond==-1:
+            bond=None
+        
         a,b=self._rho_eff(exp_num,mdl_num,bond)
         
         if bond is None and np.size(a.shape)==3:

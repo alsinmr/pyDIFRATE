@@ -67,34 +67,25 @@ class detect(mdl.model):
         while k<nM:
             if not(np.any(self.mdl_num==k)):
                 del self.MdlPar_in[k]
-                self.mdl_num[self.mdl_num>k]=self.mdl_num[self.mdl_num>k]-1
+                in1=np.where(np.array(self.mdl_num)!=None)[0]
+                in2=np.where(self.mdl_num[in1]>k)[0]
+                self.mdl_num[in1[in2]]+=-1
                 nM=nM-1
             else:
                 k=k+1  
         
-#        nM=np.size(self.MdlPar)
-#        k=0
-#        while k<nM:
-#            if np.all(k!=mdl_num):
-#                del self.MdlPar[k]
-#                mdl_num[mdl_num>k]=mdl_num[mdl_num>k]-1
-#                nM=nM-1
-#            else:
-#                k=k+1
-#        
-#        if np.size(mdl_num)==1:
-#            self.mdl_num=np.ones(np.size(exp_num))*mdl_num
-#            print(mdl_num)
-#        else:
-        self.mdl_num=mdl_num
+        if np.all(self.mdl_num==-1):
+            self.mdl_num=[]
         
         "Determine if any models are bond specific"
         self.BondSpfc='no'
-        for k in self.MdlPar_in:
-            if k.get('BondSpfc')=='yes':
-                self.BondSpfc='yes'
+        if sens._rho(bond=-1).ndim==3:
+            self.BondSpfc='yes'     #If the previously applied models are bond-specific, we need to maintain bond speciicity
+        else:
+            for k in self.MdlPar_in:
+                if k.get('BondSpfc')=='yes':
+                    self.BondSpfc='yes'
         
-       
 
         "Pass the molecule object"
         """Note that this is not a copy, but rather a pointer to the same object.
@@ -126,9 +117,8 @@ class detect(mdl.model):
 #                    a,b=sens._rho_effCSA(exp_num=exp_num,mdl_num=mdl_num[0],bond=k)
 #                    self.__RCSA.append(a)
 #                    self.__R0CSA.append(b)
-
-                a,b=sens._rho_eff(exp_num=exp_num,mdl_num=mdl_num[0])
-                c,d=sens._rho_effCSA(exp_num=exp_num,mdl_num=mdl_num[0])
+                a,b=sens._rho_eff(exp_num=exp_num,mdl_num=mdl_num[0],bond=-1)
+                c,d=sens._rho_effCSA(exp_num=exp_num,mdl_num=mdl_num[0],bond=-1)
                 for k in range(0,nb):
                     self.__R.append(a[k])
                     self.__R0.append(b[k])
@@ -163,7 +153,9 @@ class detect(mdl.model):
                         self.__R0CSA[k][m]=b
             else:
                 self.__R.append(np.zeros([ne,ntc]))
+                self.__R0.append(np.zeros(ne))
                 self.__RCSA.append(np.zeros([ne,ntc]))
+                self.__R0CSA.append(np.zeros(ne))
                 for m in range(0,ne):
                     a,b=sens._rho_eff(exp_num=exp_num[m],mdl_num=mdl_num[m])
                     self.__R[0][m,:]=a
@@ -304,12 +296,13 @@ class detect(mdl.model):
 
             for k in bond:
                 U,S,Vt,VCSA=self.getSVD(k,n)
-                self.__r[k]=np.multiply(np.repeat(np.transpose([self.norm]),n,axis=1),np.dot(U,np.diag(S)))
+                self.__r[k]=np.multiply(np.repeat(np.transpose([1/self.norm]),n,axis=1),np.dot(U,np.diag(S)))
                 self.__rho[k]=Vt
                 self.__rhoCSA[k]=VCSA
                 norm=np.repeat(np.transpose([self.norm]),np.size(self.__tc),axis=1)
                 self.__Rc[k]=np.divide(np.dot(U,np.dot(np.diag(S),Vt)),norm)
                 self.SVD[k]['T']=np.eye(n)
+                self.__r_info(k,**kwargs)
                 
             if 'sort_rho' not in kwargs:
                 kwargs['sort_rho']='n'
@@ -467,7 +460,11 @@ class detect(mdl.model):
                         slope1=-temp[maxi[0]]/step*Neg
                         line1=np.arange(0,-temp[maxi[0]]*Neg-1e-12,slope1)
                         line2=np.arange(-temp[maxi[0]]*Neg,1e-12,slope2)
-                        target=np.concatenate((np.zeros(a),line1,line2,np.zeros(ntc-a-np.size(line1)-np.size(line2))))
+                        try:
+                            target=np.concatenate((np.zeros(a),line1,line2,np.zeros(ntc-a-np.size(line1)-np.size(line2))))
+                        except:
+                            reopt=False
+                                
                 else:
                     "Calculation otherwise (last detection vector)"
                     if np.size(maxi)>=2 & np.size(mini)>=2:
@@ -496,7 +493,7 @@ class detect(mdl.model):
                     rhoz[k,:]=np.dot(T[k,:],Vt)
                  
         "Save the results into the detect object"
-        self.r0=self.__r
+#        self.r0=self.__r
         if bond is None:
             self.__rAvg=np.multiply(np.repeat(np.transpose([1/self.norm]),n,axis=1),\
                         np.dot(U,np.linalg.solve(T.T,np.diag(S)).T))
@@ -659,7 +656,9 @@ class detect(mdl.model):
         stdev=np.zeros(nd0)
         
         if bond is None:
-            a=range(0,nb)
+#            a=np.arange(0,nb)
+            a=np.arange(0,0)
+            match=False
         else:
             a=np.atleast_1d(bond)
             
@@ -810,15 +809,27 @@ class detect(mdl.model):
         _rho(self), that exists and functions the same way in all children
         """
         
-        if exp_num is None:
-            exp_num=self.info.columns
-        
+
+             
         if bond is None:
             bond=0
         
+        if np.size(self.__rho[bond])==1:
+            print('First generate the detectors for the selected bond')
+            return
+                
+        if exp_num is None:
+            exp_num=self.info.columns
+        
+        exp_num=np.atleast_1d(exp_num)
+        
+        
         if bond==-1:
             rhoz=self.rhoz(bond)
-            rhoz=rhoz[:,exp_num,:]
+            if rhoz.ndim==3:
+                rhoz=rhoz[:,exp_num,:]
+            elif rhoz.ndim==2:
+                rhoz=rhoz[exp_num,:]
         else:
             rhoz=self.rhoz(bond)[exp_num,:]
                 
@@ -832,21 +843,35 @@ class detect(mdl.model):
         _rho(self), that exists and functions the same way in all children
         """
         
-        if exp_num is None:
-            exp_num=self.info.columns
-        
         if bond is None:
             bond=0
         
+        if np.size(self.__rhoCSA[bond])==1:
+            print('First generate the detectors for the selected bond')
+            return
+        
+        
+        if exp_num is None:
+            exp_num=self.info.columns
+        
+        exp_num=np.atleast_1d(exp_num)
+        
+        
         if bond==-1:
             rhoz=np.array(self.__rhoCSA)
-            rhoz=rhoz[:,exp_num,:]
+            if rhoz.ndim==3:
+                rhoz=rhoz[:,exp_num,:]
+            elif rhoz.ndim==2:
+                rhoz=rhoz[exp_num,:]
+            
+            if rhoz.shape[0]==1:
+                rhoz=rhoz[0]
         else:
             rhoz=self.__rhoCSA[bond]
             rhoz=rhoz[exp_num,:]
             
         
-        return self.__rhoCSA[bond][exp_num,:]
+        return rhoz
     
     def plot_rhoz(self,bond=None,rho_index=None,ax=None,**kwargs):
         "Create an axis if not given"
@@ -861,16 +886,17 @@ class detect(mdl.model):
         if rho_index is None:
             "Get all rho"
             if np.size(bond)==1:
-                nd=self.rhoz(bond).shape[0]
+                nd=self.rhoz(bond).shape[-2]
             else:
-                nd=self.rhoz(bond[0]).shape[0]
+                nd=self.rhoz(bond[0]).shape[-2]
             rho_index=np.arange(0,nd)
             
 
             
-                    
-        a=self.rhoz(bond).T
-
+        if bond==-1:
+            a=self.rhoz(bond=None).T
+        else:                    
+            a=self.rhoz(bond).T
         a=a[:,rho_index]
 
         hdl=ax.plot(self.z(),a)
@@ -1010,10 +1036,11 @@ def linprog_par(Y):
         target=np.zeros(ntc)
         
     try:
-        x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),method='interior-point',options={'disp' :False})
+        x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),method='revised simplex',options={'disp' :False,})
         x=x['x']
     except:
         x=np.ones(Vt.shape[0])
+        
     return x
 
 def lsqlin_par(Y):

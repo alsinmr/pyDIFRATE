@@ -151,9 +151,6 @@ class Ct(mdl.model):
         
         R=self.Ct(exp_num)
         
-        if bond==-1 & self.molecule.vXY.shape[0]>0:
-            nb=self.molecule.vXY.shape[0]
-            R=np.repeat([R],nb,axis=0)
         
         return R
     

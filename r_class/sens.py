@@ -325,11 +325,7 @@ class rates(mdl.model):
 #                self.__R=np.vstack([self.__R,R[k,:]])
 #                self.__info=pd.concat([self.__info,self.info.loc[:,exp_num[k]]],axis=1,ignore_index=True)
               
-        print(self.molecule.vXY.shape[0]>0)
-        if (bond==-1 and (self.molecule.vXY.shape[0]>0)):
-            print('checkpoint')
-            nb=self.molecule.vXY.shape[0]
-            R=np.repeat([R],nb,axis=0)
+        
         return R
     
     def _rhoCSA(self,exp_num,bond=None):
