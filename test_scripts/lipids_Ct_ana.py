@@ -65,7 +65,7 @@ sel01=['C13','C13','C13','C14','C14','C14','C15','C15','C15',
        ]
 
 
-sel02=['H13A','H13B','H13C','H14A','H14B','H14C','H14A','H14B','H14C',
+sel02=['H13A','H13B','H13C','H14A','H14B','H14C','H15A','H15B','H15C',
        'H12A','H12B',
        'H11A','H11B',
        'HA','HB',
@@ -154,14 +154,32 @@ sel0=uni.select_atoms('resid 1')
 
 
 i1=np.zeros(np.unique(sel01).shape,'int64')
-for k,s in enumerate(np.unique(sel01)):
+
+a,b=np.unique(sel01,return_inverse=True)
+
+for k,s in enumerate(a):
     i1[k]=sel0.select_atoms('name {0}'.format(s)).indices[0]
     
 mol.sel1=sel0[i1]
+mol.sel1in=b
+
+a,b=np.unique(sel02,return_inverse=True)
 
 i2=np.zeros(np.unique(sel02).shape,'int64')
-for k,s in enumerate(np.unique(sel02)):
+for k,s in enumerate(a):
     i2[k]=sel0.select_atoms('name {0}'.format(s)).indices[0]
     
 mol.sel2=sel0[i2]
+mol.sel2in=b
+
+
+data=DR.Ct_ana.Ct2data(mol,tstep=10,dt=.005)
+data.detect.r_auto(7)
+data.label=label
+
+
+fit=data.fit()
+
+
+
 

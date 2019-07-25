@@ -67,7 +67,12 @@ class molecule(object):
         
     def set_selection(self,**kwargs):
         
-        nr=np.size(self.sel1.resids)
+        if self.sel1in is None and self.sel2in is None:
+            nr=np.size(self.sel1.resids)
+        elif self.sel1in is None:
+            nr=np.size(self.sel2in)
+        else:
+            nr=np.size(self.sel1in)
 
         
         
@@ -97,14 +102,13 @@ class molecule(object):
                 vec+=self.sel1.positions-self.sel2.positions
             elif self.sel1in is None:
                 for m,q in enumerate(self.sel2in):
-                    vec[m,:]+=self.sel1[m].positions-self.sel2[q].positions
+                    vec[m,:]+=self.sel1.positions[m]-self.sel2.positions[q]
             elif self.sel2in is None:
                 for m,q in enumerate(self.sel1in):
-                    vec[m,:]+=self.sel1[q].positions-self.sel2[m].positions
+                    vec[m,:]+=self.sel1.positions[q]-self.sel2.positions[m]
             else:
-                for m,q in enuemerate(self.sel1in):
-                    vec[m,:]+=self.sel1[q].potions-self.sel2[self.sel2in[m]].positions
-                    
+                for m,q in enumerate(self.sel1in):
+                    vec[m,:]+=self.sel1.positions[q]-self.sel2.positions[self.sel2in[m]]
         
         len=np.sqrt(np.sum(np.power(vec,2),axis=1))
         vec=np.divide(vec,np.reshape(np.repeat(len,3),vec.shape)) #Normalize the vector

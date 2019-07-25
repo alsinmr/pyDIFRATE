@@ -114,12 +114,24 @@ def get_vec(sel1,sel2,**kwargs):
     "Gets vectors from an MDanalysis selection, returns X,Y,Z in dictionary"
     a=sel1.universe
     b=sel2.universe
+    
+    if 'in1' in kwargs:
+        in1=kwargs.get('in1')
+    else:
+        in1=np.arange(a.atoms.n_atoms)
+        
+    if 'in2' in kwargs:
+        in2=kwargs.get('in2')
+    else:
+        in2=np.arange(b.atoms.n_atoms)
+    
+    
     if a!=b:
         print('sel1 and sel2 must be generated from the same MDAnalysis universe!')
         return
 
-    if sel1.n_atoms!=sel2.n_atoms:
-        print('sel1 and sel2 must have the same number of atoms')
+    if sel1.n_atoms!=sel2.n_atoms and np.size(in1)!=np.size(in2):
+        print('sel1 and sel2 or indices sel1in and sel2in must have the same number of atoms')
         return
 
 
@@ -131,7 +143,7 @@ def get_vec(sel1,sel2,**kwargs):
     
 
     nt=int((a.trajectory.n_frames-1)/tstep)+1
-    na=sel1.n_atoms
+    na=np.size(in1)
     
     X=np.zeros([na,nt])
     Y=np.zeros([na,nt])
@@ -143,7 +155,8 @@ def get_vec(sel1,sel2,**kwargs):
     try:
         for k in range(0,nt):
             a.trajectory[k*tstep]
-            pos=sel1.positions-sel2.positions
+            pos=sel1.positions[in1]-sel2.positions[in2]
+            
             X0=pos[:,0]
             Y0=pos[:,1]
             Z0=pos[:,2]
@@ -161,7 +174,7 @@ def get_vec(sel1,sel2,**kwargs):
         for ts in ts0:
             for _ in range(tstep-1):
                 next(ts0,None)
-            pos=sel1.positions-sel2.positions
+            pos=sel1.positions[in1]-sel2.positions[in2]
             X0=pos[:,0]
             Y0=pos[:,1]
             Z0=pos[:,2]
@@ -199,7 +212,7 @@ def alignCA(vec0,uni,tstep=1,**kwargs):
         
     if uni0.n_atoms==0:
         print('No atoms found for alignment, specify atom for alignment with align_ref')
-        return
+        return vec0
 
     ref0=uni0.positions-uni0.atoms.center_of_mass()
     
