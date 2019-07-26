@@ -75,8 +75,6 @@ class molecule(object):
             nr=np.size(self.sel1in)
 
         
-        
-        
         vec=np.zeros([nr,3])
         
     #    for k in range(0, nt-2):
@@ -109,14 +107,14 @@ class molecule(object):
             else:
                 for m,q in enumerate(self.sel1in):
                     vec[m,:]+=self.sel1.positions[q]-self.sel2.positions[self.sel2in[m]]
-        
+                    
         len=np.sqrt(np.sum(np.power(vec,2),axis=1))
         vec=np.divide(vec,np.reshape(np.repeat(len,3),vec.shape)) #Normalize the vector
         
         self.vXY=vec
-        self.label=self.label_in
-   
-
+        if np.shape(self.label_in)[0]==nr:
+            self.label=self.label_in
+        
     def MDA2pdb(self,tstep=None,selection=None,**kwargs):
         "Provide a molecule, print a certain frame to pdb for later use in chimera"
         
@@ -144,7 +142,7 @@ class molecule(object):
             a=uni.select_atoms('protein')
             if a.n_atoms==0:
                 a=uni.select_atoms('name *')
-        
+                
         a.write(full_path)
         
         self.pdb=full_path

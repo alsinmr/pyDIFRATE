@@ -24,6 +24,7 @@ from iRED_ana import align_vec
 def Ct2data(molecule,**kwargs):
     
     
+    
     if molecule.sel1in is None:
         in1=np.arange(molecule.sel1.atoms.n_atoms)
     else:
@@ -35,6 +36,7 @@ def Ct2data(molecule,**kwargs):
         
     vec=get_vec(molecule.sel1,molecule.sel2,in1=in1,in2=in2,**kwargs)
     
+
     if 'align' in kwargs and kwargs.get('align').lower()[0]=='y':
         vec=align_vec(vec)
     
@@ -42,7 +44,9 @@ def Ct2data(molecule,**kwargs):
     
     S2=S2calc(vec)
     
+    
     Ctdata=data(molecule=molecule,Ct=ct,S2=S2)
+    
 
     return Ctdata
 

@@ -35,14 +35,40 @@ def plot_cc(mol,resi,values,resi0,chain=None,chain0=None,scaling=1,\
             filename=mol.MDA2pdb(selection='protein',**kwargs)
         
     
+    "If all pairs include N, we assume that we should use peptide plane plotting"
+    if 'style' not in kwargs:    
+        if np.all(np.array(mol.sel1.names)=='N') or np.all(np.array(mol.sel2.names)=='N'):
+            kwargs.update({'style':'pp'})
+        else:
+            kwargs.update({'style':'bond'})
+            
+    if kwargs.get('style')=='bond':
+
+        if mol.sel1in is None:
+            mol.sel1in=np.arange(mol.sel1.n_atoms)
+        if mol.sel2in is None:
+            mol.sel2in=np.arange(mol.sel2.n_atoms)
+        atom1=mol.sel1.ids[mol.sel1in]
+        atom2=mol.sel2.ids[mol.sel2in]
+        resi=(atom1,atom2)
+
+        index=np.where(np.array(mol.label)==resi0)[0][0]
+        atoma=mol.sel1.ids[mol.sel1in[index]]
+        atomb=mol.sel2.ids[mol.sel2in[index]]
+        resi0=(atoma,atomb)
+        
+    
     "Scale the values for better viewing"
     if scaling is not None:
         values=values*scaling
     
     "Make sure the auto-correlated value is 1 no matter what"
-    values[resi==resi0]=1
+    if kwargs.get('style')=='bond':
+        values[index]=1
+    else:
+        values[resi==resi0]=1
         
-    chimera_setup(resi,values,fileout,chain=chain,filename=filename,resi0=resi0,chain0=chain0,scaling=scaling,scene=scene,**kwargs)
+    chimera_setup(resi,values,fileout,chain=chain,filename=filename,loc0=resi0,chain0=chain0,scaling=scaling,scene=scene,**kwargs)
     
 def plot_rho(mol,resi,values,chain=None,chain0=None,scaling=1,\
             filename=None,scene=None,fileout=None,**kwargs):
@@ -51,7 +77,25 @@ def plot_rho(mol,resi,values,chain=None,chain0=None,scaling=1,\
             filename=mol.pdb
         else:
             filename=mol.MDA2pdb(selection='protein',**kwargs)
+    
+    "If all pairs include N, we assume that we should use peptide plane plotting"
+    if 'style' not in kwargs:    
+        if np.all(np.array(mol.sel1.names)=='N') or np.all(np.array(mol.sel2.names)=='N'):
+            kwargs.update({'style':'pp'})
+        else:
+            kwargs.update({'style':'bond'})
+    
+    if kwargs.get('style')=='bond':
+        resi0=resi
+        if mol.sel1in is None:
+            mol.sel1in=np.arange(mol.sel1.n_atoms)
+        if mol.sel2in is None:
+            mol.sel2in=np.arange(mol.sel2.n_atoms)
+        atom1=mol.sel1.ids[mol.sel1in]
+        atom2=mol.sel2.ids[mol.sel2in]
+        "Currently we don't use resi0- we should consider whether this should be included in the indexing"
         
+        resi=(atom1,atom2)
     
     "Scale the values for better viewing"
     if scaling is not None:
@@ -86,6 +130,36 @@ def peptide_plane(attr,residue,value,chain=None):
                 f.write(':{0}.{1}'.format(res-1,chain))
                 
             f.write('@C,O\t{0}\n'.format(value[k]))
+            
+def bond_attr(attr,atom1,atom2,value):
+    
+    
+    a1,b1=np.unique(atom1,return_inverse=True)
+    
+    val1=np.zeros(a1.size)
+    for k in range(a1.size):
+        val1[k]=np.mean(value[b1==k])
+    
+    a2,b2=np.unique(atom2,return_inverse=True)
+    
+    val2=np.zeros(a2.size)
+    for k in range(a2.size):
+        val2[k]=np.mean(value[b2==k])
+    
+    "Generate attributes file for individual bonds"
+    full_path=get_path('attr_'+attr+'.txt')
+    with open(full_path,'w+') as f:
+        "File header"
+        f.write('attribute: {0}\n'.format(attr))
+        f.write('match mode: any\n')
+        f.write('recipient: atoms\n')
+        
+        for k,a in enumerate(a1):
+            f.write('\t@/serialNumber={0}\t{1}\n'.format(a,val1[k]))
+        for k,a in enumerate(a2):
+            f.write('\t@/serialNumber={0}\t{1}\n'.format(a,val2[k]))
+        
+        
         
 def pp_sel_string(residue,chain=None):
     residue=np.array(residue)
@@ -113,10 +187,40 @@ def pp_sel_string(residue,chain=None):
         string=string+'|:{0}@N,H,HN,CA'.format(res0)
         
     return string
+
+def bond_sel_string(atom1,atom2):
+    string='@/'
+    atom1=np.atleast_1d(atom1)
+    atom2=np.atleast_1d(atom2)
+    for k in atom1:
+        string=string+'serialNumber={0:d} or '.format(k)
+    for k in atom2:
+        string=string+'serialNumber={0:d} or '.format(k)
+    string=string[0:-4]
+    
+    return string
+        
 #%% Writes out a script to open chimera with detector information plotted on the molecule
-def chimera_setup(resi,value,fileout=None,style='pp',color_scheme=None,chain=None,filename=None,scene=None,\
-                   sc_rad=3.2,resi0=None,chain0=None,chimera_commands=None,png_opts=None,edit=True,scaling=None,**kwargs):
+def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=None,filename=None,scene=None,\
+                   sc_rad=3.2,loc0=None,chain0=None,chimera_commands=None,png_opts=None,edit=True,scaling=None,**kwargs):
     full_path=get_path('chimera_script.py')
+    
+    
+    if style.lower()=='pp':
+        resi=locs
+        resi0=loc0
+    elif style.lower()=='bond':
+        atom1=locs[0]
+        atom2=locs[1]
+        if loc0 is None:
+            atoma=None
+            atomb=None
+        else:
+            atoma=loc0[0]
+            atomb=loc0[1]
+    else:
+        print('Style not defined')
+        return
     
     "Variable with all chains in it"
     if chain is not None:
@@ -138,6 +242,10 @@ def chimera_setup(resi,value,fileout=None,style='pp',color_scheme=None,chain=Non
         if sc_rad is not None:
             peptide_plane('radius',resi,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0),chain)
         peptide_plane('rho',resi,value,chain)
+    elif style.lower()=='bond':
+        if sc_rad is not None:
+            bond_attr('radius',atom1,atom2,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0))
+        bond_attr('rho',atom1,atom2,value)
     else:
         print('Style not defined')
         return
@@ -162,7 +270,12 @@ def chimera_setup(resi,value,fileout=None,style='pp',color_scheme=None,chain=Non
         "Set everything to grey wires at the beginning"
         WrCC(f,'~ribbon')
         WrCC(f,'~display')
-        WrCC(f,'display @N,C,CA,O,H,HN')
+        if style.lower()=='pp':
+            WrCC(f,'display @N,C,CA,O,H,HN')
+        elif style.lower()=='bond':
+            WrCC(f,'display')
+            
+                
         WrCC(f,'represent wire')
         WrCC(f,'linewidth 5')
         WrCC(f,'color grey')
@@ -198,7 +311,7 @@ def chimera_setup(resi,value,fileout=None,style='pp',color_scheme=None,chain=Non
                     WrCC(f,'sel {0}'.format(pp_sel_string(resi[index],k)))
                     WrCC(f,'display sel')
                     WrCC(f,'represent bs sel')
-            if resi0 is not None:          
+            if resi0 is not None:
                 if chain0 is not None:
                     WrCC(f,'sel {0}'.format(pp_sel_string(resi0,chain0)))
                 else:
@@ -206,6 +319,18 @@ def chimera_setup(resi,value,fileout=None,style='pp',color_scheme=None,chain=Non
                 "If resi0 given, color it black"
                 WrCC(f,'color black sel')
         elif style.lower()=='bond':
+            WrCC(f,'sel {0}'.format(bond_sel_string(atom1,atom2)))
+            WrCC(f,'display sel')
+            WrCC(f,'represent bs sel')
+            print(atoma)
+            if atoma is not None:
+                print(atoma)
+                if chain0 is not None:
+                    WrCC(f,'sel {0}'.format(pp_sel_string(atoma,atomb,chain0)))
+                else:
+                    WrCC(f,'sel {0}'.format(bond_sel_string(atoma,atomb)))
+                WrCC(f,'color black sel')
+        else:
             print('Style not defined')
             return
         

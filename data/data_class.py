@@ -51,6 +51,7 @@ class data(object):
         self.detect=None
         
         
+        
         self.load(**kwargs)
 #%% Some options for loading in data        
     def load(self,**kwargs):
@@ -66,7 +67,7 @@ class data(object):
             norm=1/(self.ired.get('Ct')[:,0]-self.ired.get('CtInf'))
             norm=np.transpose([norm/norm[0:-(self.ired.get('rank')*2+1)].mean()])
             self.std=np.dot(norm,[self.sens.info.loc['stdev']])
-            
+        
         if 'Ct' in kwargs:
             ct=kwargs.get('Ct')
             self.R=ct.get('Ct')
@@ -75,14 +76,16 @@ class data(object):
             self.std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
             if 'S2' in kwargs:
                 self.S2=kwargs.get('S2')
+            molecule=kwargs.get('molecule')
             
         if 'molecule' in kwargs:
             mol=kwargs.get('molecule')
             if self is not None:
                 self.sens.molecule=mol
+                self.detect.molecule=mol
                 self.sens.molecule.set_selection()
             self.label=mol.label
-            
+             
         if 'EstErr' in kwargs and kwargs.get('EstErr').lower()[0]=='y':
             self.detect.r_nopt(np.min([15,nt]))
             
@@ -116,11 +119,18 @@ class data(object):
         rank=self.ired.get('rank')
         ne=2*rank+1
         
-
-        nb0=self.sens.molecule.sel1.n_atoms
+        
+        if self.sens.molecule.sel1in is not None:
+            nb0=np.size(self.sens.molecule.sel1in)
+        elif self.sens.molecule.sel2in is not None:
+            nb0=np.size(self.sens.molecule.sel2in)
+        else:
+            nb0=self.sens.molecule.sel1.n_atoms
         
         out.R=np.zeros([nb0,nd])
         out.R_std=np.zeros([nb0,nd])
+        out.R_l=np.zeros([nb0,nd])
+        out.R_u=np.zeros([nb0,nd])
         
         for k in range(0,nd):
             lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R[0:-ne,k]],nb0,axis=0)
@@ -128,6 +138,13 @@ class data(object):
              
             lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R_std[0:-ne,k]],nb0,axis=0)
             out.R_std[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
+            
+            lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R_l[0:-ne,k]],nb0,axis=0)
+            out.R_l[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
+            
+            lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R_u[0:-ne,k]],nb0,axis=0)
+            out.R_u[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
+            
             
         
         out.sens=self.sens
@@ -165,7 +182,7 @@ class data(object):
 
         return out
     
-    def plot_R(self,fig=None,plot_sens='y',**kwargs):
+    def plot_rho(self,fig=None,plot_sens='y',index=None,**kwargs):
         if fig is None:
             fig=plt.figure()
             
@@ -183,22 +200,38 @@ class data(object):
             
         ax=list()
         
-        if self.label is not None:
-            lbl=self.label
+        if index is not None:
+            index=np.atleast_1d(index).astype(int)
         else:
-            lbl=np.arange(0,self.R.shape[0])
+            index=np.arange(self.R.shape[0]).astype(int)
+        
+        if np.size(self.label)!=0:
+            lbl=np.array(self.label)[index]
+            if isinstance(lbl[0],str):
+                xaxis_lbl=lbl.copy()
+                lbl=np.arange(np.size(lbl))
+            else:
+                xaxis_lbl=None
+        else:
+            lbl=np.arange(np.size(index))
+            xaxis_lbl=None
+        
         
         for k in range(0,nd):
             ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1))
             if self.R_l is None:
-                ax[k].errorbar(lbl,self.R[:,k],self.R_std[:,k],color=hdl[k].get_color(),\
+                ax[k].errorbar(lbl,self.R[index,k],self.R_std[:,k],color=hdl[k].get_color(),\
                   **kwargs)
             else:
-                ax[k].errorbar(lbl,self.R[:,k],[self.R_l[:,k],self.R_u[:,k]],color=hdl[k].get_color(),\
+                ax[k].errorbar(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],color=hdl[k].get_color(),\
                   **kwargs)
             ax[k].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
-        
             
+            if k<nd-1:
+                ax[k].set_xticklabels([])
+            elif xaxis_lbl is not None:
+                ax[k].set_xticks(lbl)
+                ax[k].set_xticklabels(xaxis_lbl,rotation=90)
         fig.subplots_adjust(hspace=0.25)
         
             
@@ -227,6 +260,11 @@ class data(object):
             
         if self.label is not None:
             lbl=self.label
+            if isinstance(lbl[0],str):
+                xaxis_lbl=lbl.copy()
+                lbl=np.arange(np.size(lbl))
+            else:
+                xaxis_lbl=None
         else:
             lbl=np.arange(0,self.R.shape[0])
         
@@ -265,6 +303,15 @@ class data(object):
         else:
             ax.set_title(r'Cross correlation for $\rho_{' + '{}'.format(det_num) + '}$')
         
+        
+        if xaxis_lbl is not None:
+            ax.set_xticks(lbl)
+            ax.set_xticklabels(xaxis_lbl,rotation=90)
+            ax.set_yticks(lbl)
+            ax.set_yticklabels(xaxis_lbl,rotation=0)
+        
+        
+        
         return ax
        
         
@@ -275,8 +322,9 @@ class data(object):
         if self.label is None:
             print('User has not defined any bond labels, bond will now refer to the absolute index')
             index=bond
-        elif any(self.label==bond):
+        elif any(np.atleast_1d(self.label)==bond):
             index=np.where(np.array(self.label)==bond)[0][0]
+            print(index)
 
         if norm.lower()[0]=='y':
             if det_num is None:
@@ -320,7 +368,8 @@ class data(object):
             plt_cc3D(self.sens.molecule,resi,values,resi0=bond,chain=chain,chain0=chain[index],\
                      fileout=fileout,scaling=scaling,color_scheme='blue',**kwargs)
         else:
-            print('Selections over multiple residues/chains- not currently implemented')
+            plt_cc3D(self.sens.molecule,None,values,resi0=bond,scaling=scaling,color_scheme='red',**kwargs)
+#            print('Selections over multiple residues/chains- not currently implemented')
         
         
         
@@ -336,8 +385,9 @@ class data(object):
         chain1=self.sens.molecule.sel1.segids
         res2=self.sens.molecule.sel2.resids
         chain2=self.sens.molecule.sel2.segids
+        
 
-        if np.all(res1==res2) and np.all(chain1==chain2):
+        if np.size(res1)==np.size(res2) and (np.all(res1==res2) and np.all(chain1==chain2)):
             resi0=resi
             resi=res1
             chain=chain1
@@ -357,7 +407,13 @@ class data(object):
                 
             plot_rho(self.sens.molecule,resi,values,chain=chain,\
                      fileout=fileout,scaling=scaling,**kwargs)
+                
         else:
-            print('Selections over multiple residues/chains- not currently implemented')
+            if scaling is None:
+                scale0=np.max(values)
+                scaling=1/scale0
+            
+            plot_rho(self.sens.molecule,None,values,scaling=scaling,**kwargs)
+#            print('Selections over multiple residues/chains- not currently implemented')
         
         

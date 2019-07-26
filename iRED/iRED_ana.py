@@ -99,7 +99,16 @@ def iRED2data(molecule,rank,**kwargs):
     analysis, moved into a data object
     """
     
-    ired=iRED_full(molecule.sel1,molecule.sel2,rank,**kwargs)
+    if molecule.sel1in is None:
+        in1=np.arange(molecule.sel1.n_atoms)
+    else:
+        in1=molecule.sel1in
+    if molecule.sel2in is None:
+        in2=np.arange(molecule.sel2.n_atoms)
+    else:
+        in2=molecule.sel2in
+    
+    ired=iRED_full(molecule.sel1,molecule.sel2,rank,in1=in1,in2=in2,**kwargs)
     
     
     Ctdata=data(iRED=ired,molecule=molecule)
@@ -240,7 +249,7 @@ def alignCA(vec0,uni,tstep=1,**kwargs):
         vec['Z'][:,k]=vec0['X'][:,k]*R[2,0]+vec0['Y'][:,k]*R[2,1]+vec0['Z'][:,k]*R[2,2]
 
         if k%int(nt/100)==0 or k+1==nt:
-            printProgressBar(k+1, nt, prefix = 'Aligning CA positions:', suffix = 'Complete', length = 50)
+            printProgressBar(k+1, nt, prefix = 'Aligning positions:', suffix = 'Complete', length = 50)
             
     return vec
         

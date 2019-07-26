@@ -6,17 +6,20 @@ Created on Wed Jul 24 14:38:11 2019
 @author: albertsmith
 """
 
-
+import numpy as np
+import MDAnalysis as mda
 
 
 dcd='/Volumes/My Book/MD/step6.0_minimization.gro'
 
-psf=list()
-for k in range(2,12):
-    psf.append('/Volumes/My Book/MD/run1.part{0:04d}.xtc'.format(k))    
+#psf=list()
+#for k in range(2,12):
+#    psf.append('/Volumes/My Book/MD/run1.part{0:04d}.xtc'.format(k))    
+#
+#
+#uni=mda.Universe(dcd,psf[0:10])
 
-
-uni=mda.Universe(dcd,psf[0:10])
+uni=mda.Universe(dcd,'/Volumes/My Book/MD/reduced_1ns_whole.xtc')
 
 mol=DR.molecule()
 
@@ -107,7 +110,7 @@ sel02=['H13A','H13B','H13C','H14A','H14B','H14C','H15A','H15B','H15C',
        'H18S','H18R','H18T'
        ]
 
-label=['gamma1A','gamma1B','gamma1C','gamma2A','gamma2B','gamma2C','gamma3A','gamma3B','gamma3C',
+label0=['gamma1A','gamma1B','gamma1C','gamma2A','gamma2B','gamma2C','gamma3A','gamma3B','gamma3C',
        'betaA','betaB',
        'alphaA','alphaB',
        'g3A','g3B',
@@ -150,35 +153,116 @@ label=['gamma1A','gamma1B','gamma1C','gamma2A','gamma2B','gamma2C','gamma3A','ga
        ]
 
 
-sel0=uni.select_atoms('resid 1')
 
+res_in=np.arange(1,6)
 
-i1=np.zeros(np.unique(sel01).shape,'int64')
+i1=np.zeros(np.unique(sel01).size*np.size(res_in),'int64')
 
 a,b=np.unique(sel01,return_inverse=True)
 
-for k,s in enumerate(a):
-    i1[k]=sel0.select_atoms('name {0}'.format(s)).indices[0]
-    
+for m in range(0,np.size(res_in)):
+    sel0=uni.select_atoms('resid {0}'.format(res_in[m]))
+    for k,s in enumerate(a):
+        i1[k+m*a.size]=sel0.select_atoms('name {0}'.format(s)).indices[0]
+
+
+sel0=uni.select_atoms('resid {0}-{1}'.format(res_in[0],res_in[-1]))
 mol.sel1=sel0[i1]
-mol.sel1in=b
+
+mol.sel1in=list()
+for k in range(0,np.size(res_in)):
+    mol.sel1in.append(b+a.size*k)
+mol.sel1in=np.concatenate(mol.sel1in)
+
+
+i1=np.zeros(np.unique(sel02).size*np.size(res_in),'int64')
 
 a,b=np.unique(sel02,return_inverse=True)
 
-i2=np.zeros(np.unique(sel02).shape,'int64')
-for k,s in enumerate(a):
-    i2[k]=sel0.select_atoms('name {0}'.format(s)).indices[0]
-    
-mol.sel2=sel0[i2]
-mol.sel2in=b
+for m in range(0,np.size(res_in)):
+    sel0=uni.select_atoms('resid {0}'.format(res_in[m]))
+    for k,s in enumerate(a):
+        i1[k+m*a.size]=sel0.select_atoms('name {0}'.format(s)).indices[0]
 
 
-data=DR.Ct_ana.Ct2data(mol,tstep=10,dt=.005)
+sel0=uni.select_atoms('resid {0}-{1}'.format(res_in[0],res_in[-1]))
+mol.sel2=sel0[i1]
+
+mol.sel2in=list()
+for k in range(0,np.size(res_in)):
+    mol.sel2in.append(b+a.size*k)
+mol.sel2in=np.concatenate(mol.sel2in)
+
+
+
+"Load in a pdb here"
+mol.MDA2pdb(tstep=0,selection='resid 1-5')
+
+
+label=list()
+for k in res_in:
+    for m in label0:    
+        label.append('{0}_{1}'.format(m,k))
+
+mol.label=np.array(label)
+
+
+"Indices for first molecule"
+in_head=np.arange(18)
+in_SN1=np.arange(18,50)
+in_SN2=np.arange(50,84)
+
+
+
+"Calculate the experimental detectors"
+rates=DR.rates(Type='R1',v0=[600,700])
+rates.new_exp(Type='R1p',v0=600,vr=10,v1=[17,35])
+
+r=DR.detect(rates)
+r.r_auto(3)
+
+
+
+"iRED Analysis"
+ired=DR.iRED.iRED2data(mol,2,tstep=10,dt=0.005,align='y')
+ired.detect.r_auto(7)
+fit_ired=ired.fit()
+fit_final=fit_ired.iRED2rho()
+
+fit_final.plot_rho(index=in_head)
+fit_final.plot_rho(index=in_SN1)
+fit_final.plot_rho(index=in_SN2)
+
+ired.detect.r_target(4,r.rhoz())
+fit_ired1=ired.fit()
+fit_final1=fit_ired.iRED2rho()
+
+fit_final1.plot_rho(index=in_head)
+fit_final1.plot_rho(index=in_SN1)
+fit_final1.plot_rho(index=in_SN2)
+
+
+"Normal Analysis"
+#data=DR.Ct_ana.Ct2data(mol,tstep=10,dt=.005)
+data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=1,align_ref='name C21 or name C31')
 data.detect.r_auto(7)
-data.label=label
+
 
 
 fit=data.fit()
+
+fit.plot_rho(index=in_head)
+fit.plot_rho(index=in_SN1)
+fit.plot_rho(index=in_SN2)
+
+
+data.detect.r_target(7,r.rhoz())
+fit1=data.fit()
+
+fit1.plot_rho(index=in_head)
+fit1.plot_rho(index=in_SN1)
+fit1.plot_rho(index=in_SN2)
+
 
 
 
