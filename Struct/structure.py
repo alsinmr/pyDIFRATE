@@ -24,6 +24,7 @@ class molecule(object):
         self.Ralign=list()
 
         self.pdb=None #Container for a pdb extracted from the mda_object
+        self.pdb_id=None
         "We might want to delete this pdb upon object deletion"
         
         if np.size(args)>0:
@@ -146,5 +147,6 @@ class molecule(object):
         a.write(full_path)
         
         self.pdb=full_path
+        self.pdb_id=np.array(a.ids)
         
         return full_path

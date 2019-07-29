@@ -50,12 +50,12 @@ def plot_cc(mol,resi,values,resi0,chain=None,chain0=None,scaling=1,\
             mol.sel2in=np.arange(mol.sel2.n_atoms)
         atom1=mol.sel1.ids[mol.sel1in]
         atom2=mol.sel2.ids[mol.sel2in]
-        resi=(atom1,atom2)
+        resi=(uni2pdb_index(atom1,mol.pdb_id),uni2pdb_index(atom2,mol.pdb_id))
 
         index=np.where(np.array(mol.label)==resi0)[0][0]
         atoma=mol.sel1.ids[mol.sel1in[index]]
         atomb=mol.sel2.ids[mol.sel2in[index]]
-        resi0=(atoma,atomb)
+        resi0=(uni2pdb_index(atoma,mol.pdb_id),uni2pdb_index(atomb,mol.pdb_id))
         
     
     "Scale the values for better viewing"
@@ -94,13 +94,12 @@ def plot_rho(mol,resi,values,chain=None,chain0=None,scaling=1,\
         atom1=mol.sel1.ids[mol.sel1in]
         atom2=mol.sel2.ids[mol.sel2in]
         "Currently we don't use resi0- we should consider whether this should be included in the indexing"
-        
-        resi=(atom1,atom2)
+        resi=(uni2pdb_index(atom1,mol.pdb_id),uni2pdb_index(atom2,mol.pdb_id))
     
     "Scale the values for better viewing"
     if scaling is not None:
         values=values*scaling
-        
+
     chimera_setup(resi,values,fileout,chain=chain,filename=filename,scaling=scaling,scene=scene,**kwargs)
 
 
@@ -155,9 +154,9 @@ def bond_attr(attr,atom1,atom2,value):
         f.write('recipient: atoms\n')
         
         for k,a in enumerate(a1):
-            f.write('\t@/serialNumber={0}\t{1}\n'.format(a,val1[k]))
+            f.write('\t@/serialNumber={0:.0f}\t{1}\n'.format(a,val1[k]))
         for k,a in enumerate(a2):
-            f.write('\t@/serialNumber={0}\t{1}\n'.format(a,val2[k]))
+            f.write('\t@/serialNumber={0:.0f}\t{1}\n'.format(a,val2[k]))
         
         
         
@@ -193,9 +192,9 @@ def bond_sel_string(atom1,atom2):
     atom1=np.atleast_1d(atom1)
     atom2=np.atleast_1d(atom2)
     for k in atom1:
-        string=string+'serialNumber={0:d} or '.format(k)
+        string=string+'serialNumber={0:.0f} or '.format(k)
     for k in atom2:
-        string=string+'serialNumber={0:d} or '.format(k)
+        string=string+'serialNumber={0:.0f} or '.format(k)
     string=string[0:-4]
     
     return string
@@ -231,7 +230,7 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
     
     "Default color schemes"
     if color_scheme is None:
-        if resi0 is None:
+        if loc0 is None:
             color_scheme='red'
         else:
             color_scheme='rb'
@@ -322,9 +321,7 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
             WrCC(f,'sel {0}'.format(bond_sel_string(atom1,atom2)))
             WrCC(f,'display sel')
             WrCC(f,'represent bs sel')
-            print(atoma)
             if atoma is not None:
-                print(atoma)
                 if chain0 is not None:
                     WrCC(f,'sel {0}'.format(pp_sel_string(atoma,atomb,chain0)))
                 else:
@@ -383,3 +380,15 @@ def WrCC(f,command):
     "Function to print chimera commands correctly"
     f.write('rc("{0}")\n'.format(command))
                 
+def uni2pdb_index(index,pdb_index):
+    "Converts the universe index to the index for a stored pdb"
+    "The stored pdb is in molecule.pdb, and the index is in molecule.pdb_in"
+    
+    index=np.atleast_1d(index)
+    
+    i=np.zeros(np.size(index))
+    for k,ind in enumerate(index):
+        i[k]=np.where(ind==pdb_index)[0][0]
+    return i
+    
+    

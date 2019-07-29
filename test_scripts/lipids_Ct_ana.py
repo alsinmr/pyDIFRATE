@@ -12,14 +12,14 @@ import MDAnalysis as mda
 
 dcd='/Volumes/My Book/MD/step6.0_minimization.gro'
 
-#psf=list()
-#for k in range(2,12):
-#    psf.append('/Volumes/My Book/MD/run1.part{0:04d}.xtc'.format(k))    
-#
-#
-#uni=mda.Universe(dcd,psf[0:10])
+psf=list()
+for k in range(2,12):
+    psf.append('/Volumes/My Book/MD/run1.part{0:04d}.xtc'.format(k))    
 
-uni=mda.Universe(dcd,'/Volumes/My Book/MD/reduced_1ns_whole.xtc')
+
+uni=mda.Universe(dcd,psf[0:20])
+
+#uni=mda.Universe(dcd,'/Volumes/My Book/MD/reduced_1ns_whole.xtc')
 
 mol=DR.molecule()
 
@@ -115,7 +115,7 @@ label0=['gamma1A','gamma1B','gamma1C','gamma2A','gamma2B','gamma2C','gamma3A','g
        'alphaA','alphaB',
        'g3A','g3B',
        'g2',
-       'g1X','g2X',
+       'g1X','g1Y',
        'C1_1',
        'C1_2X','C1_2Y',
        'C1_3X','C1_3Y',
@@ -154,7 +154,7 @@ label0=['gamma1A','gamma1B','gamma1C','gamma2A','gamma2B','gamma2C','gamma3A','g
 
 
 
-res_in=np.arange(1,6)
+res_in=[114,15,56,45,117]
 
 i1=np.zeros(np.unique(sel01).size*np.size(res_in),'int64')
 
@@ -166,8 +166,14 @@ for m in range(0,np.size(res_in)):
         i1[k+m*a.size]=sel0.select_atoms('name {0}'.format(s)).indices[0]
 
 
-sel0=uni.select_atoms('resid {0}-{1}'.format(res_in[0],res_in[-1]))
-mol.sel1=sel0[i1]
+
+resi_str=list()
+for k in res_in:
+    resi_str.append('resid {0}'.format(k))
+    
+sel0=uni.select_atoms(*resi_str)
+
+mol.sel1=uni.select_atoms('name *')[i1]
 
 mol.sel1in=list()
 for k in range(0,np.size(res_in)):
@@ -185,8 +191,8 @@ for m in range(0,np.size(res_in)):
         i1[k+m*a.size]=sel0.select_atoms('name {0}'.format(s)).indices[0]
 
 
-sel0=uni.select_atoms('resid {0}-{1}'.format(res_in[0],res_in[-1]))
-mol.sel2=sel0[i1]
+sel0=uni.select_atoms(*resi_str)
+mol.sel2=uni.select_atoms('name *')[i1]
 
 mol.sel2in=list()
 for k in range(0,np.size(res_in)):
@@ -196,7 +202,7 @@ mol.sel2in=np.concatenate(mol.sel2in)
 
 
 "Load in a pdb here"
-mol.MDA2pdb(tstep=0,selection='resid 1-5')
+mol.MDA2pdb(tstep=0,selection='resid 114 or resid 15 or resid 56 or resid 45 or resid 117')
 
 
 label=list()
@@ -219,12 +225,16 @@ rates=DR.rates(Type='R1',v0=[600,700])
 rates.new_exp(Type='R1p',v0=600,vr=10,v1=[17,35])
 
 r=DR.detect(rates)
-r.r_auto(3)
+r.r_auto(3,NT='M')
 
 
 
 "iRED Analysis"
-ired=DR.iRED.iRED2data(mol,2,tstep=10,dt=0.005,align='y')
+ired=DR.iRED.iRED2data(mol,2,tstep=10,dt=1,align='n',alignCA='y',align_ref='name C21 or name C31')
+
+ 
+
+
 ired.detect.r_auto(7)
 fit_ired=ired.fit()
 fit_final=fit_ired.iRED2rho()
@@ -243,8 +253,9 @@ fit_final1.plot_rho(index=in_SN2)
 
 
 "Normal Analysis"
-#data=DR.Ct_ana.Ct2data(mol,tstep=10,dt=.005)
-data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=1,align_ref='name C21 or name C31')
+data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=.005,align_ref='name C21 or name C31')
+
+#data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=1,align_ref='name C21 or name C31')
 data.detect.r_auto(7)
 
 
