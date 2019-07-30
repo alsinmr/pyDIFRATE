@@ -56,6 +56,7 @@ def read_data(f,keys0):
     cont=True
     R=list()
     Rstd=list()
+    label=None
     ne=0
     while not(eof(f)) and cont:
         pos=f.tell()
@@ -100,7 +101,7 @@ def read_data(f,keys0):
         
     
     
-    return R,Rstd
+    return R,Rstd,label
 
 def read_lines(f,keys0):
     
@@ -132,10 +133,19 @@ def read_lines(f,keys0):
     return np.atleast_2d(R)
 
 def read_label(f,keys0):
-    
     label=list()
+    cont=True
+    while not(eof(f)) and cont:
+        pos=f.tell()
+        a=f.readline()
+        if np.isin(a.strip(),keys0):
+            cont=False
+            f.seek(pos)
+        else:
+            label.append(a.strip())
     
-                
+    return np.atleast_1d(label)
+        
 def read_model(f,keys0):
     mdl_pars=dict()
     cont=True

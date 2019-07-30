@@ -17,9 +17,9 @@ for k in range(2,12):
     psf.append('/Volumes/My Book/MD/run1.part{0:04d}.xtc'.format(k))    
 
 
-uni=mda.Universe(dcd,psf[0:20])
+#uni=mda.Universe(dcd,psf[0:20])
 
-#uni=mda.Universe(dcd,'/Volumes/My Book/MD/reduced_1ns_whole.xtc')
+uni=mda.Universe(dcd,'/Volumes/My Book/MD/reduced_1ns_whole.xtc')
 
 mol=DR.molecule()
 
