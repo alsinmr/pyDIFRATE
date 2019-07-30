@@ -18,7 +18,7 @@ os.chdir('r_class')
 from sens import rates
 from Ctsens import Ct
 from detectors import detect
-import DIFRATE_funs as calc_rates
+import DIFRATE_funs as funs
 
 os.chdir('../data')
 from data_class import data

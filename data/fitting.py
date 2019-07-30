@@ -71,10 +71,10 @@ def fit_data(data,detect=None,**kwargs):
         r=detect.r(bond=k)
         
         if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
-            R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.std[k,:]
+            R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
         else:
-            R=(data.R[k,:]-detect.R0in(k))/data.std[k,:]
-        r=r/np.repeat(np.transpose([data.std[k,:]]),r.shape[1],axis=1)
+            R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
+        r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
         
         X.append((r,R,LB,UB,conf,nmc))
     

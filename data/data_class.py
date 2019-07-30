@@ -62,18 +62,22 @@ class data(object):
             nt=self.ired.get('t').size
             self.sens=Ct(t=self.ired.get('t'),**kwargs)
             self.detect=detect(self.sens)
-#            self.std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
+#            self.R_std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
             
             norm=1/(self.ired.get('Ct')[:,0]-self.ired.get('CtInf'))
             norm=np.transpose([norm/norm[0:-(self.ired.get('rank')*2+1)].mean()])
-            self.std=np.dot(norm,[self.sens.info.loc['stdev']])
+
+#            self.std=np.dot(norm,[self.sens.info.loc['stdev']])
         
+
+            self.R_std=np.dot(norm,[self.sens.info.loc['stdev']])
+            
         if 'Ct' in kwargs:
             ct=kwargs.get('Ct')
             self.R=ct.get('Ct')
             self.sens=Ct(t=ct.get('t'),**kwargs)
             self.detect=detect(self.sens)
-            self.std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
+            self.R_std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
             if 'S2' in kwargs:
                 self.S2=kwargs.get('S2')
             molecule=kwargs.get('molecule')

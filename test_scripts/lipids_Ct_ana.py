@@ -259,7 +259,6 @@ data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=.005,align_ref='name C21 or name C31')
 data.detect.r_auto(7)
 
 
-
 fit=data.fit()
 
 fit.plot_rho(index=in_head)
