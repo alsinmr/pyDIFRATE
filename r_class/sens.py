@@ -138,39 +138,50 @@ class rates(mdl.model):
 #%% Make sure inputs all are the correct type (numpy arrays)         
     "Function to make sure all inputs are arrays, and have the correct sizes"    
     def __cleanup(self,ne):
-        
         "Check that all experimental variables can be treated as arrays"
         
         for k in self.__exper:
-            a=self.__exp.get(k)
-            if not isinstance(a,(list,np.ndarray,pd.DataFrame)):
-                a=[a]*ne
-            elif np.size(a)!=ne:
-                "We tile the output if the number of experiments doesn't match up"
-                a=a*int(np.ceil(ne/np.size(a)))
-                a=a[0:ne]
-            if not isinstance(a,np.ndarray):
-                a=np.array(a)
+            a=np.atleast_1d(self.__exp.get(k))
+            rep=np.ceil(ne/np.size(a))
+            a=np.repeat(a,rep)
+            a=a[0:ne]
+#            a=self.__exp.get(k)
+#            if not isinstance(a,(list,np.ndarray,pd.DataFrame)):
+#                a=[a]*ne
+#            elif np.size(a)!=ne:
+#                "We tile the output if the number of experiments doesn't match up"
+#                a=a*int(np.ceil(ne/np.size(a)))
+#                a=a[0:ne]
+#            else:
+#            if not isinstance(a,np.ndarray):
+#                a=np.array(a)
             self.__exp.update({k:a})
                 
         for k in self.__spinsys:
-            a=self.__sys.get(k)
-            if not isinstance(a,(list,np.ndarray)):
+            a=np.atleast_1d(self.__sys.get(k))
+
+            if k=='dXY' or k=='Nuc1':
                 a=[a]*ne
-            elif k=='dXY' or k=='Nuc1':
-                b=np.array([None]*ne)
-                for m in range(0,ne):
-                    b[m]=a
-                a=b
-            if not isinstance(a,np.ndarray):
-                a=np.array(a)
-            
-            if a.dtype.str[0:2]=='<U':
-                a=a.astype('<U6')
+            else:
+                a=[a[0]]*ne
+
+#            a=self.__sys.get(k)
+#            
+#            if not isinstance(a,(list,np.ndarray)):
+#                a=[a]*ne
+#            elif k=='dXY' or k=='Nuc1':
+#                b=np.array([None]*ne)
+#                for m in range(0,ne):
+#                    b[m]=a
+#                a=b
+#            if not isinstance(a,np.ndarray):
+#                a=np.array(a)
+#            
+#            if a.dtype.str[0:2]=='<U':
+#                a=a.astype('<U6')
                 
             self.__sys.update({k:a})
             
-        
 #%% Setting defaults             
     "Function for setting defaults"
     def __set_defaults(self,ne):
@@ -186,6 +197,8 @@ class rates(mdl.model):
                 self.__CD2H_def(k)
             elif Nuc[k].upper()=='2H' or Nuc[k].upper()=='D':
                 self.__2H_def(k)
+            elif Nuc[k].upper()=='H217O':
+                self.__H217O_def(k)
         
             
             
@@ -261,7 +274,8 @@ class rates(mdl.model):
         if self.__sys.get('theta')[k] is None:
             self.__sys.get('theta')[k]=0
         if self.__sys.get('QC')[k] is None:
-            self.__sys.get('QC')[k]=170e3
+#            self.__sys.get('QC')[k]=170e3
+            self.__sys.get('QC')[k]=60104
             
         "Function called to set O17 in water defaults (Quadrupole only)"     
     def __H217O_def(self,k):

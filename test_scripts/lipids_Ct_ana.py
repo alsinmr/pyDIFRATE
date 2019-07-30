@@ -175,7 +175,7 @@ mol.sel2in=b
 
 data=DR.Ct_ana.Ct2data(mol,tstep=10,dt=.005)
 data.detect.r_auto(7)
-data.label=label
+#data.label=label
 
 
 fit=data.fit()

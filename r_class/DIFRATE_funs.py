@@ -73,7 +73,8 @@ def NucInfo(Nuc=None,info='gyro'):
             NucData=NucData[NucData['mass']==mass]
         elif any(NucData['spin']==0.5): #Ambiguous input, take spin 1/2 nucleus if exists
             NucData=NucData[NucData['spin']==0.5] #Ambiguous input, take most abundant nucleus
-            
+        elif any(NucData['spin']>0):
+            NucData=NucData[NucData['spin']>0]
         
         NucData=NucData[NucData['abund']==max(NucData['abund'])]
             
@@ -232,7 +233,7 @@ def R1p(tc,exper):
     
     R10=R1(tc,exper)    #We do this first, because it includes all R1 contributions
     "Start here with the dipole contributions"
-    if Nuc1!=None:
+    if Nuc1 is not None:
         if np.size(dXY)==1:
             vY=NucInfo(Nuc1)/NucInfo('1H')*v0
             S=NucInfo(Nuc1,'spin')
