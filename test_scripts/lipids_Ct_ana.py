@@ -253,9 +253,9 @@ fit_final1.plot_rho(index=in_SN2)
 
 
 "Normal Analysis"
-data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=.005,align_ref='name C21 or name C31')
+#data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=.005,align_ref='name C21 or name C31')
 
-#data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=1,align_ref='name C21 or name C31')
+data=DR.Ct_ana.Ct2data(mol,tstep=1,dt=1,align_ref='name C21 or name C31')
 data.detect.r_auto(7)
 
 

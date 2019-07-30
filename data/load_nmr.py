@@ -34,9 +34,10 @@ def load_from_file(filename):
                 for k in rate_args:
                     data.sens.new_exp(**k)
             elif a.strip().lower()=='data':
-                R,Rstd=read_data(f,keys0)
+                R,Rstd,label=read_data(f,keys0)
                 data.R=R
                 data.R_std=Rstd
+                data.label=label
             elif a.strip().lower()=='model':
                 mdl_args.append(read_model(f,keys0))
     
@@ -58,18 +59,21 @@ def read_data(f,keys0):
     Rstd=list()
     label=None
     ne=0
+    
+    keys1=['R','Rstd','label']
+    
     while not(eof(f)) and cont:
         pos=f.tell()
         a=f.readline()
         
-        
-        if np.isin(a.strip(),['R','Rstd']):
+        print(a)
+        if np.isin(a.strip(),keys1):
             if a.strip()=='R':
-                R.append(read_lines(f,np.concatenate((keys0,['R','Rstd','label']))))
+                R.append(read_lines(f,np.concatenate((keys0,keys1))))
             elif a.strip()=='Rstd':
-                Rstd.append(read_lines(f,np.concatenate((keys0,['R','Rstd','label']))))
+                Rstd.append(read_lines(f,np.concatenate((keys0,keys1))))
             elif a.strip()=='label':
-                label=read_label(f,np.concatenate((keys0,['R','Rstd','label'])))
+                label=read_label(f,np.concatenate((keys0,keys1)))
         elif np.isin(a.strip(),keys0):
             cont=False
             f.seek(pos)
@@ -95,8 +99,7 @@ def read_data(f,keys0):
     elif np.any(R.shape!=Rstd.shape):
         print('Warning: Shape of standard deviation does not match shape of rate constants')
         print('Standard deviations set equal to 1/10 of the median of the rate constants')
-        ne=R.shape[0]
-        
+        ne=R.shape[0]        
         Rstd=np.repeat([np.median(R,axis=0)],ne,axis=0)
         
     
