@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Functions for loading experimental relaxation rate constants from NMR
+Functions for loading data from files
 
 Created on Mon Jul 29 14:14:04 2019
 
@@ -17,7 +17,82 @@ from detectors import detect
 os.chdir('../data')
 import data_class as dc
 
-def load_from_file(filename):
+def load_NMR(filename):
+    """
+    |load_NMR loads NMR data and experimental information from a text file
+    |data = load_NMR(filename)
+    |
+    |The file can contain experimental data, information about those experiments,
+    |and information about models (currently only isotropic models)
+    |Each part of the file is initiated by keywords 'data', 'info', or 'model'
+    |A section terminates at the occurence of another one of the keywords or at
+    |the end of the file. 
+    |
+    |Within the data section, 'R', 'Rstd', and 'label' initiate sections 
+    |containing data (contains all data, regardless of whether that data is 
+    |usually referred to as a rate, ex. order parameters), standard deviation of
+    |the data, and labels. 'R' and 'Rstd' can be input as a matrix, where each
+    |column is a different experiment. One may also have multiple 'R' and 'Rstd'
+    |sections, where each new section will be appended as a new set of experiments
+    |The 'label' section is a single column with numbers or strings, naming the
+    |different residues or bonds. This is only used for plot labeling.
+    |
+    |Within the info section, one inputs parameters describing a given experiment
+    |for a given system. 'Type','v0','v1','vr','offset','stdev','Nuc','Nuc1','dXY',
+    |'CSA','QC','eta','theta' all are possible parameters. These should appear on
+    |one line with the following line containing the value for the parameter. 
+    |Multiple experiments may be entered by including multiple parameters for the
+    |experimental parameters (although only one spin system may be entered this way)
+    |However, if a parameter is repeated in the 'info' section, this will initiate
+    |entry of a new set of experiments.
+    |
+    |Isotropic models may be entered in the model section. However, a molecule needs
+    |to be loaded before entry of anisotropic models, so that it is not currently
+    |possible to enter anisotropic model parameters from a file. Within the model
+    |section, tthe first line names the model, and subsequent lines come in pairs,
+    |where we name the parameter and give its value in the second line
+    |
+    |An example file would look like
+    |
+    |data
+    |R
+    |1.6337    1.6337    3.4796    2.1221
+    |2.2000    2.0245    9.3194    3.6051
+    |...
+    |0.2500    0.2900    4.0425    2.0151
+    |
+    |Rstd
+    |0.0327    0.0327    0.0696    0.0424
+    |0.0440    0.0405    0.1864    0.0721
+    |...
+    |0.0050    0.0058    0.0808    0.0403
+    |
+    |label
+    |gamma
+    |beta
+    |...
+    |C16
+    |
+    |info
+    |Type
+    |R1
+    |v0
+    |500 800
+    |Type
+    |R1p
+    |v0
+    |600
+    |vr
+    |10
+    |v1
+    |15,35
+    |
+    |model
+    |IsoDif
+    |tM
+    |4.84e-9
+    """
+    
     keys0=np.array(['info','data','model'])
     
     data=dc.data()
@@ -50,10 +125,37 @@ def load_from_file(filename):
         data.detect=detect(data.sens,mdl_num=0)
     else:
         data.detect=detect(data.sens)
+        
+    if data.sens.info.shape[1]!=0:
+        if data.sens.info.shape[1]!=data.R.shape[1]:
+            print('Warning: number of data sets does not match number of experiments in info')
+        else:
+            for k in range(data.sens.info.shape[1]):
+                if data.sens.info.loc['stdev'][k] is None:
+                    data.sens.info.loc['stdev'][k]=np.median(data.R[:,k])
+                    
             
     return data
 
+def load_NMR_info(filename):
+    """
+    |load_NMR_info loads a description of NMR experiments from a file. Formatting
+    |is as for load_NMR (which loads a full data set and experimental info).
+    |
+    |rates = load_NMR_info(filename)
+    |
+    |Note that this simply calls load_NMR, and extracts the 'sens' object from
+    |data
+    """
+    data=load_NMR(filename)
+    rates=data.sens
+    
+    return rates
+
 def read_data(f,keys0):    
+    """
+    Reads data out of a file (called by load_NMR)
+    """
     cont=True
     R=list()
     Rstd=list()
@@ -79,14 +181,14 @@ def read_data(f,keys0):
             f.seek(pos)
     
     if np.size(R)!=0:
-        R=np.concatenate(R)
+        R=np.concatenate(R,axis=1)
     else:
         R=None
         print('Warning: no data found in data entry')
         return None,None
 
     if np.size(Rstd)!=0:
-        Rstd=np.concatenate(Rstd)
+        Rstd=np.concatenate(Rstd,axis=1)
     else:
         Rstd=None
     
@@ -107,6 +209,9 @@ def read_data(f,keys0):
     return R,Rstd,label
 
 def read_lines(f,keys0):
+    """
+    Reads individual lines of data from a file
+    """
     
     R=list()
     ne=0
@@ -128,7 +233,7 @@ def read_lines(f,keys0):
                 if ne==0:
                     ne=R0.size
                 elif ne!=R0.size:
-                    print('Inconsistent column sizes, data input aborted')
+                    print('Inconsistent row lengths, data input aborted')
                     return None
                 
                 R.append(R0)
@@ -136,6 +241,9 @@ def read_lines(f,keys0):
     return np.atleast_2d(R)
 
 def read_label(f,keys0):
+    """
+    Reads out labels from a file. Tries to convert to label to float, returns strings if fails
+    """
     label=list()
     cont=True
     while not(eof(f)) and cont:
@@ -147,11 +255,24 @@ def read_label(f,keys0):
         else:
             label.append(a.strip())
     
-    return np.atleast_1d(label)
+    label=np.atleast_1d(label)
+    
+    try:
+        label=label.astype('float')
+    except:
+        pass
+    
+    return label
         
 def read_model(f,keys0):
+    """
+    Reads out description of a model
+    """
     mdl_pars=dict()
     cont=True
+    
+    a=f.readline()
+    mdl_pars.update({'Model':a.strip()})
     
     while not(eof(f)) and cont:
         pos=f.tell()
@@ -159,7 +280,7 @@ def read_model(f,keys0):
         if np.isin(a.strip(),keys0):
             cont=False
             f.seek(pos)
-        else:
+        elif a.strip():
             name=a.strip()
             a=f.readline()
             val=np.atleast_1d(a.strip().split())
@@ -170,9 +291,13 @@ def read_model(f,keys0):
             if val.size==1:
                 val=val[0]
             mdl_pars.update({name:val})
+            print(mdl_pars[name])
     
     return mdl_pars
 def read_info(f,keys0):
+    """
+    Reads out information on an experiment from file (called by load_NMR)
+    """
     temp=rates()
     keywords=np.concatenate((temp.retExper(),temp.retSpinSys())) #These are the possible variables to load
 
