@@ -23,6 +23,7 @@ import DIFRATE_funs as funs
 os.chdir('../data')
 from data_class import data
 from fitting import fit_data as fit
+import in_out as io
 
 os.chdir('../iRED')
 import iRED_ana as iRED
