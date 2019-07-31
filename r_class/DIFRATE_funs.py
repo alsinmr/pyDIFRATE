@@ -156,13 +156,14 @@ def R1(tc,exper):
             for k in range(0,np.size(dXY)):
                 S=NucInfo(Nuc1[k],'spin')
                 sc=S*(S+1)*4/3 # Scaling factor depending on the spin, =1 for spin 1/2
-                vY=NucInfo(Nuc1[k])
+                vY=NucInfo(Nuc1[k])/NucInfo('1H')*v0
                 R+=sc*(np.pi*dXY[k]/2)**2*(J(tc,vX-vY)+3*J(tc,vX)+6*J(tc,vY+vX))
                 
     "CSA relaxation"
     R+=3/4*(2*np.pi*CSA)**2*J(tc,vX)
 
     if QC!=0:
+        print('Huh?')
         "Quadrupolar relaxation"
         """Note that these formulas give the initial rate of relaxation, that 
         is, the average rate of relaxation for all orientations, and furthermore
