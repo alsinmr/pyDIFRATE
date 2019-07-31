@@ -160,7 +160,7 @@ class rates(mdl.model):
         for k in self.__spinsys:
             a=np.atleast_1d(self.__sys.get(k))
 
-            if k=='dXY' or k=='Nuc1':
+            if (k=='dXY' or k=='Nuc1') and np.size(a)>1:
                 a=[a]*ne
             else:
                 a=[a[0]]*ne
@@ -219,7 +219,7 @@ class rates(mdl.model):
         self.__sys.get('Nuc')[k]='15N'
         if np.size(self.__sys.get('Nuc1')[k])==1 and self.__sys.get('Nuc1')[k] is None:
             self.__sys.get('Nuc1')[k]='1H'
-        if np.size(self.__sys.get('dXY')[k])==1 and any([self.__sys.get('dXY')[k] is None]):
+        if (np.size(self.__sys.get('dXY')[k])==1 and np.size(self.__sys.get('dXY')[k])==1) and any([self.__sys.get('dXY')[k] is None]):
             self.__sys.get('dXY')[k]=dff.dipole_coupling(.102,'15N',self.__sys.get('Nuc1')[k])
         if self.__sys.get('CSA')[k] is None:
             self.__sys.get('CSA')[k]=113
