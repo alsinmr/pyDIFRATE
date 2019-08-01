@@ -168,7 +168,6 @@ def read_data(f,keys0):
         pos=f.tell()
         a=f.readline()
         
-        print(a)
         if np.isin(a.strip(),keys1):
             if a.strip()=='R':
                 R.append(read_lines(f,np.concatenate((keys0,keys1))))
@@ -291,7 +290,6 @@ def read_model(f,keys0):
             if val.size==1:
                 val=val[0]
             mdl_pars.update({name:val})
-            print(mdl_pars[name])
     
     return mdl_pars
 def read_info(f,keys0):
