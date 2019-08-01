@@ -19,6 +19,7 @@ from chimera_funs import plot_cc as plt_cc3D
 from chimera_funs import plot_rho
 os.chdir('../data')
 from fitting import fit_data
+from bin_in_out import save_DIFRATE
 
 class data(object):
 #%% Basic container for experimental and MD data
@@ -420,4 +421,9 @@ class data(object):
             plot_rho(self.sens.molecule,None,values,scaling=scaling,**kwargs)
 #            print('Selections over multiple residues/chains- not currently implemented')
         
-        
+    def save(self,filename):
+        """
+        |Save data to filename
+        |self.save(filename)
+        """
+        save_DIFRATE(self,filename)

@@ -9,5 +9,5 @@ Created on Wed Jul 31 11:56:56 2019
 from load_nmr import load_NMR
 from load_nmr import load_NMR_info
 
-from bin_in_out import save_bin
-from bin_in_out import load_bin
+from bin_in_out import save_DIFRATE
+from bin_in_out import load_DIFRATE

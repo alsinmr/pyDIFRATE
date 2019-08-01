@@ -114,25 +114,14 @@ def rate(tc,exper):
     """Returns the sensitivity of an experiment, specified by exper (one 
     column of a pandas array), for a given set of correlation times, tc.
     """
-    if exper.loc['Type']=='R1':
-        return R1(tc,exper)
-    elif exper.loc['Type']=='R1p':
-        return R1p(tc,exper)
-    elif exper.loc['Type']=='NOE':
-        return NOE(tc,exper)
-    elif exper.loc['Type']=='R2':
-        return R2(tc,exper)
-    elif exper.loc['Type']=='cct':
-        return cct(tc,exper)
-    elif exper.loc['Type']=='ccl':
-        return ccl(tc,exper)
-    elif exper.loc['Type']=='Ct':
-        return Ct(tc,exper)
-    elif exper.loc['Type']=='R1Q':
-        return R1Q(tc,exper)
-    else:
+    try:
+        fun=globals()[exper.loc['Type']]
+        R=fun(tc,exper)
+        return R
+    except:
         print('Experiment type {0} was not recognized'.format(exper.loc['Type']))
-        return
+        pass
+    
     
 def R1(tc,exper):
     v0=exper['v0']*1e6

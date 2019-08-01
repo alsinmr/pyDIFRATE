@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
+import copy
 import DynamicModels as dm
 import os
 os.chdir('../Struct')
@@ -171,7 +172,7 @@ class model(object):
             R0=R0[0]
         
             
-        return R,R0
+        return R.copy(),R0.copy()
         
     
     def _rho_effCSA(self,exp_num=None,mdl_num=0,bond=None):
@@ -217,7 +218,7 @@ class model(object):
             R0=R0[0]
         
             
-        return R,R0
+        return R.copy(),R0.copy()
     
     def __apply_mdl(self,tMdl,A):
         "tMdl is a list of correlation times in the model, and A the amplitudes"
@@ -266,15 +267,16 @@ class model(object):
 
         SZ1=[SZeff[0],np.prod(SZeff[1:])]
 
-        
+        """
+        The order parameter of the input model yields the fraction of the model correlation that does not
+        change the internal effective correlation time. 
+        """
         Reff=np.multiply(np.repeat(np.transpose([S2]),SZ1[1],axis=1),np.reshape(R,SZ1))
         ReffCSA=np.multiply(np.repeat(np.transpose([S2CSA]),SZ1[1],axis=1),np.reshape(RCSA,SZ1))
         Reff=np.reshape(Reff,SZeff)
         ReffCSA=np.reshape(ReffCSA,SZeff)
         
-#        Reff=np.reshape(np.dot(np.transpose([S2]),np.reshape(R,[1,np.prod(SZR)])),SZeff)
-#        ReffCSA=np.reshape(np.dot(np.transpose([S2CSA]),np.reshape(RCSA,[1,np.prod(SZR)])),SZeff)
-#        
+     
         R0=np.zeros(SZ0)
         R0CSA=np.zeros(SZ0)
         
@@ -287,7 +289,7 @@ class model(object):
             SZ1=[np.prod(SZeff[0:2]),SZeff[2]]
             R00=np.dot(M0,np.reshape(R,SZ1).T)
             R0CSA0=np.dot(M0,np.reshape(RCSA,SZ1).T)
-            
+                
             Reff0=np.reshape(np.dot(M,np.reshape(R,SZ1).T).T-np.transpose([R00]),[1,np.prod(SZeff)])
             ReffCSA0=np.reshape(np.dot(M,np.reshape(RCSA,SZ1).T).T-np.transpose([R0CSA0]),[1,np.prod(SZeff)])
 
@@ -305,11 +307,9 @@ class model(object):
                 ReffCSA+=np.reshape(np.multiply(np.repeat(np.transpose([A0]),np.prod(SZR)),ReffCSA0),SZeff)
                 R0CSA+=np.reshape(np.multiply(np.repeat(np.transpose([A0]),SZR[0]),R0CSA0),SZ0)
                 
-#                R0+=np.reshape(np.dot(np.transpose([A0]),[R00]),SZ0)
-#                A0=A[:,1,k]
-#                ReffCSA+=np.reshape(np.dot(np.transpose([A0]),ReffCSA0),SZeff)
-#                R0CSA+=np.reshape(np.dot(np.transpose([A0]),[R0CSA0]),SZ0)
-            
+        
+        Reff+=ReffCSA
+        R0+=R0CSA
         
         return Reff,R0,ReffCSA,R0CSA
         
@@ -364,18 +364,33 @@ class model(object):
         
         self.del_exp(n) #Delete the experiment to hide this operation from the user
         
-        return R
-    
-    def clear_stored(self):
-        """mdl_sens objects store results of model calculations. However, in 
-        some situations, this may take up too much memory. We can clear them 
-        with this function"""
-        self.__Reff=np.zeros([0,np.size(self.tc())])
-        self.__R0=np.zeros([0,1])
-        self.__mdlinfo=pd.DataFrame(index=self.retExper()+self.retSpinSys())
-        self.__tMdl=list()
-        self.__AMdl=list()
+        return R 
+
+    def _clear_stored(self,exp_num=None):
+        "Unfortunately, we only have methods to apply models to all experiments at once"
+        "This means a change in the experiment list requires recalculation of all models for all experiments"
+        "This function deletes all model calculations"
         
+
+        if exp_num is None:
+            for m in self.__Reff:
+                m=None
+            for m in self.__ReffCSA:
+                m=None
+            for m in self.__R0:
+                m=None
+            for m in self.__R0CSA:
+                m=None
+        else:    
+            for m in self.__Reff:
+                np.delete(m,exp_num,axis=0)
+            for m in self.__ReffCSA:
+                np.delete(m,exp_num,axis=0)
+            for m in self.__R0:
+                np.delete(m,exp_num)
+            for m in self.__R0CSA:
+                np.delete(m,exp_num)
+                
     def zeff(self,t,tau=None):
         if tau==None:
             return self.z()+np.log10(t)-np.log10(10**self.z()+t)
@@ -440,3 +455,26 @@ class model(object):
             if k in props:
                 for m in hdl:
                     getattr(m,'set_{}'.format(k))(kwargs.get(k))
+                    
+    def copy(self,type='deep'):
+        """
+        |
+        |Returns a copy of the object. Default is deep copy (all objects except the molecule object)
+        | obj = obj0.copy(type='deep')
+        |To also create a copy of the molecule object, set type='ddeep'
+        |To do a shallow copy, set type='shallow'
+        """
+        if type=='ddeep':
+            out=copy.deepcopy(self)
+        elif type!='deep':
+            out=copy.copy(self)
+        else:
+            mol=self.molecule
+            self.molecule=None
+            out=copy.deepcopy(self)
+            self.molecule=mol
+            out.molecule=mol
+            
+        return out
+        
+        

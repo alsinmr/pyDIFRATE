@@ -292,6 +292,7 @@ def read_model(f,keys0):
             mdl_pars.update({name:val})
     
     return mdl_pars
+
 def read_info(f,keys0):
     """
     Reads out information on an experiment from file (called by load_NMR)
@@ -312,6 +313,7 @@ def read_info(f,keys0):
             if name in used:    #We reset to a new set of experiments if a parameter is repeated (usually 'Type')
                 rate_args.append(args)
                 used=list()
+                used.append(name)
 #                print(args)
                 args=dict()
             else:

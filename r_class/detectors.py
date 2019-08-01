@@ -521,7 +521,7 @@ class detect(mdl.model):
             self.SVD[bond]['T']=T
             self.__r_info(bond,**kwargs)
             self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rho[bond]}
-            self.__r_norm(bond)
+            self.__r_norm(bond,**kwargs)
             if np.size(bonds)>0:
                 if 'NT' in kwargs: #We don't re-normalize the results of detectors obtained with r_target
                     kwargs.pop('NT')
@@ -593,6 +593,13 @@ class detect(mdl.model):
         if 'sort_rho' not in kwargs:
             kwargs['sort_rho']='n'
         self.__r_info(bond,**kwargs)
+    
+    
+    def _addS2(self,bond=None):
+        pass
+    
+    def _R2_ex_corr(self,bond=None):
+        pass
     
     def __r_norm(self,bond=None,**kwargs):
         "Applies equal-max or equal-integral normalization"

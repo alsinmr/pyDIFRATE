@@ -16,7 +16,6 @@ import sens
 class rates(mdl.model):  
     def __init__(self,tc=None,**kwargs):
         
-        
         """Probably a better way to do this, but I need to identify which
         child of mdl_sens is which later. Using isinstance requires me to 
         import the children into mdl_sens, but also import mdl_sens into its
@@ -69,8 +68,7 @@ class rates(mdl.model):
     
         "We need to initialize self.info"
         self.info=None  
-        "Here we feed in all the information on the experiments"
-        self.new_exp(**kwargs)
+        
 
         "Initialize some storage for rate constant calculation"
 #        self.__R=np.zeros([0,np.size(self.__tc)])
@@ -78,6 +76,8 @@ class rates(mdl.model):
 #        self.__info=pd.DataFrame(index=self.__exper+self.__spinsys)
         
         super().__init__()
+        "Here we feed in all the information on the experiments"
+        self.new_exp(**kwargs)
     
     def new_exp(self,**kwargs):
         "Count how many experiments are given"
@@ -134,7 +134,9 @@ class rates(mdl.model):
             self.info=info
         else:
             self.info=pd.concat([self.info,info],axis=1,ignore_index=True)
-         
+            
+        self._clear_stored()
+        
 #%% Make sure inputs all are the correct type (numpy arrays)         
     "Function to make sure all inputs are arrays, and have the correct sizes"    
     def __cleanup(self,ne):
@@ -291,21 +293,30 @@ class rates(mdl.model):
 
 #%% Delete experiment
     def del_exp(self,exp_num):
-        exp_num=np.atleast_1d(exp_num)
-        for k in exp_num:
-            self.info=self.info.drop(k,axis=1)
-            del self.__R[k]
-            del self.__RCSA[k]
-          
-        self.info.set_axis(np.arange(np.size(self.info.axes[1])),axis=1,inplace=True)
+        
+        if np.size(exp_num)>1:
+            for m in exp_num:
+                self.del_exp(m)
+        else:
+            self.info=self.info.drop(exp_num,axis=1)
+            del self.__R[exp_num]
+            del self.__RCSA[exp_num]
                 
+            self.info.set_axis(np.arange(np.size(self.info.axes[1])),axis=1,inplace=True)
+            self._clear_stored(exp_num)
+            
 #%% Adjust a parameter
     "We can adjust all parameters of a given type, or just one with the experiment index"
-    def set_par(self,type,index=None,value=None):
-        if index is None:
+    def set_par(self,type,value,exp_num=None):
+        if exp_num is None:
             self.info.at[type,:]=value
+            self.__R[:]=[None]*len(self.__R)
         else:
-            self.info.at[type,index]=value
+            self.info.at[type,exp_num]=value
+            self.__R[exp_num]=None
+            self.__RCSA[exp_num]=None
+         
+        self._clear_stored()
 
 #%% Correlation time axes   
     "Return correlation times or log of correlation times"        
@@ -340,7 +351,7 @@ class rates(mdl.model):
 #                self.__info=pd.concat([self.__info,self.info.loc[:,exp_num[k]]],axis=1,ignore_index=True)
               
         
-        return R
+        return R.copy()
     
     def _rhoCSA(self,exp_num,bond=None):
         """Calculates relaxation due to CSA only. We need this function to 
@@ -385,7 +396,7 @@ class rates(mdl.model):
             if bond==-1 & self.molecule.vXY.shape[0]>0:
                 nb=self.molecule.vXY.shape[0]
                 R=np.repeat([R],nb,axis=0)
-        return R
+        return R.copy()
     
     
 #%% Plot the rate constant sensitivites
