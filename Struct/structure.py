@@ -33,18 +33,32 @@ class molecule(object):
     def load_struct(self,*args):   
         self.mda_object=mda.Universe(*args)
         
-    def select_atoms(self,sel1=None,sel2=None,index1=None,index2=None,Nuc=None,sel1in=None,sel2in=None,**kwargs):
+    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,index1=None,index2=None,Nuc=None,resi=None,select=None,**kwargs):
+        
+        if select is not None:
+            sel=self.mda_object.select_atoms(kwargs.get('select'))
+        else:
+            sel=self.mda_object.select_atoms('name *')
+            
+        if resi is not None:
+            string=''
+            for res in resi:
+                string=string+'resid {0:.0f} or '.format(res)
+            string=string[0:-4]
+            sel=sel.select_atoms(string)
+        
         if Nuc!=None:
-            if Nuc.lower()=='15n' or Nuc.lower()=='n':
-                if 'select' in kwargs:
-                    sel=self.mda_object.select_atoms(kwargs.get('select'))
-                else:
-                    sel=self.mda_object.select_atoms('name *')
-                
+            if Nuc.lower()=='15n' or Nuc.lower()=='n':                    
                 self.sel1=sel.select_atoms('(name H or name HN) and around 1.1 name N')
                 self.sel2=sel.select_atoms('name N and around 1.1 (name H or name HN)')
-                
-                self.label_in=self.sel1.resids                                
+            elif Nuc.lower()=='CO':
+                self.sel1=sel.select_atoms('name C and around 1.4 name O')
+                self.sel2=sel.select_atoms('name O and around 1.4 name C')
+            elif Nuc.lower()=='CA':
+                self.sel1=sel.select_atoms('name CA and around 1.4 (name HA or name HA2)')
+                self.sel2=sel.select_atoms('(name HA or name HA2) and around 1.4 name CA')
+                print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
+            self.label_in=self.sel1.resids                                
         else:
             if sel1!=None:
                 if index1!=None:
@@ -90,6 +104,12 @@ class molecule(object):
         nt=self.mda_object.trajectory.n_frames
     
         for k in range(0,nt,tstep):
+            """
+            I think that this averaging over the trajectory should probably include
+            a re-alignment of each molecule with itself at each time point. Consider
+            the problems otherwise- for a lipid rotating in a membrane, we'd end
+            up with all average bonds pointing approximately along the lipid normal.
+            """
             try:
                 self.mda_object.trajectory[k]
             except:

@@ -295,6 +295,9 @@ class rates(mdl.model):
     def del_exp(self,exp_num):
         
         if np.size(exp_num)>1:
+            exp_num=np.atleast_1d(exp_num)
+            exp_num[::-1].sort()    #Crazy, but this sorts exp_num in descending order
+            "delete largest index first, because otherwise the indices will be wrong for later deletions"
             for m in exp_num:
                 self.del_exp(m)
         else:

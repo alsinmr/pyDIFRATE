@@ -23,16 +23,19 @@ def ModelBondSpfc(Model):
     
     
 def ModelSel(Model,direct='dXY',structure=None,**kwargs):
+    """
+    I should update this to simply try to execute the function out of globals()
+    """
     if Model=='IsoDif':
-        tMdl,AMdl=IsoDif(**kwargs)
-        BndSpfc='no'
+        tMdl,AMdl,BndSpfc=IsoDif(**kwargs)
+#        BndSpfc='no'
         """We must always say if the model is bond specific, so we know if an
         array of models is being returned"""
     elif Model=='AnisoDif':
-        tMdl,AMdl=AnisoDif(structure,direct,**kwargs)
-        BndSpfc='yes'
+        tMdl,AMdl,BndSpfc=AnisoDif(structure,direct,**kwargs)
+#        BndSpfc='yes'
     elif Model=='Combined':
-        tMdl,AMdl=Combined(tMdl1=kwargs.get('tMdl1'),AMdl1=kwargs.get('AMdl1'),\
+        tMdl,AMdl,BndSpfc=Combined(tMdl1=kwargs.get('tMdl1'),AMdl1=kwargs.get('AMdl1'),\
                            tMdl2=kwargs.get('tMdl2'),AMdl2=kwargs.get('AMdl2'))
         BndSpfc='no'
 
@@ -62,8 +65,8 @@ def IsoDif(**kwargs):
         tMdl=kwargs.get('tR')
         
     AMdl=1
-    
-    return tMdl,AMdl
+    BndSpfc='no'
+    return tMdl,AMdl,BndSpfc
     
 def AnisoDif(struct,direct='vXY',**kwargs):
    
@@ -152,9 +155,16 @@ def AnisoDif(struct,direct='vXY',**kwargs):
     tM[3]=1/D4
     tM[4]=1/D5
     
-    return tM,A
+    BndSpfc='yes'
+    
+    return tM,A,BndSpfc
 
 def Combined(tMdl1,AMdl1,tMdl2,AMdl2):
+    if np.ndim(tMdl1)==np.ndim(AMdl1) and np.ndim(tMdl2)==np.ndim(AMdl2):
+        BndSpfc='no'
+    else:
+        BndSpfc='yes'
+    
     nt1=tMdl1.size
     nt2=tMdl2.size
     if np.size(tMdl1)==0:
@@ -199,7 +209,7 @@ def Combined(tMdl1,AMdl1,tMdl2,AMdl2):
         
         AMdl=np.swapaxes(AMdl,0,-1)
 
-    return tMdl,AMdl
+    return tMdl,AMdl,BndSpfc
     
 def RotVec(euler,vec):
     def Rz(theta):

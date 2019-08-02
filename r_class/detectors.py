@@ -410,6 +410,7 @@ class detect(mdl.model):
         
         rhoz=np.dot(T,Vt)
         
+        plt.plot(self.z(),rhoz[-1])
         """Detectors that are not approaching zero at the end of the range of
         correlation times tend to oscillate where they do approach zero. We want
         to push that oscillation slightly below zero
@@ -595,10 +596,19 @@ class detect(mdl.model):
         self.__r_info(bond,**kwargs)
     
     
-    def _addS2(self,bond=None):
+    def __addS2(self,bond=None,**kwargs):
+        if 'NT' in kwargs:
+            NT=kwargs.get('NT')
+        elif 'Normalization' in kwargs:
+            NT=kwargs.get('Normalization')
+        else:
+            NT=self.detect_par.get('Normalization')
+            
         pass
     
-    def _R2_ex_corr(self,bond=None):
+    def __R2_ex_corr(self,bond=None):
+        index=self.info_in.loc['Type']=='R2'
+        
         pass
     
     def __r_norm(self,bond=None,**kwargs):
@@ -1045,6 +1055,9 @@ def linprog_par(Y):
     try:
         x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),method='interior-point',options={'disp' :False,})
         x=x['x']
+        if np.any(np.dot(Vt.T,x)<(np.min(target)-.0001)):
+            "This is sketchy. Linprog is return np.dot(Vt.T,x)<-1, but yields success. Shouldn't happend"
+            x=np.ones(Vt.shape[0])
     except:
         x=np.ones(Vt.shape[0])
         

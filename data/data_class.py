@@ -100,14 +100,44 @@ class data(object):
             self.detect=detect(kwargs.get('sens'),**kwargs)
         else:
             self.detect=detect(self.sens,**kwargs)
-            
+    
+#%% Option for deleting experiments
+    def del_exp(self,exp_num):
+        """
+        |Deletes an experiment or experiments
+        |obj.del_exp(exp_num)
+        |
+        |Note that this method will automatically delete the detector object,
+        |since it is no longer valid after deletion of an experiment. Add it back
+        |with obj.new_detect()
+        """
+        
+        if np.size(exp_num)>1:
+            exp_num=np.atleast_1d(exp_num)
+            exp_num[::-1].sort()
+            for m in exp_num:
+                self.del_exp(m)
+        else:
+            if self.R is not None and self.R.shape[1]>exp_num:
+                self.R=np.delete(self.R,exp_num,axis=1)
+                if self.R_std is not None:
+                    self.R_std=np.delete(self.R_std,exp_num,axis=1)
+
+                self.detect=None #Detectors are no longer valid, and so are deleted here
+                if self.sens is not None:
+                    self.sens.del_exp(exp_num)
+            else:
+                print('Warning: exp_num {0} was not found'.format(exp_num))
+
+        
+        
 #%% Run fit_data from the object     
     def fit(self,detect=None,**kwargs):
         if detect is None:
             detect=self.detect
             
         return fit_data(self,detect,**kwargs)
-            
+      
 #%% Convert iRED data types into normal detector responses and cross-correlation matrices            
     def iRED2rho(self):
         if self.ired is None or not isinstance(self.sens,detect):
@@ -427,3 +457,37 @@ class data(object):
         |self.save(filename)
         """
         save_DIFRATE(self,filename)
+        
+    def copy(self,type='deep'):
+        """
+        |
+        |Returns a copy of the object. Default is deep copy (all objects except the molecule object)
+        | obj = obj0.copy(type='deep')
+        |To also create a copy of the molecule object, set type='ddeep'
+        |To do a shallow copy, set type='shallow'
+        """
+        if type=='ddeep':
+            out=copy.deepcopy(self)
+        elif type!='deep':
+            out=copy.copy(self)
+        else:
+            if self.sens is not None and self.detect is not None:
+                mol=self.sens.molecule
+                self.sens.molecule=None
+                self.detect.molecule=None
+                out=copy.deepcopy(self)
+                self.sens.molecule=None
+                self.detect.molecule=None
+                out.sens.molecule=None
+                out.detect.molecule=None
+            elif self.sens is not None:
+                mol=self.sens.molecule
+                self.sens.molecule=None
+                out=copy.deepcopy(self)
+                self.sens.molecule=mol
+                out.sens.molecule=mol
+            else:
+                out=copy.deepcopy(self)
+            
+        return out
+        

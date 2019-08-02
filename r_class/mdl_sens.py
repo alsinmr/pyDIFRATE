@@ -72,6 +72,7 @@ class model(object):
             
             BndSpfc='no'
             Models=list()
+            "Maybe we can determine bond specificity inside of the Combined function? (below)"
             for k in mdl_nums:
                 Models.append(self.MdlPar[k])
                 if self.MdlPar[k]['BondSpfc']=='yes':
@@ -383,13 +384,17 @@ class model(object):
                 m=None
         else:    
             for m in self.__Reff:
-                np.delete(m,exp_num,axis=0)
+                if m is not None:
+                    np.delete(m,exp_num,axis=1)
             for m in self.__ReffCSA:
-                np.delete(m,exp_num,axis=0)
+                if m is not None:
+                    np.delete(m,exp_num,axis=1)
             for m in self.__R0:
-                np.delete(m,exp_num)
+                if m is not None:
+                    np.delete(m,exp_num,axis=1)
             for m in self.__R0CSA:
-                np.delete(m,exp_num)
+                if m is not None:
+                    np.delete(m,exp_num,axis=1)
                 
     def zeff(self,t,tau=None):
         if tau==None:
