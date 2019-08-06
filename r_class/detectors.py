@@ -171,10 +171,13 @@ class detect(mdl.model):
         "Initialize self.info"
         self.info=None
         
-        self.detect_par=dict()
-        self.detect_par['Normalization']='M'
-        self.detect_par['inclS2']='no'
-        self.detect_par['NegAllow']=0.5
+        
+        "Some global defaults"
+        self.detect_par={'Normalization':'M',   #Normalization of detectors
+                         'inclS2':'no',
+                         'NegAllow':0.5,
+                         'R2_ex_corr':'no'} 
+        
         
         "Pass the normalization"
         a=self.info_in.loc['stdev'].to_numpy()   
@@ -185,19 +188,20 @@ class detect(mdl.model):
         self.norm=np.divide(1,a).astype('float64')
 
         "Storage for the detection vectors"
-        self.__r=list(np.zeros(nb))   #Store the detection vectors
-        self.__rho=list(np.zeros(nb))   #Store the detector sensitivities
+        self.__r=[None]*nb   #Store the detection vectors
+        self.__rho=[None]*nb   #Store the detector sensitivities
         self.__rhoAvg=None
         self.__rAvg=None
-        self.__Rc=list(np.zeros(nb))        #Store the back-calculated sensitivities
+        self.__Rc=[None]*nb        #Store the back-calculated sensitivities
         self.__RcAvg=None
-        self.__rhoCSA=list(np.zeros(nb)) #CSA only sensitivities
+        self.__rhoCSA=[None]*nb #CSA only sensitivities
         
         "Store SVD matrix for parallel function"
         self.__Vt=None
 
-        self.z0=list(np.zeros(nb))
-        self.Del_z=list(np.zeros(nb))
+        self.z0=[None]*nb
+        self.Del_z=[None]*nb
+        self.stdev=[None]*nb
         
         self.SVD=list(np.zeros(nb))
         self.SVDavg=dict()
@@ -492,7 +496,9 @@ class detect(mdl.model):
                     X=linprog_par(Y)
                     T[k,:]=X
                     rhoz[k,:]=np.dot(T[k,:],Vt)
-                 
+        R2ex=('R2_ex_corr' in kwargs and kwargs.get('R2_ex_corr').lower()[0]=='y') or\
+            self.detect_par['R2_ex_corr'][0].lower()=='y'
+            
         "Save the results into the detect object"
 #        self.r0=self.__r
         if bond is None:
@@ -500,6 +506,8 @@ class detect(mdl.model):
                         np.dot(U,np.linalg.solve(T.T,np.diag(S)).T))
             self.__rhoAvg=rhoz
             self.SVDavg['T']=T
+            if R2ex:
+                self.R2_ex_corr(bond,**kwargs)
             self.__r_info(bond,**kwargs)
             self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rhoAvg}
             self.__r_norm(bond,**kwargs)
@@ -508,7 +516,7 @@ class detect(mdl.model):
                     kwargs.pop('NT')
                 if 'Normalization' in kwargs:
                     kwargs.pop('Normalization')
-                self.r_target(n,self.rhoz(None),bonds,**kwargs)
+                self.r_target(n,bond=bonds,**kwargs)
         else:
 
             """This isn't correct yet- if more than one bond, we want to 
@@ -520,6 +528,8 @@ class detect(mdl.model):
             self.__rho[bond]=rhoz
             self.__rhoCSA[bond]=np.dot(T,VCSA)
             self.SVD[bond]['T']=T
+            if R2ex:
+                self.R2_ex_corr(bond,**kwargs)
             self.__r_info(bond,**kwargs)
             self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rho[bond]}
             self.__r_norm(bond,**kwargs)
@@ -530,10 +540,27 @@ class detect(mdl.model):
                     kwargs.pop('Normalization')
                 self.r_target(n,self.__rho[bond],bonds,**kwargs)
 
-    def r_target(self,n,target,bond=None,**kwargs):
+    def r_target(self,n=None,target=None,bond=None,**kwargs):
         "Set sensitivities as close to some target function as possible"
         
+        if target is None:
+            try:
+                target=self.__r_auto.get('rho_z')
+            except:
+                print('No target provided, and no sensitivity from r_auto available')
+                R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
+                inS2=self.detect_par['inclS2'][0].lower()=='y'
+                target=self.rhoz(bond=None)
+                if R2ex:
+                    target=target[:-1]
+                if inS2:
+                    target=target[1:]
+                    
+        
         target=np.atleast_2d(target)
+        
+        if n is None:
+            n=target.shape[0]
         
         nb=np.shape(self.__R)[0]
         
@@ -589,11 +616,16 @@ class detect(mdl.model):
                 self.__rhoCSA[k]=np.dot(T[index],VCSA)
                 self.SVD[k]['T']=T[index]
                 if 'NT' in kwargs:
-                    self.__r_norm(None,**kwargs)   
+                    self.__r_norm(None,**kwargs)
+                if ('R2_ex_corr' in kwargs and kwargs.get('R2_ex_corr').lower()[0]=='y') or\
+                    self.detect_par['R2_ex_corr'][0].lower()=='y':
+                    self.R2_ex_corr(bond=k,**kwargs)
+                    
                 
         if 'sort_rho' not in kwargs:
             kwargs['sort_rho']='n'
         self.__r_info(bond,**kwargs)
+        
     
     
     def __addS2(self,bond=None,**kwargs):
@@ -606,11 +638,48 @@ class detect(mdl.model):
             
         pass
     
-    def __R2_ex_corr(self,bond=None):
-        index=self.info_in.loc['Type']=='R2'
+    def R2_ex_corr(self,bond=None,v_ref=None,**kwargs):
+        """
+        Attempts to fit exchange contributions to R2 relaxation. Requires R2 
+        measured at at least two fields. By default, adds a detection vector which
+        corrects for exchange, and returns the estimated exchange contribution at 
+        the lowest field at which R2 was measured.
+        """
+        self.detect_par.update({'R2_ex_corr':'yes'})
         
-        pass
+        index=self.info_in.loc['Type']=='R2'
+        if np.where(index)[0].size<2:
+            print('Warning: At least 2 R2 experiments are required to perform the exchange correction')
+            return
+        
+        nb=np.shape(self.__R)[0]
+        if nb==1:
+            "If bond is not specified, and we don't have bond specificity, operate on bond 0"
+            bond=0
+            
+
+        
+        
+        r_ex_vec=np.zeros(self.info_in.shape[1])
+        v0=np.atleast_1d(self.info_in.loc['v0'][index])
+        if v_ref is None:
+            v_ref=np.min(v0)
     
+        r_ex_vec[index]=np.divide(v0**2,v_ref**2)
+        
+        rhoz=np.zeros(self.tc().size)
+        rhoz[-1]=1e6
+        if bond is None:
+            self.__rAvg=np.concatenate((self.__rAvg,np.transpose([r_ex_vec])),axis=1)
+            self.__rhoAvg=np.concatenate((self.__rhoAvg,[rhoz]),axis=0)
+        else:
+            bond=np.atleast_1d(bond) #Work with np arrays
+            for k in bond:
+                self.__r[k]=np.concatenate((self.__r[k],np.transpose([r_ex_vec])),axis=1)
+                self.__rho[k]=np.concatenate((self.__rho[k],[rhoz]),axis=0)
+                self.__rhoCSA[k]=np.concatenate((self.__rhoCSA[k],np.zeros([1,self.tc().size])))
+            
+            
     def __r_norm(self,bond=None,**kwargs):
         "Applies equal-max or equal-integral normalization"
         if 'NT' in kwargs:
@@ -653,9 +722,154 @@ class detect(mdl.model):
                 self.__r[bond][:,k]=self.__r[bond][:,k]*sc
                 
                 
-            
-    
     def __r_info(self,bond=None,**kwargs):
+        """ Calculates paramaters describing the detector sensitivities (z0, Del_z,
+        and standard deviation of the detectors). Also resorts the detectors by
+        z0, unless 'sort_rho' is set to 'no'. Does not return anything, but edits 
+        internal values, z0, Del_z
+        """
+        
+        nb=np.shape(self.__R)[0]
+        """Trying to determine how many detectors to characterize (possible that 
+        not all bonds have same number of detectors. Note- this situation is not
+        allowed for data processing.
+        """
+        
+        if np.ndim(bond)>0:
+            bond=bond[0]
+            
+        if bond is None:
+            if self.__rAvg is not None:
+                nd0=self.__rAvg.shape[1]
+            else:
+                cont=True
+                k=0
+                while cont:
+                    if self.__r[k] is not None:
+                        cont=False
+                        nd0=self.__r[k].shape[1]
+                    else:
+                        k=k+1
+                        if k==nb:
+                            print('Warning: no detectors are defined. detect.info cannot be calculated')
+                            return
+        elif self.__r[bond] is not None:
+            nd0=self.__r[bond].shape[1]
+        elif self.__rAvg is not None:
+            nd0=self.__rAvg.shape[1]
+        else:
+            cont=True
+            k=0
+            while cont:
+                if self.__r[k] is not None:
+                    cont=False
+                    nd0=self.__r[k].shape[1]
+                else:
+                    k=k+1
+                    if k==nb:
+                        print('Warning: no detectors are defined. detect.info cannot be calculated')
+                        return
+        
+        index=[False]*nb
+        
+        for k in range(nb):
+            if self.__r[k] is not None:
+                
+                z0,_,_=self.r_info(k)
+                nd=z0.shape[0]
+                if nd==nd0:
+                    index[k]=True
+            
+                
+        a=dict()
+        flds=['z0','Del_z','stdev']
+
+        if np.any(index):        
+            for f in flds:
+                x=list()
+                x0=getattr(self,f)
+                for k in np.where(index)[0]:
+                    x.append(x0[k])
+                a.update({f : np.mean(x,axis=0)})
+                if f!='stdev':
+                    a.update({f+'_std':np.std(x,axis=0)})
+                
+        else:
+            "Re-do calculation for average detectors"
+            z0,Del_z,stdev=self.r_info(bond=None)
+            a.update({'z0':z0,'Del_z':Del_z,'stdev':stdev})
+        
+        self.info=pd.DataFrame.from_dict(a)
+        self.info=self.info.transpose()
+           
+    def r_info(self,bond=None,**kwargs):
+        """
+        |Returns z0, Del_z, and the standard deviation of a detector
+        |
+        |z0,Del_z,stdev = detect.r_info(bond)
+        |
+        |If requested, these will be sorted with z0 ascending (set sort_rho='y' 
+        |as argument). Note this will also sort the internal detector!
+        """
+        r=self.r(bond)
+        rhoz=self.rhoz(bond)
+        if r is not None:
+            nd=self.r(bond).shape[1]
+            z0=np.divide(np.sum(np.multiply(rhoz,\
+                np.repeat([self.z()],nd,axis=0)),axis=1),\
+                np.sum(self.rhoz(bond),axis=1))
+                        
+            iS2=self.detect_par['inclS2'][0].lower()=='y'
+            R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
+                    
+            if iS2 and R2ex:
+                i0=np.argsort(z0[1:-1])
+                i=np.concatenate(([0],i0+1,[nd-1]))
+            elif iS2:
+                i0=np.argsort(z0[1:])
+                i=np.concatenate(([0],i0+1))
+            elif R2ex:
+                i0=np.argsort(z0[0:-1])
+                i=np.concatenate((i0,[nd-1]))
+            else:
+                i0=np.argsort(z0)
+                i=i0
+            if 'sort_rho' not in kwargs or kwargs.get('sort_rho')[0].lower()=='n':
+                i0=np.arange(np.size(i0))
+                i=np.arange(np.size(i))
+                
+            z0=z0[i]
+            rhoz=rhoz[i,:]
+            r=r[:,i]
+            Del_z=np.diff(self.z()[0:2])*np.divide(np.sum(rhoz,axis=1),
+                          np.max(rhoz,axis=1))
+            
+            if R2ex:
+                #Dummy value for z0 of R2ex
+                z0[-1]=0
+                Del_z[-1]=0
+
+            
+
+            stdev=np.power(np.dot(np.linalg.pinv(r)**2,self.info_in.loc['stdev']**2),0.5)
+            
+            if bond is not None:
+                self.z0[bond]=z0
+                self.SVD[bond]['T']=self.SVD[bond]['T'][i0,:]
+                self.__r[bond]=r
+                self.__rho[bond]=rhoz
+                self.Del_z[bond]=Del_z
+                self.stdev[bond]=stdev
+            else:
+                self.SVDavg['T']=self.SVDavg['T'][i0,:]
+                self.__rAvg=r
+                self.__rhoAvg=rhoz
+                
+            return z0,Del_z,stdev
+        else:
+            return
+    
+    def ___r_info(self,bond=None,**kwargs):
         """Calculates some parameters related to the detectors generates, z0,
         Del_z, and standard deviation of resulting detectors. Also resorts the
         detectors according to z0
@@ -697,17 +911,39 @@ class detect(mdl.model):
     
                 if 'sort_rho' in kwargs and kwargs.get('sort_rho').lower()[0]=='n':
                     i=np.arange(0,np.size(z0))
+                    i0=i
+                    if self.detect_par['inclS2'][0].lower()=='y':
+                        i0=i0[1:]
+                    if self.detect_par['R2_ex_corr'][0].lower()=='y':
+                        i0=i0[0:-1]
                 else:
-                    i=np.argsort(z0)
+                    if self.detect_par['inclS2'][0].lower()=='y' and self.detect_par['R2_ex_corr'][0].lower()=='y':
+                        i0=np.argsort(z0[1:-1])
+                        i=np.concatenate(([0],i0,[np.size(z0)]))
+                    elif self.detect_par['inclS2'][0].lower()=='y':
+                        i0=np.argsort(z0[1:])
+                        i=np.concatenate(([0],i0))
+                    elif self.detect_par['R2_ex_corr'][0].lower()=='y':
+                        i0=np.argsort(z0[0:-1])
+                        i=np.concatenate((i0,[np.size(z0)]))
+                    else:
+                        i0=np.argsort(z0)
+                        i=i0
                 
                 self.z0[k]=z0[i]
-                self.SVD[k]['T']=self.SVD[k]['T'][i,:]
+                self.SVD[k]['T']=self.SVD[k]['T'][i0,:]
+                
                 self.__r[k]=self.__r[k][:,i]
                 self.__rho[k]=self.__rho[k][i,:]
                 self.Del_z[k]=np.diff(self.z()[0:2])*np.divide(np.sum(self.__rho[k],axis=1),
                           np.max(self.__rho[k],axis=1))
-                self.SVD[k]['stdev']=np.sqrt(np.dot(self.SVD[k]['T']**2,1/self.SVD[k]['S'][0:nd]**2))
-                
+                stdev=np.sqrt(np.dot(self.SVD[k]['T']**2,1/self.SVD[k]['S'][0:np.size(i0)]**2))
+                if self.detect_par['inclS2'][0].lower()=='y':
+                    "THIS IS WRONG. ADD STANDARD DEVIATION LATER!!!"
+                    stdev=np.concatenate(([0],stdev))
+                if self.detect_par['R2_ex_corr'][0].lower()=='y':
+                    stdev=np.concatenate((stdev,[0]))
+                self.SVD[k]['stdev']=stdev
                 if match:
                     stdev+=self.SVD[k]['stdev']
                 
@@ -908,7 +1144,7 @@ class detect(mdl.model):
                 nd=self.rhoz(bond[0]).shape[-2]
             rho_index=np.arange(0,nd)
             
-
+            print(nd)
             
         if bond==-1:
             a=self.rhoz(bond=None).T

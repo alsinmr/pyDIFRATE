@@ -17,6 +17,11 @@ from detectors import detect as dt
 os.chdir('../data')
 
 def fit_data(data,detect=None,**kwargs):
+    """
+    Should update this to pass the standard deviations from the fit into the new
+    sensitivity object!!!
+    FIX THIS NEXT!!!!
+    """
     if detect is None:
         if data.detect is None:
             print('A detect object must be provided in the input or as part of the data object')

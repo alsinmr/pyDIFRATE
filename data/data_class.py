@@ -226,10 +226,21 @@ class data(object):
         if plot_sens.lower()[0]=='y' and self.sens is not None:
             nplts=nd+2
             ax0=fig.add_subplot(int(nplts/2)+1,1,1)
-            hdl=ax0.plot(self.sens.z(),np.transpose(self.sens._rho(np.arange(0,nd),bond=None)))
+            if hasattr(self.sens,'detect_par') and self.sens.detect_par['R2_ex_corr'][0].lower()=='y':
+                nd0=nd-1
+            else:
+                nd0=nd
+            hdl=ax0.plot(self.sens.z(),self.sens._rho(np.arange(0,nd),bond=None).T)
             ax0.set_xlabel(r'$\log_{10}(\tau$ / s)')
             ax0.set_ylabel(r'$\rho(z)$')
             ax0.set_xlim(self.sens.z()[[0,-1]])
+            temp=self.sens._rho(np.arange(nd0),bond=None)
+            mini=np.min(temp)
+            maxi=np.max(temp)
+            ax0.set_ylim([mini-(maxi-mini)*.05,maxi+(maxi-mini)*.05])
+
+            if nd0!=nd:
+                hdl[-1].set_alpha(0)
         else:
             nplts=nd
             
@@ -264,9 +275,12 @@ class data(object):
             
             if k<nd-1:
                 ax[k].set_xticklabels([])
-            elif xaxis_lbl is not None:
-                ax[k].set_xticks(lbl)
-                ax[k].set_xticklabels(xaxis_lbl,rotation=90)
+            else:
+                if xaxis_lbl is not None:
+                    ax[k].set_xticks(lbl)
+                    ax[k].set_xticklabels(xaxis_lbl,rotation=90)
+                if nd0!=nd:
+                    ax[k].set_ylabel(r'$R_2^{ex} / s^{-1}$')
         fig.subplots_adjust(hspace=0.25)
         
             
