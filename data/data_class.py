@@ -20,6 +20,7 @@ from chimera_funs import plot_rho
 os.chdir('../data')
 from fitting import fit_data
 from bin_in_out import save_DIFRATE
+import copy
 
 class data(object):
 #%% Basic container for experimental and MD data
@@ -490,10 +491,10 @@ class data(object):
                 self.sens.molecule=None
                 self.detect.molecule=None
                 out=copy.deepcopy(self)
-                self.sens.molecule=None
-                self.detect.molecule=None
-                out.sens.molecule=None
-                out.detect.molecule=None
+                self.sens.molecule=mol
+                self.detect.molecule=mol
+                out.sens.molecule=mol
+                out.detect.molecule=mol
             elif self.sens is not None:
                 mol=self.sens.molecule
                 self.sens.molecule=None

@@ -55,6 +55,13 @@ class detect(mdl.model):
 #        if np.size(mdl_num)>1 and np.all(mdl_num[0]==mdl_num):
 #            mdl_num=mdl_num[0]
 #        
+        "Delete detector used for R2 exchange correction"
+        if hasattr(sens,'detect_par') and sens.detect_par['R2_ex_corr'][0].lower()=='y':
+            sens=sens.copy()    #We don't want to edit the original sensitivy object
+            ne=ne-1
+            exp_num=exp_num[exp_num!=sens.info.axes[1][-1]]
+            sens._remove_R2_ex()
+
         
         "Store all the experiment and model information"
         self.info_in=sens.info.loc[:,exp_num].copy()
@@ -508,10 +515,10 @@ class detect(mdl.model):
                         np.dot(U,np.linalg.solve(T.T,np.diag(S)).T))
             self.__rhoAvg=rhoz
             self.SVDavg['T']=T
+            self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rhoAvg.copy()}
             if R2ex:
                 self.R2_ex_corr(bond,**kwargs)
             self.__r_info(bond,**kwargs)
-            self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rhoAvg}
             self.__r_norm(bond,**kwargs)
             if np.size(bonds)>0:
                 if 'NT' in kwargs: #We don't re-normalize the results of detectors obtained with r_target
@@ -530,10 +537,10 @@ class detect(mdl.model):
             self.__rho[bond]=rhoz
             self.__rhoCSA[bond]=np.dot(T,VCSA)
             self.SVD[bond]['T']=T
+            self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rho[bond].copy()}
             if R2ex:
                 self.R2_ex_corr(bond,**kwargs)
             self.__r_info(bond,**kwargs)
-            self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rho[bond]}
             self.__r_norm(bond,**kwargs)
             if np.size(bonds)>0:
                 if 'NT' in kwargs: #We don't re-normalize the results of detectors obtained with r_target
@@ -563,6 +570,7 @@ class detect(mdl.model):
         
         if n is None:
             n=target.shape[0]
+            print(n)
         
         nb=np.shape(self.__R)[0]
         
@@ -642,6 +650,7 @@ class detect(mdl.model):
     
     def R2_ex_corr(self,bond=None,v_ref=None,**kwargs):
         """
+        detect.R2_ex_corr(bond=None,v_ref=None,**kwargs)
         Attempts to fit exchange contributions to R2 relaxation. Requires R2 
         measured at at least two fields. By default, adds a detection vector which
         corrects for exchange, and returns the estimated exchange contribution at 
@@ -680,7 +689,32 @@ class detect(mdl.model):
                 self.__r[k]=np.concatenate((self.__r[k],np.transpose([r_ex_vec])),axis=1)
                 self.__rho[k]=np.concatenate((self.__rho[k],[rhoz]),axis=0)
                 self.__rhoCSA[k]=np.concatenate((self.__rhoCSA[k],np.zeros([1,self.tc().size])))
-            
+                
+    def _remove_R2_ex(self):
+        """
+        Deletes the R2 exchange correction from all bonds and from the average
+        sensitivity calculation. If the user has manually set detect_par['R2_ex_corr']
+        to 'no', this function will do nothing (so don't edit this parameter
+        manually!)
+        detect._remove_R2_ex()
+        """
+        
+        if self.detect_par['R2_ex_corr'][0].lower()=='n':
+            return
+        else:
+            self.detect_par['R2_ex_corr']='no'
+            if self.info is not None:
+                self.info=self.info.drop(self.info.axes[1][-1],axis=1)
+            if self.__rAvg is not None:
+                self.__rAvg=self.__rAvg[:,:-1]
+                self.__rhoAvg=self.__rhoAvg[:-1]
+            nb=np.shape(self.__r)[0]
+            for k in range(nb):
+                if self.__r[k] is not None:
+                    self.__r[k]=self.__r[k][:,:-1]
+                    self.__rho[k]=self.__rho[k][:-1]
+                    self.__rhoCSA[k]=self.__rhoCSA[k][:-1]
+
             
     def __r_norm(self,bond=None,**kwargs):
         "Applies equal-max or equal-integral normalization"
@@ -1031,6 +1065,14 @@ class detect(mdl.model):
         if nb==1:
             bond=0
         return self.__R0[bond]
+    
+    def rho_eff(self,exp_num=None,mdl_num=0,bond=None,**kwargs):
+        rho_eff,_=self._rho_eff(exp_num,mdl_num,bond,**kwargs)
+        return rho_eff
+    
+    def rho0(self,exp_num=None,mdl_num=0,bond=None,**kwargs):
+        _,rho0=self._rho_eff(exp_num,mdl_num,bond,**kwargs)
+        return rho0
     
     def _RCSAin(self,bond=0):
         nb=np.shape(self.__R)[0]

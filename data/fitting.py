@@ -42,9 +42,16 @@ def fit_data(data,detect=None,**kwargs):
     "The new sensitivities of the output data are the detectors used"
     out.sens=detect.copy()
     
-    "Delete data if R2 exchange correction has been made"
-    if out.sens.detect_par['R2_ex_corr']=='y':
-        pass
+    "Delete the estimation of R2 due to exchange if included in the data here"
+    if hasattr(data.sens,'detect_par') and data.sens.detect_par['R2_ex_corr'][0].lower()=='y':
+        R=data.R.copy()[:,:-1]
+        R_std=data.R_std.copy()[:,:-1]
+        data=data.copy('shallow')    #We don't want to edit the original data object by deleting some of the R data
+        "The shallow copy alone would still edit the original R data"
+        "Replacing the matrices, however, should leave the orignal matrices untouched"
+        data.R=R
+        data.R_std=R_std
+        
     
     nd=detect.r(bond=0).shape[1]    #Number of detectors
     out.R=np.zeros([nb,nd])

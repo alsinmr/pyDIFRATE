@@ -356,6 +356,14 @@ class rates(mdl.model):
         
         return R.copy()
     
+    def Reff(self,exp_num=None,mdl_num=0,bond=None,**kwargs):
+        R,_=self._rho_eff(exp_num,mdl_num,bond,**kwargs)
+        return R
+
+    def R0(self,exp_num=None,mdl_num=None,bond=None,**kwargs):
+        _,R0=self._rho_eff(exp_num,mdl_num,bond,**kwargs)
+        return R0
+    
     def _rhoCSA(self,exp_num,bond=None):
         """Calculates relaxation due to CSA only. We need this function to 
         allow application of anisotropic models, which then have different 
