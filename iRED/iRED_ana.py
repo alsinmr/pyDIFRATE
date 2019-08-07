@@ -127,12 +127,13 @@ def get_vec(sel1,sel2,**kwargs):
     if 'in1' in kwargs:
         in1=kwargs.get('in1')
     else:
-        in1=np.arange(a.atoms.n_atoms)
+        "Just changed this line. Could be wrong!!!"
+        in1=np.arange(sel1.n_atoms)
         
     if 'in2' in kwargs:
         in2=kwargs.get('in2')
     else:
-        in2=np.arange(b.atoms.n_atoms)
+        in2=np.arange(sel2.n_atoms)
     
     
     if a!=b:

@@ -72,11 +72,18 @@ def trunc_t_axis(nt,n=100,nr=10):
     return index
         
 
-def get_trunc_vec(molecule,n=100,nr=10):
+def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
     """
-    vec=get_trunc_vec(molecule,n=100,nr=10)
+    vec=get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None)
     
 
     
     """
-    pass
+    
+    "Indices to allow using the same atom more than once"
+    if sel1in is None:
+        sel1in=np.arange(sel1.n_atoms)
+    if sel2in is None:
+        sel2in=np.arange(sel2.n_atoms)
+        
+    return
