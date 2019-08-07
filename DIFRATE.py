@@ -11,7 +11,6 @@ import os
 curdir=os.getcwd()
 
 DRloc=os.path.dirname(os.path.abspath(__file__))
-print(DRloc)
 os.chdir(DRloc)
 
 os.chdir('r_class')

@@ -18,10 +18,12 @@ os.chdir('../data')
 
 def fit_data(data,detect=None,**kwargs):
     """
-    Should update this to pass the standard deviations from the fit into the new
-    sensitivity object!!!
-    FIX THIS NEXT!!!!
+    Subsequent fitting is currently failing (I think), because we are later trying to 
+    fit the detectors that result from the R2 exchange correction. Should have an 
+    automatic mechanism to discard these in later fits.
     """
+    
+    
     if detect is None:
         if data.detect is None:
             print('A detect object must be provided in the input or as part of the data object')
@@ -38,7 +40,11 @@ def fit_data(data,detect=None,**kwargs):
     "Output object"
     out=dc.data()
     "The new sensitivities of the output data are the detectors used"
-    out.sens=detect
+    out.sens=detect.copy()
+    
+    "Delete data if R2 exchange correction has been made"
+    if out.sens.detect_par['R2_ex_corr']=='y':
+        pass
     
     nd=detect.r(bond=0).shape[1]    #Number of detectors
     out.R=np.zeros([nb,nd])
@@ -120,6 +126,7 @@ def fit_data(data,detect=None,**kwargs):
         if sv_in:
             out.Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])
         
+    out.sens.info.loc['stdev']=np.median(out.R_std,axis=0)
         
     if sv_in:
         out.Rin=data.R

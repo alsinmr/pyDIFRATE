@@ -414,88 +414,90 @@ class detect(mdl.model):
         
         rhoz=np.dot(T,Vt)
         
-        plt.plot(self.z(),rhoz[-1])
         """Detectors that are not approaching zero at the end of the range of
         correlation times tend to oscillate where they do approach zero. We want
         to push that oscillation slightly below zero
         """
         
         for k in range(0,n):
-            if (rhoz[k,0]>0.95*np.max(rhoz[k,:]) or rhoz[k,-1]>0.95*np.max(rhoz[k,:])) and Neg!=0:
-
-                reopt=True #Option to cancel the re-optimization in special cases
-                
-                if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
-                    pm=1;
-                else:
-                    pm=-1;                        
-                
-                temp=rhoz[k,:]
-                "Locate maxima and minima in the detector"
-                mini=np.where((temp[2:]-temp[1:-1]>=0) & (temp[1:-1]-temp[0:-2]<=0))[0]+1
-                maxi=np.where((temp[2:]-temp[1:-1]<=0) & (temp[1:-1]-temp[0:-2]>=0))[0]+1
-                
-                """Filter out minima that occur at more than 90% of the sensitivity max,
-                since these are probably just glitches in the optimization.
-                """
-                if np.size(mini)>=2 and np.size(maxi)>=2:
-                    mini=mini[(temp[mini]<.9) & (temp[mini]<.05*np.max(-pm*np.diff(temp[maxi])))]
-                elif np.size(mini)>=2:
-                    mini=mini[temp[mini]<.9]
-                    
-                if np.size(maxi)>=2:
-                    maxi=maxi[(temp[maxi]<.9) & (temp[maxi]>0.0)]
-#                    maxi=maxi[(temp[maxi]<.9) & (temp[maxi]>0.0*np.max(-pm*np.diff(temp[maxi])))]
-                
-                
-                if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
-                    "Calculation for the first detection vector"
-
-                    if np.size(maxi)>=2 & np.size(mini)>=2:
-                        step=int(np.round(np.diff(mini[0:2])/2))
-                        slope2=-(temp[maxi[-1]]-temp[maxi[0]])*Neg/(maxi[-1]-maxi[0])
-                    elif np.size(maxi)==1 and np.size(mini)>=1:
-                        step=maxi[0]-mini[0]
-                        slope2=temp[maxi[0]]*Neg/step
-                    else:
-                        reopt=False
-                        
-                    if reopt:
-                        a=np.max([1,mini[0]-step])
-                        slope1=-temp[maxi[0]]/step*Neg
-                        line1=np.arange(0,-temp[maxi[0]]*Neg-1e-12,slope1)
-                        line2=np.arange(-temp[maxi[0]]*Neg,1e-12,slope2)
-                        try:
-                            target=np.concatenate((np.zeros(a),line1,line2,np.zeros(ntc-a-np.size(line1)-np.size(line2))))
-                        except:
-                            reopt=False
-                                
-                else:
-                    "Calculation otherwise (last detection vector)"
-                    if np.size(maxi)>=2 & np.size(mini)>=2:
-                        step=int(np.round(np.diff(mini[-2:])/2))
-                        slope2=-(temp[maxi[0]]-temp[maxi[-1]])*Neg/(maxi[0]-maxi[-1])
-                    elif np.size(maxi)==1 and np.size(mini)>=1:
-                        step=mini[-1]-maxi[0]
-                        slope2=-temp[maxi[0]]*Neg/step
-                    else:
-                        reopt=False
-                        
-                    if reopt:
-                        a=np.min([ntc,mini[-1]+step])
-                        slope1=temp[maxi[-1]]/step*Neg
+            try:
+                if (rhoz[k,0]>0.95*np.max(rhoz[k,:]) or rhoz[k,-1]>0.95*np.max(rhoz[k,:])) and Neg!=0:
     
-                        line1=np.arange(-temp[maxi[-1]]*Neg,1e-12,slope1)
-                        line2=np.arange(0,-temp[maxi[-1]]*Neg-1e-12,slope2)                    
-                        target=np.concatenate((np.zeros(a-np.size(line1)-np.size(line2)),line2,line1,np.zeros(ntc-a)))
+                    reopt=True #Option to cancel the re-optimization in special cases
                     
-
-                if reopt:
-                    Y=(Vt,pks[k],target)
+                    if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
+                        pm=1;
+                    else:
+                        pm=-1;                        
                     
-                    X=linprog_par(Y)
-                    T[k,:]=X
-                    rhoz[k,:]=np.dot(T[k,:],Vt)
+                    temp=rhoz[k,:]
+                    "Locate maxima and minima in the detector"
+                    mini=np.where((temp[2:]-temp[1:-1]>=0) & (temp[1:-1]-temp[0:-2]<=0))[0]+1
+                    maxi=np.where((temp[2:]-temp[1:-1]<=0) & (temp[1:-1]-temp[0:-2]>=0))[0]+1
+                    
+                    """Filter out minima that occur at more than 90% of the sensitivity max,
+                    since these are probably just glitches in the optimization.
+                    """
+                    if np.size(mini)>=2 and np.size(maxi)>=2:
+                        mini=mini[(temp[mini]<.9) & (temp[mini]<.05*np.max(-pm*np.diff(temp[maxi])))]
+                    elif np.size(mini)>=2:
+                        mini=mini[temp[mini]<.9]
+                        
+                    if np.size(maxi)>=2:
+                        maxi=maxi[(temp[maxi]<.9) & (temp[maxi]>0.0)]
+    #                    maxi=maxi[(temp[maxi]<.9) & (temp[maxi]>0.0*np.max(-pm*np.diff(temp[maxi])))]
+                    
+                    
+                    if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
+                        "Calculation for the first detection vector"
+    
+                        if np.size(maxi)>=2 & np.size(mini)>=2:
+                            step=int(np.round(np.diff(mini[0:2])/2))
+                            slope2=-(temp[maxi[-1]]-temp[maxi[0]])*Neg/(maxi[-1]-maxi[0])
+                        elif np.size(maxi)==1 and np.size(mini)>=1:
+                            step=maxi[0]-mini[0]
+                            slope2=temp[maxi[0]]*Neg/step
+                        else:
+                            reopt=False
+                            
+                        if reopt:
+                            a=np.max([1,mini[0]-step])
+                            slope1=-temp[maxi[0]]/step*Neg
+                            line1=np.arange(0,-temp[maxi[0]]*Neg-1e-12,slope1)
+                            line2=np.arange(-temp[maxi[0]]*Neg,1e-12,slope2)
+                            try:
+                                target=np.concatenate((np.zeros(a),line1,line2,np.zeros(ntc-a-np.size(line1)-np.size(line2))))
+                            except:
+                                reopt=False
+                                    
+                    else:
+                        "Calculation otherwise (last detection vector)"
+                        if np.size(maxi)>=2 & np.size(mini)>=2:
+                            step=int(np.round(np.diff(mini[-2:])/2))
+                            slope2=-(temp[maxi[0]]-temp[maxi[-1]])*Neg/(maxi[0]-maxi[-1])
+                        elif np.size(maxi)==1 and np.size(mini)>=1:
+                            step=mini[-1]-maxi[0]
+                            slope2=-temp[maxi[0]]*Neg/step
+                        else:
+                            reopt=False
+                            
+                        if reopt:
+                            a=np.min([ntc,mini[-1]+step])
+                            slope1=temp[maxi[-1]]/step*Neg
+        
+                            line1=np.arange(-temp[maxi[-1]]*Neg,1e-12,slope1)
+                            line2=np.arange(0,-temp[maxi[-1]]*Neg-1e-12,slope2)                    
+                            target=np.concatenate((np.zeros(a-np.size(line1)-np.size(line2)),line2,line1,np.zeros(ntc-a)))
+                        
+    
+                    if reopt:
+                        Y=(Vt,pks[k],target)
+                        
+                        X=linprog_par(Y)
+                        T[k,:]=X
+                        rhoz[k,:]=np.dot(T[k,:],Vt)
+            except:
+                pass
         R2ex=('R2_ex_corr' in kwargs and kwargs.get('R2_ex_corr').lower()[0]=='y') or\
             self.detect_par['R2_ex_corr'][0].lower()=='y'
             
