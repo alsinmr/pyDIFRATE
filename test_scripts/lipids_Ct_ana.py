@@ -17,7 +17,7 @@ for k in range(2,80):
     psf.append('/Volumes/My Book/MD/run1.part{0:04d}.xtc'.format(k))    
 
 
-uni=mda.Universe(dcd,psf[0:10])
+uni=mda.Universe(dcd,psf[0:])
 
 #uni=mda.Universe(dcd,'/Volumes/My Book/MD/reduced_1ns_whole.xtc')
 
@@ -154,8 +154,8 @@ label0=['gamma1A','gamma1B','gamma1C','gamma2A','gamma2B','gamma2C','gamma3A','g
 
 
 
-#res_in=[114,15,56,45,117]
-res_in=[114]
+res_in=[114,15,56,45,117]
+#res_in=[114]
 
 i1=np.zeros(np.unique(sel01).size*np.size(res_in),'int64')
 

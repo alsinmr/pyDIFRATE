@@ -471,7 +471,7 @@ class data(object):
         |Save data to filename
         |self.save(filename)
         """
-        save_DIFRATE(self,filename)
+        save_DIFRATE(filename,self)
         
     def copy(self,type='deep'):
         """

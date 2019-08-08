@@ -38,6 +38,34 @@ os.chdir('../iRED')
 from MDAnalysis.analysis.align import rotation_matrix
 from psutil import virtual_memory
 
+def Ct2data(molecule,n=100,nr=10,**kwargs):
+    
+    if molecule.sel1in is None:
+        sel1in=np.arange(molecule.sel1.atoms.n_atoms)
+    else:
+        sel1in=molecule.sel1in
+    if molecule.sel2in is None:
+        sel2in=np.arange(molecule.sel2.atoms.n_atoms)
+    else:
+        sel2in=molecule.sel2in
+        
+        
+    nt=molecule.mda_object.trajectory.n_frames
+        
+    index=trunc_t_axis(nt,n,nr)
+        
+    vec=get_trunc_vec(molecule.sel1,molecule.sel2,index,sel1in,sel2in,**kwargs)
+    
+    ct=Ct(vec,**kwargs)
+    
+    S2=S2calc(vec)
+    
+    Ctdata=data(molecule=molecule,Ct=ct,S2=S2)
+    
+    "Still need to make sure that the standard deviation is properly imported from here!!!"
+    
+    return Ctdata
+    
 def trunc_t_axis(nt,n=100,nr=10):
     """
     Calculates a log-spaced sampling schedule for an MD time axis. Parameters are
@@ -92,16 +120,20 @@ def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
     nt=np.size(index) #Number of time steps
     na=np.size(sel1in) #Number of vectors
     
-    X=np.zeros([na,nt])
-    Y=np.zeros([na,nt])
-    Z=np.zeros([na,nt])
+    X=np.zeros([nt,na])
+    Y=np.zeros([nt,na])
+    Z=np.zeros([nt,na])
     t=np.zeros([nt])
 
-    traj=sel1.trajectory
+    traj=sel1.universe.trajectory
     if 'dt' in kwargs:
         dt=kwargs.get('dt')
     else:
         dt=traj.dt
+        if traj.units['time']=='ps':    #Convert time units into ns
+            dt=dt/1e3
+        elif traj.units['time']=='ms':
+            dt=dt*1e3
 
     ts=iter(traj)
     for k,t0 in enumerate(index):
@@ -119,9 +151,9 @@ def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
         
         length=np.sqrt(X0**2+Y0**2+Z0**2)
         
-        X[:,k]=np.divide(X0,length)
-        Y[:,k]=np.divide(Y0,length)
-        Z[:,k]=np.divide(Z0,length)
+        X[k,:]=np.divide(X0,length)
+        Y[k,:]=np.divide(Y0,length)
+        Z[k,:]=np.divide(Z0,length)
         t[k]=dt*t0
         if k%int(nt/100)==0 or k+1==nt:
             printProgressBar(k+1, nt, prefix = 'Loading:', suffix = 'Complete', length = 50) 
@@ -130,18 +162,73 @@ def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
     
     if not('alignCA' in kwargs and kwargs.get('alignCA').lower()[0]=='n'):
         "Default is always to align the molecule (usually with CA)"
-        vec=align(vec,sel1,index,**kwargs)
+        vec=align(vec,sel1.universe,**kwargs)
            
     return vec
 
-def Ct(vec,**kwargs):
-    
-    nc=mp.cpu_count()
+def Ct(vec,**kwargs):    
     if'n_cores' in kwargs:
         nc=np.min([kwargs.get('n_cores'),nc])
+    else:
+        nc=mp.cpu_count()
         
-    pass
+    nb=vec['X'].shape[1]
+    
+    v0=list()   #Store date required for each core
+    for k in range(nc):
+        v0.append((vec['X'][:,range(k,nb,nc)],vec['Y'][:,range(k,nb,nc)],vec['Z'][:,range(k,nb,nc)],vec['index']))
+    
+    if 'parallel' in kwargs and kwargs.get('parallel').lower()[0]=='n':
+        ct0=list()
+        for v in v0:
+            ct0.append(Ct_par(v))
+    else:
+        with mp.Pool(processes=nc) as pool:
+            ct0=pool.map(Ct_par,v0)
+    
+    
+    "Get the count of number of averages"
+    index=vec['index']
+    N=np.zeros(np.max(index)+1)
+    n=np.size(index)
+    for k in range(n):
+        N[index[k:]-index[k]]+=1
+        
+    i=N!=0
+    N=N[i]
+    
+    ct=np.zeros([np.size(N),nb])
+    N0=N
+    N=np.repeat([N],np.shape(ct0)[2],axis=0).T
+    for k in range(nc):
+        ct[:,range(k,nb,nc)]=np.divide(ct0[k][i],N)
+        
+    
+    dt=(vec['t'][1]-vec['t'][0])/(vec['index'][1]-vec['index'][0])
+    t=np.arange(0,dt*(np.max(index)+1),dt)
+    t=t[i]
+    
+    Ct={'t':t,'Ct':ct.T,'N':N0,'index':index}
+    
+    return Ct
 
+def Ct_par(v):
+    index=v[3]
+    X=v[0]
+    Y=v[1]
+    Z=v[2]
+    
+    n=np.size(index)
+    c=np.zeros([np.max(index)+1,np.shape(X)[1]])
+    
+    for k in range(n):
+        if k/100==np.ceil(k/100):
+            print(k/n)
+        c[index[k:]-index[k]]+=(3*(np.multiply(X[k:],X[k])+np.multiply(Y[k:],Y[k])\
+             +np.multiply(Z[k:],Z[k]))**2-1)/2
+        
+    return c
+    
 def align(vec0,uni,**kwargs):
     """
     Removes overall rotation from a trajectory, by aligning to a set of reference
@@ -157,11 +244,12 @@ def align(vec0,uni,**kwargs):
     ref0=uni0.positions-uni0.atoms.center_of_mass()
     
     SZ=np.shape(vec0.get('X'))
+    index=vec0['index']
     "Pre-allocate the direction vector"
     vec={'X':np.zeros(SZ),'Y':np.zeros(SZ),'Z':np.zeros(SZ),'t':vec0.get('t'),'index':index} 
 
     nt=vec0['t'].size
-    index=vec0['index']
+
     
     traj=uni.trajectory
     ts=iter(traj)
@@ -178,10 +266,24 @@ def align(vec0,uni,**kwargs):
         
         "Rotation matrix for this time point"
         R,_=rotation_matrix(pos,ref0)
-        vec['X'][:,k]=vec0['X'][:,k]*R[0,0]+vec0['Y'][:,k]*R[0,1]+vec0['Z'][:,k]*R[0,2]
-        vec['Y'][:,k]=vec0['X'][:,k]*R[1,0]+vec0['Y'][:,k]*R[1,1]+vec0['Z'][:,k]*R[1,2]
-        vec['Z'][:,k]=vec0['X'][:,k]*R[2,0]+vec0['Y'][:,k]*R[2,1]+vec0['Z'][:,k]*R[2,2]
+        vec['X'][k,:]=vec0['X'][k,:]*R[0,0]+vec0['Y'][k,:]*R[0,1]+vec0['Z'][k,:]*R[0,2]
+        vec['Y'][k,:]=vec0['X'][k,:]*R[1,0]+vec0['Y'][k,:]*R[1,1]+vec0['Z'][k,:]*R[1,2]
+        vec['Z'][k,:]=vec0['X'][k,:]*R[2,0]+vec0['Y'][k,:]*R[2,1]+vec0['Z'][k,:]*R[2,2]
+        if k%int(np.size(index)/100)==0 or k+1==nt:
+            printProgressBar(k+1, np.size(index), prefix = 'Aligning:', suffix = 'Complete', length = 50) 
         
+    return vec
+
+def S2calc(vec):
+    v=[vec.get('X'),vec.get('Y'),vec.get('Z')]
+    S2=np.zeros(np.shape(vec.get('X'))[1])
+    for k in v:
+        for m in v:
+            S2+=np.mean(k*m,axis=0)**2
+    
+    S2=3/2*S2-1/2
+    
+    return S2     
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
     """
