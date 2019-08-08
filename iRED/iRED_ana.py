@@ -133,6 +133,7 @@ def get_vec(sel1,sel2,**kwargs):
     if 'in2' in kwargs:
         in2=kwargs.get('in2')
     else:
+        "Also changed this line. "
         in2=np.arange(sel2.n_atoms)
     
     
