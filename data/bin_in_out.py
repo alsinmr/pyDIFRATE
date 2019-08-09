@@ -50,15 +50,18 @@ def save_DIFRATE(filename,obj):
     Nonetheless, pickling fails if we don't first remove the saved universe.
     """
     
+    obj=obj.copy()
+    
     if hasattr(obj,'sens') and hasattr(obj,'detect'):
         if obj.sens is not None and obj.sens.molecule is not None:
-            obj.sens.molecule.mda_object=None
+            obj.sens.molecule=None
         if obj.detect is not None and obj.detect.molecule is not None:
-            obj.detect.molecule.mda_object=None
+            obj.detect.molecule=None
     elif hasattr(obj,'molecule'):
-        obj.molecule.mda_object=None
+        obj.molecule=None
     elif hasattr(obj,'mda_object'):
-        obj.mda_object=None
+        print('Warning: Cannot pickle MDAnalysis object')
+        return
         
     
     save_bin(filename,obj)

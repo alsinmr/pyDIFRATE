@@ -20,6 +20,7 @@ from chimera_funs import plot_rho
 os.chdir('../data')
 from fitting import fit_data
 from bin_in_out import save_DIFRATE
+from load_nmr import load_NMR
 import copy
 
 class data(object):
@@ -28,6 +29,7 @@ class data(object):
         
         
         self.label=None
+        self.chi=None
         
         self.R=None
         self.R_std=None
@@ -57,14 +59,13 @@ class data(object):
         self.load(**kwargs)
 #%% Some options for loading in data        
     def load(self,**kwargs):
+        EstErr=False #Default don't estimate error. This is overridden for 'Ct'
         "Load in correlation functions from an iRED calculation"
         if 'iRED' in kwargs:
             self.ired=kwargs.get('iRED')
             self.R=self.ired.get('DelCt')
             nt=self.ired.get('t').size
             self.sens=Ct(t=self.ired.get('t'),**kwargs)
-            self.detect=detect(self.sens)
-#            self.R_std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
             
             norm=1/(self.ired.get('Ct')[:,0]-self.ired.get('CtInf'))
             norm=np.transpose([norm/norm[0:-(self.ired.get('rank')*2+1)].mean()])
@@ -74,15 +75,49 @@ class data(object):
 
             self.R_std=np.dot(norm,[self.sens.info.loc['stdev']])
             
-        if 'Ct' in kwargs:
+        elif 'Ct' in kwargs:
+            EstErr=True #Default estimate error for correlation functions
             ct=kwargs.get('Ct')
-            self.R=ct.get('Ct')
+            self.R=ct.get('Ct')                
             self.sens=Ct(t=ct.get('t'),**kwargs)
-            self.detect=detect(self.sens)
-            self.R_std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
+            nt=ct['t'].size
+            if 'R_std' in ct:
+                self.R_std=ct['R_std']
+                EstErr=False
+            elif 'N' in ct:
+                stdev=1/np.sqrt(ct['N'])
+                stdev[0]=1e-6
+                self.sens.info.loc['stdev']=stdev
+                self.R_std=np.repeat([stdev],self.R.shape[0],axis=0)
+            else:
+                self.R_std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
             if 'S2' in kwargs:
                 self.S2=kwargs.get('S2')
             molecule=kwargs.get('molecule')
+            
+        elif 'filename' in kwargs:
+            "Can you really replace all of self like this?"
+            self=load_NMR(kwargs.get(filename))
+            
+        if 'EstErr' in kwargs and kwargs.get('EstErr')[0].lower()=='n':
+            EstErr=False
+
+        if self.sens is not None:
+            self.detect=detect(self.sens)
+            
+        if EstErr:
+            try:
+                self.detect.r_no_opt(np.min([15,nt]))
+                fit0=self.fit()
+#                plt.plot(self.sens.t(),self.R[0,:])
+#                plt.plot(self.sens.t(),fit0.Rc[0,:])
+                self.R_std=np.sqrt((1/nt)*(np.atleast_2d(fit0.chi)*self.R_std.T**2)).T
+    #            self.R_std[:,0]=self.R_std.min()/1e3
+                self.sens.info.loc['stdev']=np.median(self.R_std,axis=0)
+                self.detect=detect(self.sens)
+            except:
+                print('Warning: Error estimation failed')
+
             
         if 'molecule' in kwargs:
             mol=kwargs.get('molecule')
@@ -91,11 +126,7 @@ class data(object):
                 self.detect.molecule=mol
                 self.sens.molecule.set_selection()
             self.label=mol.label
-             
-        if 'EstErr' in kwargs and kwargs.get('EstErr').lower()[0]=='y':
-            self.detect.r_nopt(np.min([15,nt]))
-            
-
+    
     def new_detect(self,**kwargs):
         if 'sens' in kwargs:
             self.detect=detect(kwargs.get('sens'),**kwargs)
@@ -374,7 +405,6 @@ class data(object):
             index=bond
         elif any(np.atleast_1d(self.label)==bond):
             index=np.where(np.array(self.label)==bond)[0][0]
-            print(index)
 
         if norm.lower()[0]=='y':
             if det_num is None:

@@ -95,8 +95,13 @@ class Ct(mdl.model):
         
         a.update({'stdev' : stdev})
         self.info=pd.DataFrame.from_dict(a).T        
-            
-        self.__R=np.exp(-1e-9*np.dot(np.transpose([self.__t]),np.divide(1,[self.__tc])))
+        
+        if 'S2' in kwargs:
+            self.__R=np.exp(-1e-9*np.dot(np.atleast_2d(self.__t).T,1/np.atleast_2d(self.__tc)))\
+                -np.repeat([np.exp(-1e-9*self.__t[-1]/self.__tc)],self.__t.shape[0],axis=0)
+        else:
+            self.__R=np.exp(-1e-9*np.dot(np.atleast_2d(self.__t).T,1/np.atleast_2d(self.__tc)))
+#            self.__R=np.exp(-1e-9*np.dot(np.transpose([self.__t]),np.divide(1,[self.__tc])))
         "Names of the experimental variables that are available"
         self.__exper=['t','stdev']
         "Names of the spin system variables that are available"

@@ -17,6 +17,10 @@ from scipy.sparse.linalg import eigs
 from scipy.optimize import linprog
 from scipy.optimize import lsq_linear as lsqlin
 import multiprocessing as mp
+import warnings
+
+warnings.filterwarnings("ignore",r"Ill-conditioned matrix*")
+warnings.filterwarnings("ignore",r"Solving system with option*")
 
 class detect(mdl.model):
     def __init__(self,sens,exp_num=None,mdl_num=None):
@@ -1336,7 +1340,6 @@ def linprog_par(Y):
         x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),method='interior-point',options={'disp' :False,})
         x=x['x']
         if np.any(np.dot(Vt.T,x)<(np.min(target)-.0001)):
-            "This is sketchy. Linprog is return np.dot(Vt.T,x)<-1, but yields success. Shouldn't happend"
             x=np.ones(Vt.shape[0])
     except:
         x=np.ones(Vt.shape[0])

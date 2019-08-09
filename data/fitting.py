@@ -79,37 +79,64 @@ def fit_data(data,detect=None,**kwargs):
     if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
         print('Subtracting S2')
     
-    "Here, we buildup up X with all the information required for each fit"
-    "required: normalized data, normalized r, upper and lower bounds"
-    X=list()
-    for k in range(0,nb):
-        rhoz=detect.rhoz(bond=k)
-        UB=rhoz.max(axis=1)
-        LB=rhoz.min(axis=1)
-        r=detect.r(bond=k)
-        
-        if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
-            R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
+
+    "Set up parallel processing"
+    if 'parallel' in kwargs:
+
+        if kwargs.get('parallel')[0].lower()=='y':
+            para=True
         else:
-            R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
-        r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
-        
-        X.append((r,R,LB,UB,conf,nmc))
+            para=False
+    else:
+        if nmc==0:
+            para=False
+        else:
+            para=True
     
-    "Set up parallel processing"    
-    if 'parallel' in kwargs and kwargs.get('parallel').lower()[0]=='y':
+    
+    if not(para):
+        "Series processing (only on specific user request)"
+        Y=list()
+        for k in range(nb):
+            rhoz=detect.rhoz(bond=k)
+            UB=rhoz.max(axis=1)
+            LB=rhoz.min(axis=1)
+            r=detect.r(bond=k)
+            
+            if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
+                R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
+            else:
+                R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
+            r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
+            X=(r,R,LB,UB,conf,nmc)
+            Y.append(para_fit(X))
+            print(k)
+    else:
+        "Here, we buildup up X with all the information required for each fit"
+        "required: normalized data, normalized r, upper and lower bounds"
+        X0=list()
+        for k in range(0,nb):
+            rhoz=detect.rhoz(bond=k)
+            UB=rhoz.max(axis=1)
+            LB=rhoz.min(axis=1)
+            r=detect.r(bond=k)
+            
+            if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
+                R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
+            else:
+                R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
+            r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
+            
+            X0.append((r,R,LB,UB,conf,nmc))
+        
+        "Parallel processing (default)"
         nc=mp.cpu_count()
         if 'n_cores' in kwargs:
             nc=np.min([kwargs.get('n_cores'),nc])
-        
-        with mp.Pool(processes=nc) as pool:
-            Y=pool.map(para_fit,X)
             
-    else:
-        "Else, run in a normal for loop"
-        Y=list()
-        for k in range(0,nb):
-            Y.append(para_fit(X[k]))
+        with mp.Pool(processes=nc) as pool:
+            Y=pool.map(para_fit,X0)
+
             
     "Options to not save the input- possibly useful for MD data analysis"
     if 'save_input' in kwargs and kwargs.get('save_input').lower()[0]=='n':
@@ -144,7 +171,10 @@ def fit_data(data,detect=None,**kwargs):
     out.ired=data.ired
     out.label=data.label
     
+    out.chi=np.sum((data.R-out.Rc)**2/(data.R_std**2),axis=1)
+    
     return out
+
 
 def para_fit(X):
     "Function to calculate results in parallel"

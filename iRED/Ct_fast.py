@@ -60,7 +60,7 @@ def Ct2data(molecule,n=100,nr=10,**kwargs):
     
     S2=S2calc(vec)
     
-    Ctdata=data(molecule=molecule,Ct=ct,S2=S2)
+    Ctdata=data(molecule=molecule,Ct=ct,S2=S2,**kwargs)
     
     "Still need to make sure that the standard deviation is properly imported from here!!!"
     
@@ -189,7 +189,7 @@ def Ct(vec,**kwargs):
     
     "Get the count of number of averages"
     index=vec['index']
-    N=np.zeros(np.max(index)+1)
+    N=np.zeros(index[-1]+1)
     n=np.size(index)
     for k in range(n):
         N[index[k:]-index[k]]+=1
@@ -205,7 +205,7 @@ def Ct(vec,**kwargs):
         
     
     dt=(vec['t'][1]-vec['t'][0])/(vec['index'][1]-vec['index'][0])
-    t=np.arange(0,dt*(np.max(index)+1),dt)
+    t=np.linspace(0,dt*np.max(index),index[-1]+1)
     t=t[i]
     
     Ct={'t':t,'Ct':ct.T,'N':N0,'index':index}
@@ -222,11 +222,10 @@ def Ct_par(v):
     c=np.zeros([np.max(index)+1,np.shape(X)[1]])
     
     for k in range(n):
-        if k/100==np.ceil(k/100):
-            print(k/n)
         c[index[k:]-index[k]]+=(3*(np.multiply(X[k:],X[k])+np.multiply(Y[k:],Y[k])\
              +np.multiply(Z[k:],Z[k]))**2-1)/2
-        
+#        if k%int(n/100)==0 or k+1==n:
+#            printProgressBar(k+1, n, prefix = 'C(t) calc:', suffix = 'Complete', length = 50) 
     return c
     
 def align(vec0,uni,**kwargs):
