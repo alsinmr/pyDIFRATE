@@ -17,7 +17,7 @@ for k in range(2,80):
     psf.append('/Volumes/My Book/MD/run1.part{0:04d}.xtc'.format(k))    
 
 
-uni=mda.Universe(dcd,psf[0:10])
+uni=mda.Universe(dcd,psf[0:80])
 
 #uni=mda.Universe(dcd,'/Volumes/My Book/MD/reduced_1ns_whole.xtc')
 

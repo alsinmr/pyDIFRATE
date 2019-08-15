@@ -41,6 +41,7 @@ def fit_data(data,detect=None,**kwargs):
     out=dc.data()
     "The new sensitivities of the output data are the detectors used"
     out.sens=detect.copy()
+    out.sens._disable()    #Clear the input sensitivities (restricts)
     
     "Delete the estimation of R2 due to exchange if included in the data here"
     if hasattr(data.sens,'detect_par') and data.sens.detect_par['R2_ex_corr'][0].lower()=='y':
@@ -82,14 +83,13 @@ def fit_data(data,detect=None,**kwargs):
 
     "Set up parallel processing"
     if 'parallel' in kwargs:
-
         if kwargs.get('parallel')[0].lower()=='y':
             para=True
         else:
             para=False
     else:
         if nmc==0:
-            para=False
+            para=True
         else:
             para=True
     
@@ -144,8 +144,8 @@ def fit_data(data,detect=None,**kwargs):
     else:
         sv_in=True
        
-    if sv_in:
-        out.Rc=np.zeros(data.R.shape)
+
+    Rc=np.zeros(data.R.shape)
 
     nd=detect.r(bond=0).shape[1]
     out.R=np.zeros([nb,nd])
@@ -157,21 +157,25 @@ def fit_data(data,detect=None,**kwargs):
         out.R_std[k,:]=Y[k][1]
         out.R_l[k,:]=Y[k][2]
         out.R_u[k,:]=Y[k][3]
-        if sv_in:
-            out.Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])
+        Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])
+
+    if sv_in:
+        out.Rc=Rc
         
     out.sens.info.loc['stdev']=np.median(out.R_std,axis=0)
         
     if sv_in:
         out.Rin=data.R
         out.Rin_std=data.R_std
+    
         
     out.detect=dt(detect)
     
     out.ired=data.ired
     out.label=data.label
     
-    out.chi=np.sum((data.R-out.Rc)**2/(data.R_std**2),axis=1)
+
+    out.chi=np.sum((data.R-Rc)**2/(data.R_std**2),axis=1)
     
     return out
 

@@ -107,10 +107,7 @@ class detect(mdl.model):
 
         
         "How many bonds are there?"
-        if self.BondSpfc=='yes':
-            nb=self.molecule.vXY.shape[0]
-        else:
-            nb=1
+        nb=self._nb()
         
         "Storage for the input rate constants"
         self.__R=list()         #Store experimental sensitivities
@@ -208,7 +205,7 @@ class detect(mdl.model):
         self.__rhoCSA=[None]*nb #CSA only sensitivities
         
         "Store SVD matrix for parallel function"
-        self.__Vt=None
+#        self.__Vt=None
 
         self.z0=[None]*nb
         self.Del_z=[None]*nb
@@ -285,7 +282,7 @@ class detect(mdl.model):
     def r_no_opt(self,n,bond=None,**kwargs):
         
         self.n=n
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
 
         if nb==1:
             bond=0
@@ -339,7 +336,7 @@ class detect(mdl.model):
             Neg=self.detect_par.get('NegAllow')
           
             
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         "If bond set to -1, run through all orientations."
         if bond is None:
             bonds=np.zeros(0)
@@ -553,7 +550,7 @@ class detect(mdl.model):
                     kwargs.pop('Normalization')
                 self.r_target(n,self.__rho[bond],bonds,**kwargs)
 
-    def r_target(self,n=None,target=None,bond=None,**kwargs):
+    def r_target(self,target=None,n=None,bond=None,**kwargs):
         "Set sensitivities as close to some target function as possible"
         
         if target is None:
@@ -574,9 +571,8 @@ class detect(mdl.model):
         
         if n is None:
             n=target.shape[0]
-            print(n)
         
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         
         "If bond set to -1, run through all orientations."
         if bond is not None and np.size(bond)==1 and np.atleast_1d(bond)[0]==-1:
@@ -667,7 +663,7 @@ class detect(mdl.model):
             print('Warning: At least 2 R2 experiments are required to perform the exchange correction')
             return
         
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             "If bond is not specified, and we don't have bond specificity, operate on bond 0"
             bond=0
@@ -712,14 +708,48 @@ class detect(mdl.model):
             if self.__rAvg is not None:
                 self.__rAvg=self.__rAvg[:,:-1]
                 self.__rhoAvg=self.__rhoAvg[:-1]
-            nb=np.shape(self.__r)[0]
+#            nb=np.shape(self.__r)[0]
+            nb=self._nb()
             for k in range(nb):
                 if self.__r[k] is not None:
                     self.__r[k]=self.__r[k][:,:-1]
                     self.__rho[k]=self.__rho[k][:-1]
                     self.__rhoCSA[k]=self.__rhoCSA[k][:-1]
+                    
+    def _disable(self):
+        """
+        Clears many of the variables that allow a detectors object to be used
+        for fitting and for further detector optimization. This is useful when
+        passing the detector object as a sensitivity object resulting from a fit.
+        The reasoning is that the sensitivity stored in a fit should not be changed
+        for any reason, since the fit has already been performed and therefore
+        the detector sensitivities should not be changes (hidden, only intended
+        for internal use)
+        
+        Note, there is an added benefit that detectors generated for direct 
+        application to MD-derived correlation functions may be rather large, and
+        so we save considerable memory here as well (esp. when saving)
+        """
+        nb=self._nb()
+        
+        self.__R=None         #Stores experimental sensitivities
+        self.__R0=list()
+        self.__RCSA=list()      #Stores experimental sensitivities for CSA only
+        self.__R0CSA=list()
 
+        self.__r=None
+
+        self.__Rc=None        #Stores the back-calculated sensitivities
+        self.__RcAvg=None
+        
+        self.SVD=None #Stores SVD results
+        self.SVDavg=None
             
+        self.MdlPar_in=None
+        self.info_in=None
+        
+        self.norm=None
+        
     def __r_norm(self,bond=None,**kwargs):
         "Applies equal-max or equal-integral normalization"
         if 'NT' in kwargs:
@@ -731,7 +761,7 @@ class detect(mdl.model):
         else:
             NT=self.detect_par.get('Normalization')
             
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
         
@@ -769,7 +799,8 @@ class detect(mdl.model):
         internal values, z0, Del_z
         """
         
-        nb=np.shape(self.__R)[0]
+#        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         """Trying to determine how many detectors to characterize (possible that 
         not all bonds have same number of detectors. Note- this situation is not
         allowed for data processing.
@@ -914,7 +945,7 @@ class detect(mdl.model):
         Del_z, and standard deviation of resulting detectors. Also resorts the
         detectors according to z0
         """
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         
 
         match=True
@@ -1006,7 +1037,7 @@ class detect(mdl.model):
             
     
     def r(self,bond=None):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
             
@@ -1022,7 +1053,7 @@ class detect(mdl.model):
                 return self.__r[bond]
     
     def rhoz(self,bond=None):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
             
@@ -1041,7 +1072,7 @@ class detect(mdl.model):
                     return self.__rho[bond]
             
     def Rc(self,bond=None):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
             
@@ -1059,13 +1090,13 @@ class detect(mdl.model):
     
     
     def Rin(self,bond=0):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
         return self.__R[bond]
     
     def R0in(self,bond=0):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
         return self.__R0[bond]
@@ -1079,13 +1110,13 @@ class detect(mdl.model):
         return rho0
     
     def _RCSAin(self,bond=0):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
         return self.__RCSA[bond]
     
     def _R0CSAin(self,bond=0):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
         return self.__R0CSA[bond]
@@ -1180,7 +1211,7 @@ class detect(mdl.model):
             fig=plt.figure()
             ax=fig.add_subplot(111)
             
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
             
@@ -1265,7 +1296,7 @@ class detect(mdl.model):
         
         
     def plot_Rc(self,bond=None,exp_num=None,ax=None,**kwargs):
-        nb=np.shape(self.__R)[0]
+        nb=self._nb()
         if nb==1:
             bond=0
                     
@@ -1305,6 +1336,14 @@ class detect(mdl.model):
         
         return hdl
 
+    def _nb(self):
+    #    nb=np.shape(self.__R)[0]
+        if self.BondSpfc=='yes':
+            nb=self.molecule.vXY.shape[0]
+        else:
+            nb=1
+        return nb
+
 def svd0(X,n):
     if np.shape(X)[0]>np.shape(X)[1]:
 #        U,S,Vt=svds(X,k=n,tol=0,which='LM')    #Large data sets use sparse svd to avoid memory overload
@@ -1320,6 +1359,8 @@ def svd0(X,n):
         U=U[:,0:np.size(S)] #Drop all the empty vectors
     
     return U,S,Vt
+
+
     
 def linprog_par(Y):
     """This function optimizes a detector sensitivity that has a value of 1

@@ -27,6 +27,8 @@ class molecule(object):
         self.pdb_id=None
         "We might want to delete this pdb upon object deletion"
         
+        self.__MDA_info=None
+        
         if np.size(args)>0:
             self.load_struct(*args)
 
@@ -170,3 +172,53 @@ class molecule(object):
         self.pdb_id=np.array(a.ids)
         
         return full_path
+    
+    def del_MDA_object(self):
+        """
+        In some cases, it is necessary to delete the MD analysis objects 
+        (for example, when saving, we can't pickle the MD object). This function
+        deletes the object after first saving information required to reload
+        it and the atom selections
+        """
+        if self.mda_object is None:
+            "Do nothing if no universe is stored"
+            return
+        else:
+            uni=self.mda_object
+            info=dict()
+            self.__MDA_info=info
+        "Save the filenames used for the universe"
+        info.update({'filename':uni.filename})
+        if hasattr(uni.trajectory,'filenames'):
+            info.update({'filenames':uni.trajectory.filenames})
+            
+        "Save the id numbers of the selections"
+        if self.sel1 is not None:
+            info.update({'sel1':self.sel1.ids})
+        if self.sel2 is not None:
+            info.update({'sel2':self.sel2.ids})
+        
+        "Set the MD analysis objects to None"
+        self.mda_object=None
+        self.sel1=None
+        self.sel2=None
+        
+    def reload_MDA(self):
+        if self.__MDA_info is None:
+            "Do nothing if MD analysis object hasn't been deleted"
+            return
+        info=self.__MDA_info
+        if 'filenames' in info:
+            uni=mda.Universe(info['filename'],info['filenames'].tolist())
+        else:
+            uni=mda.Universe(info['filename'])
+        self.mda_object=uni
+        
+        sel0=uni.select_atoms('name *')
+        if 'sel1' in info:
+            self.sel1=sel0[info['sel1']]
+        if 'sel2' in info:
+            self.sel2=sel0[info['sel2']]
+        
+        self.__MDA_info=None
+        

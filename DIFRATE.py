@@ -27,6 +27,7 @@ import in_out as io
 os.chdir('../iRED')
 import iRED_ana as iRED
 import Ct_ana
+import Ct_fast
 
 os.chdir('../Struct')
 from structure import molecule

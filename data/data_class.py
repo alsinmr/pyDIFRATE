@@ -315,6 +315,7 @@ class data(object):
                     ax[k].set_ylabel(r'$R_2^{ex} / s^{-1}$')
         fig.subplots_adjust(hspace=0.25)
         
+        fig.show()
             
     def plot_cc(self,det_num,cutoff=None,ax=None,norm='y',**kwargs):
         if np.size(self.Rcc)==0:
@@ -326,6 +327,8 @@ class data(object):
         if ax==None:
             fig=plt.figure()
             ax=fig.add_subplot(111)
+        else:
+            fig=ax.figure
             
         if norm.lower()[0]=='y':
             if det_num is None:
@@ -391,7 +394,7 @@ class data(object):
             ax.set_yticks(lbl)
             ax.set_yticklabels(xaxis_lbl,rotation=0)
         
-        
+        fig.show()
         
         return ax
        
