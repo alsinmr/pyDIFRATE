@@ -91,21 +91,21 @@ class model(object):
             self.AMdl.append(AMdl)
             
         else:
-            if dm.ModelBondSpfc(Model) and self.molecule.vXY.size==0:
-                print('Before defining an model with anisotropic motion, import a structure and select the desired bonds')
-            else:
-                tMdl,AMdl,BndSp=dm.ModelSel(Model,'dXY',self.molecule,**kwargs)
+#            if dm.ModelBondSpfc(Model) and self.molecule.vXY.size==0:
+#                print('Before defining an model with anisotropic motion, import a structure and select the desired bonds')
+#            else:
+            tMdl,AMdl,BndSp=dm.ModelSel(Model,'dXY',self.molecule,**kwargs)
 #                if BndSp=='yes' and self._class!='Ct':
-                if BndSp=='yes':
-                    _,A,_=dm.ModelSel(Model,'dCSA',self.molecule,**kwargs)
-                    AMdl=[AMdl,A]
-                    AMdl=np.swapaxes(AMdl,0,1)
-                    
-                MdlPar=dict(Model=Model,BondSpfc=BndSp,**kwargs)
+            if BndSp=='yes':
+                _,A,_=dm.ModelSel(Model,'dCSA',self.molecule,**kwargs)
+                AMdl=[AMdl,A]
+                AMdl=np.swapaxes(AMdl,0,1)
                 
-                self.MdlPar.append(MdlPar)
-                self.tMdl.append(tMdl)
-                self.AMdl.append(AMdl)
+            MdlPar=dict(Model=Model,BondSpfc=BndSp,**kwargs)
+            
+            self.MdlPar.append(MdlPar)
+            self.tMdl.append(tMdl)
+            self.AMdl.append(AMdl)
     
         self.__Reff.append(None)
         self.__R0.append(None)

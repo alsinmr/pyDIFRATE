@@ -6,9 +6,20 @@ Created on Thu Apr  4 14:51:02 2019
 @author: albertsmith
 """
 
-"""Here we store all models for motion. We keep the basic input in the mdl_sens
+"""
+Here we store all models for motion. We keep the basic input in the mdl_sens
 class very general, so you can add whatever parameters desired here (pass with 
 **kwargs)
+To add a new model, just make a new definition. Should return an array of 
+correlation times and amplitudes. If model is anisotropic, there should be an 
+array of arrays, that is, each bond should have an array. The inner array should
+have the same size as the array of correlation times. Note that **kwargs must
+be in the arguments, even if it isn't used. We always pass the structure and 
+direction to the model function, regardless if it's required, so these can be 
+collected with **kwargs. Note, all models should return a third parameter that
+states whether the model is bond-specific or not. Value should be a string, 'yes'
+or 'no'
+
 Note that we furthermore can have access to the structure, imported via 
 the mdanalysis module 
 """
@@ -16,43 +27,64 @@ the mdanalysis module
 import numpy as np
 from numpy import inf
 
-def ModelBondSpfc(Model):
-    "Add models with bond-specific dynamics to this list"
-    mdls=np.array(['AnisoDif']) 
-    return np.any(Model==mdls)
+#def ModelBondSpfc(Model):
+#    "Add models with bond-specific dynamics to this list"
+#    mdls=np.array(['AnisoDif']) 
+#    return np.any(Model==mdls)
     
     
-def ModelSel(Model,direct='dXY',structure=None,**kwargs):
+def ModelSel(Model,direct='dXY',struct=None,**kwargs):
     """
-    I should update this to simply try to execute the function out of globals()
+    General function to select the correct model
     """
-    if Model=='IsoDif':
-        tMdl,AMdl,BndSpfc=IsoDif(**kwargs)
-#        BndSpfc='no'
-        """We must always say if the model is bond specific, so we know if an
-        array of models is being returned"""
-    elif Model=='AnisoDif':
-        tMdl,AMdl,BndSpfc=AnisoDif(structure,direct,**kwargs)
-#        BndSpfc='yes'
-    elif Model=='Combined':
+    
+    if Model=='Combined':
         tMdl,AMdl,BndSpfc=Combined(tMdl1=kwargs.get('tMdl1'),AMdl1=kwargs.get('AMdl1'),\
                            tMdl2=kwargs.get('tMdl2'),AMdl2=kwargs.get('AMdl2'))
         BndSpfc='no'
+    else:
+        try:
+            fun=globals()[Model]
+#            if 'struct' in fun.__code__.co_varnames[range(fun.__code__.co_argcount)]:
+#                print('Bond Specific')
+#                if struct.vXY.size==0:
+#                    print('Before defining an model with anisotropic motion, import a structure and select the desired bonds')
+#                    return
+            tMdl,AMdl,BndSpfc=fun(struct=struct,direct=direct,**kwargs)
+            
+        except:
+            print('Model "{0}" was not recognized'.format(Model))
+            return
+    
+#    if Model=='IsoDif':
+#        tMdl,AMdl,BndSpfc=IsoDif(**kwargs)
+##        BndSpfc='no'
+#        """We must always say if the model is bond specific, so we know if an
+#        array of models is being returned"""
+#    elif Model=='AnisoDif':
+#        tMdl,AMdl,BndSpfc=AnisoDif(struct,direct,**kwargs)
+##        BndSpfc='yes'
+#    elif Model=='Combined':
+#        tMdl,AMdl,BndSpfc=Combined(tMdl1=kwargs.get('tMdl1'),AMdl1=kwargs.get('AMdl1'),\
+#                           tMdl2=kwargs.get('tMdl2'),AMdl2=kwargs.get('AMdl2'))
+#        BndSpfc='no'
 
-    "Make sure we return np arrays with a dimension, and sort the correlation times"
-    if not isinstance(tMdl,np.ndarray):
-        tMdl=np.array(tMdl)
-    if tMdl.shape==():
-        tMdl=np.array([tMdl])
-    if not isinstance(AMdl,np.ndarray):
-        AMdl=np.array(AMdl)
-    if AMdl.shape==():
-        AMdl=np.array([AMdl])
+    "Make sure we return np arrays with a dimension"
+    tMdl=np.atleast_1d(tMdl)
+    AMdl=np.atleast_1d(AMdl)
+#    if not isinstance(tMdl,np.ndarray):
+#        tMdl=np.array(tMdl)
+#    if tMdl.shape==():
+#        tMdl=np.array([tMdl])
+#    if not isinstance(AMdl,np.ndarray):
+#        AMdl=np.array(AMdl)
+#    if AMdl.shape==():
+#        AMdl=np.array([AMdl])
         
     tMdl[tMdl==inf]=1000
     return tMdl,AMdl,BndSpfc
-
-"Simple isotropic diffusion"
+#%% Simple isotropic diffusion
+"Isotropic tumbling in solution"
 def IsoDif(**kwargs):
 
     if 'tM' in kwargs:        
@@ -67,7 +99,40 @@ def IsoDif(**kwargs):
     AMdl=1
     BndSpfc='no'
     return tMdl,AMdl,BndSpfc
+
+#%% Simple fast motion
+"Fast motion (too fast to be detected by relaxation, or occuring within 1st pt of trajectory"
+def FastMotion(S2=None,**kwargs):
+    tMdl=1e-14    #Arbitrarily short correlation time
+    if 'AMdl' in kwargs:
+        AMdl=kwargs.get('AMdl')
+    elif 'A' in kwargs:
+        AMdl=kwargs.get('A')
+    elif S2 is None:
+        print('You must provide S2 to define the FastMotion model')
+        return
+    else:
+        AMdl=1-S2
+        
+    if np.size(S2)!=1:
+        struct=kwargs.get('struct')
+        if struct.sel1in is not None:
+            nb=np.size(struct.sel1in)
+        elif struct.sel1 is not None:
+            nb=struct.sel1.n_atoms
+        else:
+            nb=None
+        if nb is not None and np.size(S2)!=nb:
+            print('The size of S2 must be 1 or equal the number of bonds being analyzed')
+            return
+        else:
+            BndSpfc='yes'
+        AMdl=np.atleast_2d(AMdl).T
+    else:
+        BndSpfc='no'
     
+    return tMdl,AMdl,BndSpfc
+#%% Anisotropic diffusion
 def AnisoDif(struct,direct='vXY',**kwargs):
    
     """First we get the diffusion tensor, and also Diso and D2. This can be 
@@ -159,6 +224,7 @@ def AnisoDif(struct,direct='vXY',**kwargs):
     
     return tM,A,BndSpfc
 
+#%% Combine two models
 def Combined(tMdl1,AMdl1,tMdl2,AMdl2):
     if np.ndim(tMdl1)==np.ndim(AMdl1) and np.ndim(tMdl2)==np.ndim(AMdl2):
         BndSpfc='no'

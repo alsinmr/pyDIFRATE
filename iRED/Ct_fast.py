@@ -91,7 +91,7 @@ def trunc_t_axis(nt,n=100,nr=10):
     index=np.repeat(index,nr,axis=0)+np.repeat([np.arange(0,nt,nt/nr)],index.size,axis=0).reshape([index.size*nr])
     
     index=index[index<nt]
-    index=np.sort(index).astype('int')
+    index=np.unique(index).astype('int')
     
     return index
         
@@ -144,7 +144,8 @@ def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
             if k!=0:    
                 for _ in range(index[k]-index[k-1]):
                     next(ts,None) 
-        pos=sel1.positions[sel1in]-sel2.positions[sel2in]
+        pos=sel1[sel1in].positions-sel2[sel2in].positions
+#        pos=sel1.positions[sel1in]-sel2.positions[sel2in]
         X0=pos[:,0]
         Y0=pos[:,1]
         Z0=pos[:,2]
