@@ -301,6 +301,8 @@ class rates(mdl.model):
             for m in exp_num:
                 self.del_exp(m)
         else:
+            if np.ndim(exp_num)>0:
+                exp_num=exp_num[0]
             self.info=self.info.drop(exp_num,axis=1)
             del self.__R[exp_num]
             del self.__RCSA[exp_num]

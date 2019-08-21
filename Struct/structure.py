@@ -38,7 +38,7 @@ class molecule(object):
     def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,index1=None,index2=None,Nuc=None,resi=None,select=None,**kwargs):
         
         if select is not None:
-            sel=self.mda_object.select_atoms(kwargs.get('select'))
+            sel=self.mda_object.select_atoms(select)
         else:
             sel=self.mda_object.select_atoms('name *')
             
@@ -191,6 +191,8 @@ class molecule(object):
         info.update({'filename':uni.filename})
         if hasattr(uni.trajectory,'filenames'):
             info.update({'filenames':uni.trajectory.filenames})
+        elif hasattr(uni.trajectory,'filename'):
+            info.update({'filenames':np.atleast_1d(uni.trajectory.filename)})
             
         "Save the id numbers of the selections"
         if self.sel1 is not None:

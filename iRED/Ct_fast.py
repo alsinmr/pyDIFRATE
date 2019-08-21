@@ -129,11 +129,12 @@ def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
     if 'dt' in kwargs:
         dt=kwargs.get('dt')
     else:
-        dt=traj.dt
-        if traj.units['time']=='ps':    #Convert time units into ns
-            dt=dt/1e3
-        elif traj.units['time']=='ms':
-            dt=dt*1e3
+        dt=traj.dt/1e3
+#        if traj.units['time']=='ps':    #Convert time units into ns
+#            dt=dt/1e3
+#        elif traj.units['time']=='ms':
+#            dt=dt*1e3
+        
 
     ts=iter(traj)
     for k,t0 in enumerate(index):
@@ -192,6 +193,7 @@ def Ct(vec,**kwargs):
     index=vec['index']
     N=np.zeros(index[-1]+1)
     n=np.size(index)
+   
     for k in range(n):
         N[index[k:]-index[k]]+=1
         
@@ -200,8 +202,9 @@ def Ct(vec,**kwargs):
     
     ct=np.zeros([np.size(N),nb])
     N0=N
-    N=np.repeat([N],np.shape(ct0)[2],axis=0).T
+    
     for k in range(nc):
+        N=np.repeat([N0],np.shape(ct0[k])[1],axis=0).T
         ct[:,range(k,nb,nc)]=np.divide(ct0[k][i],N)
         
     
@@ -240,6 +243,8 @@ def align(vec0,uni,**kwargs):
         uni0=uni.select_atoms('name CA')
         if uni0.n_atoms==0:
             uni0=uni.select_atoms('name C11')   #Not sure about this. Alignment for lipids?
+        if uni0.n_atoms==0:
+            uni0=uni.select_atoms('name *')
     
     ref0=uni0.positions-uni0.atoms.center_of_mass()
     

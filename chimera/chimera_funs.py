@@ -113,22 +113,40 @@ def peptide_plane(attr,residue,value,chain=None):
         f.write('match mode: any\n')
         f.write('recipient: atoms\n')
         
+#        for k,res in enumerate(residue):
+#            if np.size(chain)==np.size(residue):
+#                f.write('\t:{0}.{1}'.format(res,chain[k]))
+#            elif chain is not None:
+#                f.write('\t:{0}.{1}'.format(res,chain))
+#            else:
+#                f.write('\:t{0}'.format(res))
+#            
+#            f.write('@N,H,HN,CA|')
+#            
+#            if np.size(chain)==np.size(residue):
+#                f.write(':{0}.{1}'.format(res-1,chain[k]))
+#            elif chain is not None:
+#                f.write(':{0}.{1}'.format(res-1,chain))
+#                
+#            f.write('@C,O\t{0}\n'.format(value[k]))
+        
         for k,res in enumerate(residue):
             if np.size(chain)==np.size(residue):
-                f.write('\t:{0}.{1}'.format(res,chain[k]))
+                f.write('\t:{0}@N,H,HN,CA/pdbSegment={1}|'.format(res,chain[k]))
             elif chain is not None:
-                f.write('\t:{0}.{1}'.format(res,chain))
+                f.write('\t:{0}@N,H,HN,CA/pdbSegment={1}|'.format(res,chain))
             else:
-                f.write('\:t{0}'.format(res))
+                f.write('\:t{0}@N,H,HN,CA|'.format(res))
             
-            f.write('@N,H,HN,CA|')
+#            f.write('@N,H,HN,CA|')
             
             if np.size(chain)==np.size(residue):
-                f.write(':{0}.{1}'.format(res-1,chain[k]))
+                f.write(':{0}@C,O/pdbSegment={1}'.format(res-1,chain[k]))
             elif chain is not None:
-                f.write(':{0}.{1}'.format(res-1,chain))
-                
-            f.write('@C,O\t{0}\n'.format(value[k]))
+                f.write(':{0}@C,O/pdbSegment={1}'.format(res-1,chain))
+            else:
+                f.write(':{0}@C,O'.format(resi-1))
+            f.write('\t{0}\n'.format(value[k]))
             
 def bond_attr(attr,atom1,atom2,value):
     
@@ -178,8 +196,10 @@ def pp_sel_string(residue,chain=None):
 #        if np.size(residue)==1:
 #            string=':.{0}:{1}&@N,H,CA|:.{0}:.{2}&@C,0'.format(chain,residue,residue-1)
 #        else:
-        string=':{0}.{1}&@C,O'.format(res1,chain)
-        string=string+'|:{0}.{1}@N,H,HN,CA'.format(res0,chain)
+#        string=':{0}.{1}&@C,O'.format(res1,chain)
+#        string=string+'|:{0}.{1}@N,H,HN,CA'.format(res0,chain)
+        string=':{0}&@C,O/pdbSegment={1}'.format(res1,chain)
+        string=string+'|:{0}@N,H,HN,CA/pdbSegment={1}'.format(res0,chain)
             
     else:
         string=':{0}&@C,O'.format(res1)

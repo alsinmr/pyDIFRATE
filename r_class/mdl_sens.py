@@ -17,6 +17,7 @@ import os
 os.chdir('../Struct')
 import structure
 os.chdir('../r_class')
+#import detectors
 from scipy.interpolate import interp1d as interp
 
 
@@ -338,6 +339,18 @@ class model(object):
         M0[i+1]=1-wt
         
         return M,M0
+    
+#    def detect(self,exp_num=None,mdl_num=None):
+#        """
+#        r=self.detect(exp_num=None,mdl_num=None)
+#        Creates a detector object from the current sensitivity object. can
+#        specifiy particular experiments and models to use (default is all
+#        experiments) and no model
+#        """
+#        
+#        r=detectors.detect(self,exp_num,mdl_num)
+#        
+#        return r
         
     def __temp_exper(self,exp_num,inter):
         """When we calculate dipole/CSA relaxation under a bond-specific model 

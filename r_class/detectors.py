@@ -572,6 +572,7 @@ class detect(mdl.model):
         if n is None:
             n=target.shape[0]
         
+        self.n=n
         nb=self._nb()
         
         "If bond set to -1, run through all orientations."
@@ -715,6 +716,32 @@ class detect(mdl.model):
                     self.__r[k]=self.__r[k][:,:-1]
                     self.__rho[k]=self.__rho[k][:-1]
                     self.__rhoCSA[k]=self.__rhoCSA[k][:-1]
+                    
+    def del_exp(self,exp_num):
+        
+        if self.info is not None and self.info_in is not None:
+            print('Deleting experiments from the detector object requires disabling the detectors')
+            self._disable()
+            print('Detectors now disabled')
+
+        if np.size(exp_num)>1:
+            exp_num=np.atleast_1d(exp_num)
+            exp_num[::-1].sort()    #Sorts exp_num in descending order
+            for m in exp_num:
+                self.del_exp(m)
+        else:
+            if np.ndim(exp_num)>0:
+                exp_num=exp_num[0]
+            self.info=self.info.drop(exp_num,axis=1)
+            if self.__rhoAvg is not None:
+                self.__rhoAvg=np.delete(self.__rhoAvg,exp_num,axis=0)
+            nb=self._nb()
+            for k in range(nb):
+                self.__rho[k]=np.delete(self.__rho[k],exp_num,axis=0)
+                self.__rhoCSA[k]=np.delete(self.__rhoCSA[k],exp_num,axis=0)
+                
+            self.n+=-1
+            
                     
     def _disable(self):
         """

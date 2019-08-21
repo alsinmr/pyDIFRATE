@@ -65,6 +65,16 @@ def save_DIFRATE(filename,obj):
     
     save_bin(filename,obj)
     
+    if hasattr(obj,'sens') and hasattr(obj,'detect'):
+        if obj.sens is not None and obj.sens.molecule is not None:
+            obj.sens.molecule.reload_MDA()
+        if obj.detect is not None and obj.detect.molecule is not None:
+            obj.detect.molecule.reload_MDA()
+    elif hasattr(obj,'molecule'):
+        obj.molecule.reload_MDA()
+    elif hasattr(obj,'mda_object'):
+        obj.reload_MDA()
+    
     
 def load_DIFRATE(filename):
     """
