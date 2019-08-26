@@ -9,6 +9,11 @@ Created on Thu Apr  4 15:05:19 2019
 import MDAnalysis as mda
 import numpy as np
 import os
+from vec_funs import new_fun
+import copy
+os.chdir('../chimera')
+from chimera_funs import open_chimera
+os.chdir('../Struct')
 
 class molecule(object):
     def __init__(self,*args):
@@ -22,7 +27,8 @@ class molecule(object):
         self.vXY=np.array([])
         self.vCSA=np.array([])
         self.Ralign=list()
-
+        self._vf=None
+        
         self.pdb=None #Container for a pdb extracted from the mda_object
         self.pdb_id=None
         "We might want to delete this pdb upon object deletion"
@@ -35,12 +41,41 @@ class molecule(object):
     def load_struct(self,*args):   
         self.mda_object=mda.Universe(*args)
         
+    def vec_special(self,Type,**kwargs):
+        """
+        Allows user defined vectors to be created, from a function defined in
+        vec_vuns.py (a function handle should be returned, where that function
+        returns a value dependent on the current position in the md analysis
+        trajectory. The function should return x,y,z components at the given time)
+        """
+        if self._vf is None:
+            self._vf=list()
+            
+        self._vf.append(new_fun(Type,self,**kwargs))
+        
+    def clear_vec_special(self):
+        self._vf=None
+        
+    def vec_fun(self):
+        """
+        Evaluates all vectors generated with vec_special at the current time point
+        of the MD trajectory. Returns a 3xN vector, where N is the number of 
+        vectors (ex. moment_of_inertia or rot_axis vectors)
+        """
+        vec=list()
+        if self._vf is not None:
+            for f in self._vf:
+                vec.append(f()) #Run all of the functions in self._vf
+            return np.concatenate(vec,axis=1)
+        else:
+            print('No vector functions defined, run vec_special first')
+        
     def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,index1=None,index2=None,Nuc=None,resi=None,select=None,**kwargs):
         
         if select is not None:
             sel=self.mda_object.select_atoms(select)
         else:
-            sel=self.mda_object.select_atoms('name *')
+            sel=self.mda_object.atoms
             
         if resi is not None:
             string=''
@@ -64,20 +99,25 @@ class molecule(object):
         else:
             if sel1!=None:
                 if index1!=None:
-                    self.sel1=self.mda_object.select_atoms(sel1)[index1]
+                    self.sel1=sel.select_atoms(sel1)[index1]
                 else:
-                    self.sel1=self.mda_object.select_atoms(sel1)
+                    self.sel1=sel.select_atoms(sel1)
             if sel2!=None:
                 if index2!=None:
-                    self.sel2=self.mda_object.select_atoms(sel2)[index2]
+                    self.sel2=sel.select_atoms(sel2)[index2]
                 else:
-                    self.sel2=self.mda_object.select_atoms(sel2)
+                    self.sel2=sel.select_atoms(sel2)
               
             if sel1in is not None:
                 self.sel1in=sel1in
             if sel2in is not None:
                 self.sel2in=sel2in
         
+    def clear_selection(self):
+        self.sel1=None
+        self.sel2=None
+        self.sel1in=None
+        self.sel2in=None
     
     def add_label(self,label=None):
         self.label_in=label
@@ -138,7 +178,7 @@ class molecule(object):
         if np.shape(self.label_in)[0]==nr:
             self.label=self.label_in
         
-    def MDA2pdb(self,tstep=None,selection=None,**kwargs):
+    def MDA2pdb(self,tstep=None,select=None,**kwargs):
         "Provide a molecule, print a certain frame to pdb for later use in chimera"
         
 
@@ -159,8 +199,8 @@ class molecule(object):
             for k in range(0,tstep):
                 uni.trajectory.next()
         
-        if selection is not None:
-            a=uni.select_atoms(selection)
+        if select is not None:
+            a=uni.select_atoms(select)
         else:
             a=uni.select_atoms('protein')
             if a.n_atoms==0:
@@ -172,6 +212,14 @@ class molecule(object):
         self.pdb_id=np.array(a.ids)
         
         return full_path
+    
+    def chimera(self,**kwargs):
+        """
+        Starts a chimera session with the pdb stored in molecule.pdb
+        """
+        
+        open_chimera(self,**kwargs)
+        
     
     def del_MDA_object(self):
         """
@@ -223,4 +271,25 @@ class molecule(object):
             self.sel2=sel0[info['sel2']]
         
         self.__MDA_info=None
+        
+    def copy(self,type='deep'):
+        """
+        |
+        |Returns a copy of the object. Default is deep copy (all objects except the 
+        |MDanalysis object, mda_object)
+        | obj = obj0.copy(type='deep')
+        |To also create a copy of the molecule object, set type='ddeep'
+        |To do a shallow copy, set type='shallow'
+        """
+        if type=='ddeep':
+            out=copy.deepcopy(self)
+        elif type!='deep':
+            out=copy.copy(self)
+        else:
+            uni=self.mda_object
+            self.mda_object=None
+            out=copy.deepcopy(self)
+            self.mda_object=uni
+            out.mda_object=uni
+        return out
         

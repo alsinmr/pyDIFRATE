@@ -99,8 +99,11 @@ class data(object):
             "Can you really replace all of self like this?"
             self=load_NMR(kwargs.get(filename))
             
-        if 'EstErr' in kwargs and kwargs.get('EstErr')[0].lower()=='n':
-            EstErr=False
+        if 'EstErr' in kwargs:
+            if kwargs.get('EstErr')[0].lower()=='n':
+                EstErr=False
+            elif kwargs.get('EstErr')[0].lower()=='y':
+                EstErr=True
 
         if self.sens is not None:
             self.detect=detect(self.sens)
@@ -124,7 +127,8 @@ class data(object):
             if self is not None:
                 self.sens.molecule=mol
                 self.detect.molecule=mol
-                self.sens.molecule.set_selection()
+                if self.sens.molecule.sel1 is not None and self.sens.molecule.sel2 is not None:
+                    self.sens.molecule.set_selection()
             self.label=mol.label
     
     def new_detect(self,**kwargs):
@@ -296,7 +300,11 @@ class data(object):
         
         
         for k in range(0,nd):
-            ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1))
+            if k==0:
+                ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1))
+            else:
+                ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1,sharex=ax[0]))
+            
             if self.R_l is None:
                 ax[k].errorbar(lbl,self.R[index,k],self.R_std[:,k],color=hdl[k].get_color(),\
                   **kwargs)
@@ -305,14 +313,18 @@ class data(object):
                   **kwargs)
             ax[k].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
             
+            
             if k<nd-1:
-                ax[k].set_xticklabels([])
+                if xaxis_lbl is not None:
+                    ax[k].set_xticklabels(xaxis_lbl)
+                plt.setp(ax[k].get_xticklabels(),visible=False)
             else:
                 if xaxis_lbl is not None:
                     ax[k].set_xticks(lbl)
                     ax[k].set_xticklabels(xaxis_lbl,rotation=90)
                 if nd0!=nd:
                     ax[k].set_ylabel(r'$R_2^{ex} / s^{-1}$')
+                
         fig.subplots_adjust(hspace=0.25)
         
         fig.show()
@@ -539,3 +551,53 @@ class data(object):
             
         return out
         
+    def print2text(self,filename,conf='n',precision=4):
+        """
+        Prints R and R_std to a text file, specified by filename
+        data.print2text(filename)
+        Optionally can also retrun R_u and R_l, the confidence interval, by 
+        including a second argument, conf='y'
+        One may specify the precision of the output, precision=4 is default
+        """
+        form='{0:.{1}f}'
+        with open(filename,'w+') as f:
+            f.write('data')
+            f.write('\nlabel')
+            sz0=np.size(self.label)
+            for k in range(sz0):
+                f.write('\n{0}'.format(self.label[k]))
+            f.write('\nR')
+            sz0,sz1=self.R.shape
+            for k in range(sz0):
+                for m in range(sz1):
+                    if m==0:
+                        f.write('\n')
+                    else:
+                        f.write('\t')   
+                    f.write(form.format(self.R[k,m],precision))
+            f.write('\nRstd')
+            for k in range(sz0):
+                for m in range(sz1):
+                    if m==0:
+                        f.write('\n')
+                    else:
+                        f.write('\t')   
+                    f.write(form.format(self.R_std[k,m],precision))
+            if conf[0].lower()=='y' and self.R_l is not None:
+                f.write('\nR_l, conf={0}'.format(self.conf))
+                for k in range(sz0):
+                    for m in range(sz1):
+                        if m==0:
+                            f.write('\n')
+                        else:
+                            f.write('\t')   
+                        f.write(form.format(self.R_l[k,m],precision))
+                f.write('\nR_u, conf={0}'.format(self.conf))
+                for k in range(sz0):
+                    for m in range(sz1):
+                        if m==0:
+                            f.write('\n')
+                        else:
+                            f.write('\t')   
+                        f.write(form.format(self.R[k,m],precision))
+            

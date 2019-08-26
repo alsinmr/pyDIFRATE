@@ -10,7 +10,6 @@ import os
 import numpy as np
 import MDAnalysis as md
 os.chdir('../Struct')
-from structure import molecule
 os.chdir('../chimera') 
 
 def chimera_path():
@@ -25,7 +24,44 @@ def get_path(filename):
     
     return full_path
 
+def open_chimera(mol,**kwargs):
+    """
+    Open a chimera pdb. Primarily for determining the names of atoms for a given molecule
+    """
+    if mol.pdb is not None:
+        filename=mol.pdb
+    else:
+        print('First create a pdb with MDA2pdb')    
 
+    full_path=get_path('chimera_script.py')
+    
+    uni=mol.mda_object
+    if 'CA' in uni.atoms.names and 'C' in uni.atoms.names and 'N' in uni.atoms.names and 'O' in uni.atoms.names:
+        "We guess this is probably a protein"
+        protein=True
+    else:
+        protein=False    
+    
+    with open(full_path,'w+') as f:
+        f.write('from chimera import runCommand as rc\n') #imports runCommand into python
+        if 'model_id' in kwargs:
+            WrCC(f,'open {0},{1}'.format(kwargs.get('model_id'),filename))
+        else:
+            WrCC(f,'open {0}'.format(filename))
+        WrCC(f,'set bg_color white')
+        
+        WrCC(f,'~ribbon')
+        
+        if protein:
+            WrCC(f,'~display')
+            WrCC(f,'display @N,C,CA,O,H,HN')    #Default just show backbone for protein
+        else:
+            WrCC(f,'display ~solvent')   #Not protein, then just show everything but water
+        
+        WrCC(f,'set bgTransparency')
+        WrCC(f,'~sel')
+        os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
+    
 def plot_cc(mol,resi,values,resi0,chain=None,chain0=None,scaling=1,\
             filename=None,scene=None,fileout=None,**kwargs):
     if filename is None:

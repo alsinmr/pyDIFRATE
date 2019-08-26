@@ -162,7 +162,7 @@ def read_data(f,keys0):
     label=None
     ne=0
     
-    keys1=['R','Rstd','label']
+    keys1=['R','Rstd','label','R_std']
     
     while not(eof(f)) and cont:
         pos=f.tell()
@@ -171,7 +171,7 @@ def read_data(f,keys0):
         if np.isin(a.strip(),keys1):
             if a.strip()=='R':
                 R.append(read_lines(f,np.concatenate((keys0,keys1))))
-            elif a.strip()=='Rstd':
+            elif a.strip()=='Rstd' or a.strip()=='R_std':
                 Rstd.append(read_lines(f,np.concatenate((keys0,keys1))))
             elif a.strip()=='label':
                 label=read_label(f,np.concatenate((keys0,keys1)))

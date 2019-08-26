@@ -11,6 +11,10 @@ import pandas as pd
 import DIFRATE_funs as dff
 import matplotlib.pyplot as plt
 import mdl_sens as mdl
+import os
+os.chdir('../iRED')
+from fast_index import trunc_t_axis,get_count
+os.chdir('../r_class')
 
 class Ct(mdl.model):
     def __init__(self,tc=None,t=None,**kwargs):
@@ -69,7 +73,26 @@ class Ct(mdl.model):
                 self.__t=np.arange(0,t[0],t[1])
             else:
                 self.__t=t
+        elif 'sparse' in kwargs:
+            "Include nt, n, nr and dt in dict object"
+            sparse=kwargs.get('sparse')
+            if 'dt' not in sparse or 'nt' not in sparse:
+                print('dt and nt are required arguments for generating a sparse sensitivity object')
+                return
+            index=trunc_t_axis(**sparse)
             
+            "Get the count of number of averages"            
+            N=get_count(index)
+                
+            t=sparse.get('dt')*np.arange(index[-1]+1)
+            i=N!=0
+            N=N[i]
+            self.__t=t[i]
+            
+            if 'stdev' not in kwargs:
+                stdev=1/np.sqrt(N)
+                stdev[0]=1e-6
+                kwargs.update({'stdev':stdev})
         else:
             self.__t=np.arange(0,500.001,.005)
             

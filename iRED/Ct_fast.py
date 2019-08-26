@@ -37,24 +37,24 @@ from data_class import data
 os.chdir('../iRED')
 from MDAnalysis.analysis.align import rotation_matrix
 from psutil import virtual_memory
+from fast_index import trunc_t_axis,get_count
 
 def Ct2data(molecule,n=100,nr=10,**kwargs):
+    """
+    data=Ct2data(molecule,n=100,nr=10,**kwargs)
+    Takes a molecule object (generated from an MD trajectory), and creates a
+    data object, where the data contains elements of the correlation function,
+    where the trajectory has been sparsely sampled (according to arguments n
+    and nr)
+    """
+
     
-    if molecule.sel1in is None:
-        sel1in=np.arange(molecule.sel1.atoms.n_atoms)
-    else:
-        sel1in=molecule.sel1in
-    if molecule.sel2in is None:
-        sel2in=np.arange(molecule.sel2.atoms.n_atoms)
-    else:
-        sel2in=molecule.sel2in
-        
         
     nt=molecule.mda_object.trajectory.n_frames
         
     index=trunc_t_axis(nt,n,nr)
         
-    vec=get_trunc_vec(molecule.sel1,molecule.sel2,index,sel1in,sel2in,**kwargs)
+    vec=get_trunc_vec(molecule,index,**kwargs)
     
     ct=Ct(vec,**kwargs)
     
@@ -66,66 +66,61 @@ def Ct2data(molecule,n=100,nr=10,**kwargs):
     
     return Ctdata
     
-def trunc_t_axis(nt,n=100,nr=10):
-    """
-    Calculates a log-spaced sampling schedule for an MD time axis. Parameters are
-    nt, the number of time points, n, which is the number of time points to 
-    load in before the first time point is skipped, and finally nr is how many
-    times to repeat that schedule in the trajectory (so for nr=10, 1/10 of the
-    way from the beginning of the trajectory, the scehdule will start to repeat, 
-    and this will be repeated 10 times)
-    
-    """
-    
-    logdt0=np.log10(1.50000001)/n
-    
-    index=list()
-    index.append(0)
-    dt=0
-    while index[-1]<nt:
-        index.append(index[-1]+np.round(10**dt))
-        dt+=logdt0
+def Ct_S2(molecule,n=100,nr=10,**kwargs):
+    nt=molecule.mda_object.trajectory.n_frames
         
-    index=np.array(index)
-
-    index=np.repeat(index,nr,axis=0)+np.repeat([np.arange(0,nt,nt/nr)],index.size,axis=0).reshape([index.size*nr])
-    
-    index=index[index<nt]
-    index=np.unique(index).astype('int')
-    
-    return index
+    index=trunc_t_axis(nt,n,nr)
         
-def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
+    vec=get_trunc_vec(molecule,index,**kwargs)
+    
+    ct=Ct(vec,**kwargs)
+    
+    S2=S2calc(vec)
+    
+    return ct,S2
+        
+def get_trunc_vec(molecule,index,**kwargs):
     """
-    vec=get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None)
-    
-
-    
+    vec=get_trunc_vec(molecule,index)   
     """
     
-    "Indices to allow using the same atom more than once"
-    if sel1in is None:
-        sel1in=np.arange(sel1.n_atoms)
-    if sel2in is None:
-        sel2in=np.arange(sel2.n_atoms)
+    if molecule._vf is not None:
+        vf=molecule.vec_fun
+        special=True
+    else:
+        sel1=molecule.sel1
+        sel2=molecule.sel2
+        sel1in=molecule.sel1in
+        sel2in=molecule.sel2in
         
-    if sel1.universe!=sel2.universe:
-        print('sel1 and sel2 must be generated from the same MDAnalysis universe')
-        return
-        
-    if np.size(sel1in)!=np.size(sel2in):
-        print('sel1 and sel2 or sel1in and sel2in must have the same number of atoms')
-        return
+        "Indices to allow using the same atom more than once"
+        if sel1in is None:
+            sel1in=np.arange(sel1.n_atoms)
+        if sel2in is None:
+            sel2in=np.arange(sel2.n_atoms)
+            
+        if sel1.universe!=sel2.universe:
+            print('sel1 and sel2 must be generated from the same MDAnalysis universe')
+            return
+            
+        if np.size(sel1in)!=np.size(sel2in):
+            print('sel1 and sel2 or sel1in and sel2in must have the same number of atoms')
+            return
+        special=False
     
     nt=np.size(index) #Number of time steps
-    na=np.size(sel1in) #Number of vectors
+    if special:
+        na=vf().shape[1]
+    else:
+        na=np.size(sel1in) #Number of vectors
     
     X=np.zeros([nt,na])
     Y=np.zeros([nt,na])
     Z=np.zeros([nt,na])
     t=np.zeros([nt])
 
-    traj=sel1.universe.trajectory
+    uni=molecule.mda_object
+    traj=uni.trajectory
     if 'dt' in kwargs:
         dt=kwargs.get('dt')
     else:
@@ -144,15 +139,18 @@ def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
             "Maybe traj[t] doesn't work, so we skip through the iterable manually"
             if k!=0:    
                 for _ in range(index[k]-index[k-1]):
-                    next(ts,None) 
-        pos=sel1[sel1in].positions-sel2[sel2in].positions
-#        pos=sel1.positions[sel1in]-sel2.positions[sel2in]
-        X0=pos[:,0]
-        Y0=pos[:,1]
-        Z0=pos[:,2]
+                    next(ts,None)
+                    
+        if special:
+            X0,Y0,Z0=vf()
+        else:
+            pos=sel1[sel1in].positions-sel2[sel2in].positions
+    #        pos=sel1.positions[sel1in]-sel2.positions[sel2in]
+            X0=pos[:,0]
+            Y0=pos[:,1]
+            Z0=pos[:,2]
         
         length=np.sqrt(X0**2+Y0**2+Z0**2)
-        
         X[k,:]=np.divide(X0,length)
         Y[k,:]=np.divide(Y0,length)
         Z[k,:]=np.divide(Z0,length)
@@ -164,9 +162,10 @@ def get_trunc_vec(sel1,sel2,index,sel1in=None,sel2in=None,**kwargs):
     
     if not('alignCA' in kwargs and kwargs.get('alignCA').lower()[0]=='n'):
         "Default is always to align the molecule (usually with CA)"
-        vec=align(vec,sel1.universe,**kwargs)
+        vec=align(vec,uni,**kwargs)
            
     return vec
+    
 
 def Ct(vec,**kwargs):    
     if'n_cores' in kwargs:
@@ -191,11 +190,7 @@ def Ct(vec,**kwargs):
     
     "Get the count of number of averages"
     index=vec['index']
-    N=np.zeros(index[-1]+1)
-    n=np.size(index)
-   
-    for k in range(n):
-        N[index[k:]-index[k]]+=1
+    N=get_count(index)
         
     i=N!=0
     N=N[i]
@@ -309,3 +304,4 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     # Print New Line on Complete
     if iteration == total: 
         print()
+        
