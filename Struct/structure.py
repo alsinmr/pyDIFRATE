@@ -84,14 +84,14 @@ class molecule(object):
             string=string[0:-4]
             sel=sel.select_atoms(string)
         
-        if Nuc!=None:
+        if Nuc is not None:
             if Nuc.lower()=='15n' or Nuc.lower()=='n':                    
                 self.sel1=sel.select_atoms('(name H or name HN) and around 1.1 name N')
                 self.sel2=sel.select_atoms('name N and around 1.1 (name H or name HN)')
-            elif Nuc.lower()=='CO':
+            elif Nuc.lower()=='co':
                 self.sel1=sel.select_atoms('name C and around 1.4 name O')
                 self.sel2=sel.select_atoms('name O and around 1.4 name C')
-            elif Nuc.lower()=='CA':
+            elif Nuc.lower()=='ca':
                 self.sel1=sel.select_atoms('name CA and around 1.4 (name HA or name HA2)')
                 self.sel2=sel.select_atoms('(name HA or name HA2) and around 1.4 name CA')
                 print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
