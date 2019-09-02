@@ -62,18 +62,23 @@ class data(object):
         EstErr=False #Default don't estimate error. This is overridden for 'Ct'
         "Load in correlation functions from an iRED calculation"
         if 'iRED' in kwargs:
-            self.ired=kwargs.get('iRED')
-            self.R=self.ired.get('DelCt')
-            nt=self.ired.get('t').size
-            self.sens=Ct(t=self.ired.get('t'),**kwargs)
+            ired=kwargs['iRED']
+            self.ired=ired
+            self.R=ired['DelCt']
+            del ired['DelCt']
+            nt=ired['t'].size
+            self.sens=Ct(t=ired['t'],S2=None,**kwargs)
             
-            norm=1/(self.ired.get('Ct')[:,0]-self.ired.get('CtInf'))
-            norm=np.transpose([norm/norm[0:-(self.ired.get('rank')*2+1)].mean()])
+            if 'N' in self.ired:
+                stdev=1/np.sqrt(self.ired['N'])
+                stdev[0]=1e-6
+                self.sens.info.loc['stdev']=stdev
+                self.R_std=np.repeat([stdev],self.R.shape[0],axis=0)
+            else:
+                norm=1/(self.ired.get('Ct')[:,0]-self.ired.get('CtInf'))
+                norm=np.transpose([norm/norm[0:-(self.ired.get('rank')*2+1)].mean()])
 
-#            self.std=np.dot(norm,[self.sens.info.loc['stdev']])
-        
-
-            self.R_std=np.dot(norm,[self.sens.info.loc['stdev']])
+                self.R_std=np.dot(norm,[self.sens.info.loc['stdev']])
             
         elif 'Ct' in kwargs:
             EstErr=True #Default estimate error for correlation functions
@@ -182,7 +187,7 @@ class data(object):
         
         out=data()
 
-        nd=self.sens.r(bond=0).shape[1]
+        nd=self.sens.rhoz(bond=0).shape[0]
         nb=self.R.shape[0]
         
 
@@ -191,12 +196,13 @@ class data(object):
         ne=2*rank+1
         
         
-        if self.sens.molecule.sel1in is not None:
-            nb0=np.size(self.sens.molecule.sel1in)
-        elif self.sens.molecule.sel2in is not None:
-            nb0=np.size(self.sens.molecule.sel2in)
-        else:
-            nb0=self.sens.molecule.sel1.n_atoms
+#        if self.sens.molecule.sel1in is not None:
+#            nb0=np.size(self.sens.molecule.sel1in)
+#        elif self.sens.molecule.sel2in is not None:
+#            nb0=np.size(self.sens.molecule.sel2in)
+#        else:
+#            nb0=self.sens.molecule.sel1.n_atoms
+        nb0=self.R.shape[0]-self.ired['n_added_vecs']
         
         out.R=np.zeros([nb0,nd])
         out.R_std=np.zeros([nb0,nd])

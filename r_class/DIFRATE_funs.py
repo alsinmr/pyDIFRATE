@@ -152,7 +152,6 @@ def R1(tc,exper):
     R+=3/4*(2*np.pi*CSA)**2*J(tc,vX)
 
     if QC!=0:
-        print('Huh?')
         "Quadrupolar relaxation"
         """Note that these formulas give the initial rate of relaxation, that 
         is, the average rate of relaxation for all orientations, and furthermore
@@ -170,7 +169,7 @@ def R1(tc,exper):
         elif S==2.5:
             R+=C*(96/5*J(tc,vX)+384/5*J(tc,2*vX))
         else:
-            print('Spin not implemented')
+            print('Spin={0} not implemented for quadrupolar relaxation'.format(S))
             
     return R
 
@@ -188,7 +187,7 @@ def R1Q(tc,exper):
     deltaQ=1/(2*S*(2*S-1))*QC*2*np.pi
     C=(deltaQ/2)**2*(1+eta**2/3)    #Constant scaling the relaxation
     if S==0.5:
-        print('Quadrupolar relaxation experiment not possible for spin 1')
+        print('No quadruple coupling for spin=1/2')
     elif S==1:
         R=C*9*J(tc,vX)
     elif S==1.5:
@@ -221,6 +220,7 @@ def R1p(tc,exper):
     else:
         theta=np.arccos(off/ve)
     
+    
     R10=R1(tc,exper)    #We do this first, because it includes all R1 contributions
     "Start here with the dipole contributions"
     if Nuc1 is not None:
@@ -230,8 +230,7 @@ def R1p(tc,exper):
             sc=S*(S+1)*4/3 #Scaling depending on spin of second nucleus
             R1del=sc*(np.pi*dXY/2)**2*(3*J(tc,vY)+
                       1/3*J(tc,2*vr-ve)+2/3*J(tc,vr-ve)+2/3*J(tc,vr+ve)+1/3*J(tc,2*vr+ve))
-        else:
-            
+        else:            
             R1del=np.zeros(tc.shape)
             for k in range(0,np.size(dXY)):
                 vY=NucInfo(Nuc1[k])/NucInfo('1H')*v0
@@ -242,8 +241,7 @@ def R1p(tc,exper):
     else:
         R1del=np.zeros(tc.shape)
     "CSA contributions"
-    R1del+=1/6*(2*np.pi*CSA)**2*(1/2*J(tc,2*vr-ve)+J(tc,vr-ve)+J(tc,vr+ve)+1/2*J(tc,vr+ve))
-    
+    R1del+=1/6*(2*np.pi*CSA)**2*(1/2*J(tc,2*vr-ve)+J(tc,vr-ve)+J(tc,vr+ve)+1/2*J(tc,2*vr+ve))
     "Here should follow the quadrupole treatment!!!"    
     
     "Add together R1 and R1p contributions, depending on the offset"

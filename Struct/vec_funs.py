@@ -145,19 +145,22 @@ def rot_axis(molecule,axis=[0,0,1],**kwargs):
 #    else:
 #        sel2in=np.molecule.sel2in
 #   
-    
+    if 'sel1' not in kwargs:
+        kwargs.update({'sel1':True})
+    if 'sel2' not in kwargs:
+        kwargs.update({'sel2':True})
     a,b=selections(molecule,**kwargs)
     sel1,sel1in=a
     sel2,sel2in=b
     
     def sub():
         vec0=sel1[sel1in].positions-sel2[sel2in].positions
-        vec=project(vec0,axis,Type='normal')
+        vec=project(vec0,axis,Type='plane')
         return vec
     
     return sub
 
-def project(vec0,vec1,Type='normal'):
+def project(vec0,vec1,Type='plane'):
     """
     Projects a vector (vec0) onto either another vector or a plane (default). If
     projecting onto another vector, vec1 defines that vector. If projecting onto
@@ -219,60 +222,6 @@ def remove(vec0,vec1):
 
     return np.array([x,y,z])
 
-def selections1(molecule,sel=None,select=None,index=1):
-    """
-    Function to select only some atoms on which to perform special vector calculations
-    mda_selection=selections(molecule,sel=None,select=None)
-    
-    Note that sel should be a selection created from an MDanalysis universe, 
-    or be a list of MDanalysis selections.
-    
-    select is a selection string (valid for MDAnalysis) that may be applied after 
-    the initial selection in sel
-    """    
-    
-    uni=molecule.mda_object
-    sel_out=list()
-    
-    
-    if sel is None:
-        if molecule.sel1 is not None:
-            sel_out.append(molecule.sel1)
-            if select is not None:
-                try:
-                    sel_out[0]=sel_out[0].atoms.select_atoms(select)
-                except:
-                    print('select is not a valid selection string')
-        else:
-            if select is None:
-                sel0=uni.atoms
-            else:
-                try:
-                    sel0=uni.select_atoms(select)
-                except:
-                    print('select is not a valid selection string')
-            if np.size(sel0.segments)>1:
-                for sel in sel0.segments:
-                    sel_out.append(sel.atoms)
-            elif np.size(sel0.residues)>1:
-                for sel in sel0.residues:
-                    sel_out.append(sel.atoms)
-            else:
-                sel_out.append(sel0.atoms)
-    elif isinstance(sel,mda.AtomGroup):
-        sel_out.append(sel)
-    else:
-        if np.size(sel)>1:
-            for sel1 in sel:
-                sel_out.append(sel1.atoms)
-        else:
-            try:
-                sel_out.append(sel.atoms)
-            except:
-                print('sel is not a valid MDanalysis atom group')
-
-    return sel_out                
-        
 def selections(molecule,sel0=None,sel1=None,sel2=None,select=None,Nuc=None,sel1in=None,sel2in=None):
     """
     General function for returning a set of selections (does not edit the molecule
