@@ -39,7 +39,7 @@ fit=fit0.iRED2rho()
 
 #Plot results
 fit.plot_rho()  #Plot detector responses
-fit.plot_cc(1)  #Plot cross-correlation, for some detector (currently set to 1)
+fit.plot_cc(2)  #Plot cross-correlation, for some detector (currently set to 1)
 
 
 #Re-analyze detector responses without eigenmode analysis

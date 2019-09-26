@@ -558,13 +558,14 @@ class detect(mdl.model):
                 target=self.__r_auto.get('rho_z')
             except:
                 print('No target provided, and no sensitivity from r_auto available')
-                R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
-                inS2=self.detect_par['inclS2'][0].lower()=='y'
-                target=self.rhoz(bond=None)
-                if R2ex:
-                    target=target[:-1]
-                if inS2:
-                    target=target[1:]
+                return
+        R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
+        inS2=self.detect_par['inclS2'][0].lower()=='y'
+        target=self.rhoz(bond=None)
+        if R2ex:
+            target=target[:-1]
+        if inS2:
+            target=target[1:]
                     
         
         target=np.atleast_2d(target)
@@ -1248,9 +1249,15 @@ class detect(mdl.model):
                 nd=self.rhoz(bond).shape[-2]
             else:
                 nd=self.rhoz(bond[0]).shape[-2]
+            if hasattr(self,'detect_par') and self.detect_par['R2_ex_corr'][0].lower()=='y':
+                nd=nd-1
             rho_index=np.arange(0,nd)
             
-            print(nd)
+#            print(nd)
+        else: 
+            rho_index=np.array(rho_index)
+            nd=np.size(rho_index)
+#            print(nd)
             
         if bond==-1:
             a=self.rhoz(bond=None).T
@@ -1266,8 +1273,8 @@ class detect(mdl.model):
             maxi=np.zeros([nd,ntc])
             mini=1e12*np.ones([nd,ntc])
             for k in range(0,nb):
-                maxi=np.max(np.concatenate(([maxi],[self.rhoz(k)]),axis=0),axis=0)
-                mini=np.min(np.concatenate(([mini],[self.rhoz(k)]),axis=0),axis=0)
+                maxi=np.max(np.concatenate(([maxi],[self.rhoz(k)[rho_index]]),axis=0),axis=0)
+                mini=np.min(np.concatenate(([mini],[self.rhoz(k)[rho_index]]),axis=0),axis=0)
 
             x=np.concatenate((self.z(),self.z()[-1::-1]),axis=0)              
             for k in rho_index:
