@@ -137,6 +137,8 @@ class model(object):
 #        if bond==-1:
 #            bond=None
            
+        if len(self.MdlPar)==0:  #If no models present, set mdl_num to None
+            mdl_num=None
         
         if exp_num is not None:
             exp_num=np.atleast_1d(exp_num)

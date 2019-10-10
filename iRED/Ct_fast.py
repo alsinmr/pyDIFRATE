@@ -49,19 +49,21 @@ def Ct2data(molecule,n=100,nr=10,**kwargs):
     and nr)
     """
 
-    
-        
-    nt=molecule.mda_object.trajectory.n_frames
+    mol=molecule
+    if 'nt' in kwargs:
+        nt=np.min([mol.mda_object.trajectory.n_frames,kwargs.get('nt')])
+    else:
+        nt=mol.mda_object.trajectory.n_frames  
         
     index=trunc_t_axis(nt,n,nr)
         
-    vec=get_trunc_vec(molecule,index,**kwargs)
+    vec=get_trunc_vec(mol,index,**kwargs)
     
     ct=Ct(vec,**kwargs)
     
     S2=S2calc(vec)
     
-    Ctdata=data(molecule=molecule,Ct=ct,S2=S2,**kwargs)
+    Ctdata=data(molecule=mol,Ct=ct,S2=S2,**kwargs)
     
     "Still need to make sure that the standard deviation is properly imported from here!!!"
     return Ctdata

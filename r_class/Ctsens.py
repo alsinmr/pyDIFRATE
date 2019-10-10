@@ -120,8 +120,13 @@ class Ct(mdl.model):
         self.info=pd.DataFrame.from_dict(a).T        
         
         if 'S2' in kwargs:
+#            self.__R=np.exp(-1e-9*np.dot(np.atleast_2d(self.__t).T,1/np.atleast_2d(self.__tc)))\
+#                -np.repeat([np.exp(-1e-9*self.__t[-1]/self.__tc)],self.__t.shape[0],axis=0)
+            "Note the new formula for sensitivity after S2 subtraction. Based on Poisson distribution"
+            T=self.__t[-1]*1e-9 #Length of the trajectory
+            Lambda=1./(2.*self.__tc) #Constant for Poisson distribution
             self.__R=np.exp(-1e-9*np.dot(np.atleast_2d(self.__t).T,1/np.atleast_2d(self.__tc)))\
-                -np.repeat([np.exp(-1e-9*self.__t[-1]/self.__tc)],self.__t.shape[0],axis=0)
+                -np.repeat([1./(T*Lambda)*(1-np.exp(-T*Lambda))],self.__t.shape[0],axis=0)
         else:
             self.__R=np.exp(-1e-9*np.dot(np.atleast_2d(self.__t).T,1/np.atleast_2d(self.__tc)))
 #            self.__R=np.exp(-1e-9*np.dot(np.transpose([self.__t]),np.divide(1,[self.__tc])))

@@ -559,16 +559,18 @@ class detect(mdl.model):
             except:
                 print('No target provided, and no sensitivity from r_auto available')
                 return
-        R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
-        inS2=self.detect_par['inclS2'][0].lower()=='y'
-        target=self.rhoz(bond=None)
-        if R2ex:
-            target=target[:-1]
-        if inS2:
-            target=target[1:]
+
+            R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
+            inS2=self.detect_par['inclS2'][0].lower()=='y'
+            target=self.rhoz(bond=None)
+            if R2ex:
+                target=target[:-1]
+            if inS2:
+                target=target[1:]
                     
         
         target=np.atleast_2d(target)
+        
         
         if n is None:
             n=target.shape[0]

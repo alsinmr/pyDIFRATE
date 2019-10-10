@@ -259,7 +259,7 @@ class data(object):
 
         return out
     
-    def plot_rho(self,fig=None,plot_sens='y',index=None,**kwargs):
+    def plot_rho(self,fig=None,plot_sens='y',index=None,errorbars='n',**kwargs):
         if fig is None:
             fig=plt.figure()
             
@@ -311,12 +311,16 @@ class data(object):
             else:
                 ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1,sharex=ax[0]))
             
-            if self.R_l is None:
-                ax[k].errorbar(lbl,self.R[index,k],self.R_std[:,k],color=hdl[k].get_color(),\
-                  **kwargs)
+            if errorbars[0].lower()=='y':
+                if self.R_l is None:
+                    ax[k].errorbar(lbl,self.R[index,k],self.R_std[:,k],color=hdl[k].get_color(),\
+                      **kwargs)
+                else:
+                    ax[k].errorbar(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],color=hdl[k].get_color(),\
+                      **kwargs)
             else:
-                ax[k].errorbar(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],color=hdl[k].get_color(),\
-                  **kwargs)
+                ax[k].plot(lbl,self.R[index,k],color=hdl[k].get_color(),**kwargs)
+                        
             ax[k].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
             
             
@@ -415,8 +419,7 @@ class data(object):
         fig.show()
         
         return ax
-       
-        
+           
                 
     def draw_cc3D(self,bond,det_num=None,chain=None,fileout=None,scaling=None,norm='y',**kwargs):
         "bond is the user-defined label! Not the absolute index..."
@@ -463,12 +466,14 @@ class data(object):
         chain2=self.sens.molecule.sel2.segids
 
         if np.all(res1==res2) and np.all(chain1==chain2):
+            "Color the whole peptide plane one color"
             resi=res1
             chain=chain1
-            chain[chain=='PROA']='p'
+#            chain[chain=='PROA']='p'   #Why was this line here? I'm removing it, but let's see if it breaks something...
             plt_cc3D(self.sens.molecule,resi,values,resi0=bond,chain=chain,chain0=chain[index],\
                      fileout=fileout,scaling=scaling,color_scheme='blue',**kwargs)
         else:
+            "Color the individual bonds specified in the molecule selections"
             plt_cc3D(self.sens.molecule,None,values,resi0=bond,scaling=scaling,color_scheme='red',**kwargs)
 #            print('Selections over multiple residues/chains- not currently implemented')
         
@@ -492,7 +497,7 @@ class data(object):
             resi0=resi
             resi=res1
             chain=chain1
-            chain[chain=='PROA']='p'
+#            chain[chain=='PROA']='p'
             
             
             

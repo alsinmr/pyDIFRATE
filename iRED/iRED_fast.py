@@ -32,7 +32,11 @@ def iRED_full(mol,rank=2,n=100,nr=10,**kwargs):
     
     """
 
-    index=trunc_t_axis(mol.mda_object.trajectory.n_frames,n,nr)
+    if 'nt' in kwargs:
+        nt=np.min([mol.mda_object.trajectory.n_frames,kwargs.get('nt')])
+    else:
+        nt=mol.mda_object.trajectory.n_frames
+    index=trunc_t_axis(nt,n,nr)
     vec=get_trunc_vec(mol,index,**kwargs)
     
     if 'align_iRED' in kwargs and kwargs.get('align_iRED').lower()[0]=='y':
@@ -59,9 +63,9 @@ def iRED_full(mol,rank=2,n=100,nr=10,**kwargs):
         
         
 
-        n_added_vecs=vec0.get('X').shape[0]
+        n_added_vecs=vec0.get('X').shape[1]
         for k in ['X','Y','Z']:
-            vec[k]=np.concatenate((vec.get(k),vec0.get(k)),axis=0)        
+            vec[k]=np.concatenate((vec.get(k),vec0.get(k)),axis=1)        
         aligned=True
     else:
         aligned=False
@@ -114,10 +118,12 @@ def Mmat(vec,rank=2):
     M=np.eye(nb)
     
     for k in range(0,nb-1):
+        "These are the x,y,z positions for one bond"
         x0=np.repeat([X[k,:]],nb-k-1,axis=0)
         y0=np.repeat([Y[k,:]],nb-k-1,axis=0)
         z0=np.repeat([Z[k,:]],nb-k-1,axis=0)
         
+        "We correlate those positions with all bonds having a larger index (symmetry of matrix allows this)"
         dot=x0*X[k+1:,:]+y0*Y[k+1:,:]+z0*Z[k+1:,:]
         
         if rank==1:
@@ -131,6 +137,60 @@ def Mmat(vec,rank=2):
     Lambda,m=np.linalg.eigh(M)
     return {'M':M,'lambda':Lambda,'m':m,'rank':rank}
 
+def Mlagged(vec,lag,rank=2):
+    """Calculates the iRED M-matrix, with a lag time, which is provided by an 
+    index or range of indices (corresponding to the separation in time points)
+    M = Mlagged(vec,rank=2,lag)
+    
+    lag=10
+    or 
+    lag=[10,20]
+    
+    The first instance calculates M using time points separated by exactly the
+    lag index. The second takes all time points separated by the first argument, 
+    up to one less the last argument (here, separated by 10 up to 19)
+    
+    """
+    
+    X=vec['X'].T
+    Y=vec['Y'].T
+    Z=vec['Z'].T
+    
+    index0=vec['index']
+    
+    if np.size(lag)==1:
+        lag=np.atleast_1d(lag)
+    elif np.size(lag)==2:
+        lag=np.arange(lag[0],lag[1])
+    
+    "Calculate indices for pairing time points separated within the range given in lag"
+    index1=np.zeros(0,dtype=int)
+    index2=np.zeros(0,dtype=int)
+    for k in lag:
+        i=np.isin(index0+k,index0)
+        j=np.isin(index0,index0+k)
+        index1=np.concatenate((index1,np.where(i)[0]))
+        index2=np.concatenate((index2,np.where(j)[0]))
+    
+    nb=X.shape[0]
+    M=np.eye(nb)
+    
+    for k in range(0,nb):
+        "We correlate all times that have a second time within the lag range"
+        x0=np.repeat([X[k,index1]],nb,axis=0)
+        y0=np.repeat([Y[k,index1]],nb,axis=0)
+        z0=np.repeat([Z[k,index1]],nb,axis=0)
+
+        dot=x0*X[:,index2]+y0*Y[:,index2]+z0*Z[:,index2]
+        
+        if rank==1:
+            val=np.mean(dot,axis=1)
+        elif rank==2:
+            val=np.mean((3*dot**2-1)/2,axis=1)
+            
+        M[k,:]=val
+        
+    return M
 #%% Estimates cross-correlation of the eigenvectors of the M matrix
 def Mrange(vec,rank,i0,i1):
     """Estimates the Mmatrix for frames offset by a minimum distance of i0 and
@@ -209,8 +269,10 @@ def Cqt(aqt,**kwargs):
             ct=pool.map(ipc.Ct,v0)
 #            print('t={0}'.format(time()-t0))
         ct=ipc.returnCt(ref_num,ct)
-    finally:
-        ipc.clear_data(ref_num)
+    except:
+        pass
+#    finally:
+#        ipc.clear_data(ref_num)
     
     index=aqt['index']
     N=get_count(index)
@@ -223,6 +285,37 @@ def Cqt(aqt,**kwargs):
     
     return ct
 
+def Cij_t(aqt,i,j,**kwargs):
+    """
+    Calculates the cross correlation between modes in the iRED analysis, indexed
+    by i and j 
+    (this function should later be improved using parallel processing for multiple
+    pairs of modes. Currently supports only one pair)
+    c_ij=Cij_t(aqt,i,j,**kwargs)
+    """
+    
+    index=aqt['index']
+    n=np.size(index)
+    
+    
+    for p,(name,a) in enumerate(aqt.items()):
+        if p==0:
+            ct=np.zeros(index[-1]+1)+0j
+        if name!='index' and name!='t':
+            for k in range(n):
+                ct[index[k:]-index[k]]+=np.multiply(a[k:,i],a[k,j])
+    N0=get_count(index)
+    nz=N0!=0
+    N=N0[nz]
+    dt=np.diff(aqt['t'][0:2])/np.diff(index[0:2])
+    t=np.linspace(0,dt.squeeze()*np.max(index),index[-1]+1)
+    t=t[nz]
+    ct=np.divide(ct[nz].real,N)
+    
+    ct=dict({'Ct':ct,'t':t,'index':index,'N':N})
+    
+    return ct
+    
 #%% Estimate the correlation function at t=infinity
 def CtInf(aqt):
     "Get final value of correlation function"
@@ -234,6 +327,21 @@ def CtInf(aqt):
                 ctinf=np.real(a*a.conj())
             else:
                 ctinf+=np.real(a*a.conj())
+            
+    return ctinf
+
+#%% Estimate the correlation function at t=infinity
+def Cij_Inf(aqt,i,j):
+    "Get final value of correlation function"
+    ctinf=None
+    for k in aqt.keys():
+        if k!='t' and k!='index':
+            a=aqt.get(k)[:,i].mean()
+            b=aqt.get(k)[:,j].mean()
+            if np.shape(ctinf)==():
+                ctinf=np.real(a*b.conj())
+            else:
+                ctinf+=np.real(a*b.conj())
             
     return ctinf
 

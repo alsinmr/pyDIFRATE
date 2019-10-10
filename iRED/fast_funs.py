@@ -49,7 +49,7 @@ def trunc_t_axis(nt,n=100,nr=10,**kwargs):
     "Eliminate indices >= nt, eliminate repeats, and sort the index"
     "(repeats in above line lead to unsorted axis, unique gets rid of repeats and sorts)"
     index=index[index<nt]
-    index=np.unique(index).astype('int')
+    index=np.unique(index.astype('int'))
     return index
 
 #%% Determine how many frame pairs are averaged into each time point
@@ -288,9 +288,9 @@ def get_trunc_vec(molecule,index,**kwargs):
         "Default does not align molecule"
         vec=align(vec,uni,**kwargs)
         
-    "Re-align vectors so they all point along z"
-    if 'align_iRED' in kwargs and kwargs.get('align_iRED').lowr()[0]=='y':
-        vec=align_mean(vec)
+#    "Re-align vectors so they all point along z"
+#    if 'align_iRED' in kwargs and kwargs.get('align_iRED').lower()[0]=='y':
+#        vec=align_mean(vec)
            
     return vec
 

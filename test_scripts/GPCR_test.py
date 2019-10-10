@@ -26,7 +26,7 @@ mol.select_atoms(Nuc='N')
 mol.set_selection()
 
 #Calculates correlation functions of eigenmodes (correlation calculated at t=0)
-data=irf.iRED2data(mol,n=15,dt=1)   #For faster calculation, we only sample some frames. Higher n = more frames. dt is timestep in ns
+data=irf.iRED2data(mol,n=15,dt=1,align_iRED='y')   #For faster calculation, we only sample some frames. Higher n = more frames. dt is timestep in ns
 
 #Set up data analysis. 5 generates 5 detectors
 data.detect.r_auto(5)
