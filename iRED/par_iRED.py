@@ -45,7 +45,7 @@ class par_class():
             if p==0:
                 ct=np.zeros([index[-1]+1,a.shape[1]])+0j
             for k in range(n):
-                ct[index[k:]-index[k]]+=np.multiply(a[k:],a[k])
+                ct[index[k:]-index[k]]+=np.multiply(a[k:],a[k].conjugate())
         return ct.real
 #    
     @classmethod

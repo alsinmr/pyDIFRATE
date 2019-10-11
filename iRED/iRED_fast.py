@@ -216,16 +216,24 @@ def Ylm(vec,rank=2):
         Yl['1,0']=c/np.sqrt(2)*Z
         a=(X+Y*1j)
         b=np.sqrt(X**2+Y**2)
-        Yl['1,+1']=-c/2*b*a
-        Yl['1,-1']=c/2*b*a.conjugate()
+#        Yl['1,+1']=-c/2*b*a  #a was supposed to equal exp(i*phi), but wasn't normalized (should be normalized by b)
+#        Yl['1,-1']=c/2*b*a.conjugate()  #Correction below
+        Yl['1,+1']=-c/2*a
+        Yl['1,-1']=c/2*a.conjugate()
     elif rank==2:
         c=np.sqrt(15/(32*np.pi))
         Yl['2,0']=c*np.sqrt(2/3)*(3*Z**2-1)
         a=(X+Y*1j)
         b=np.sqrt(X**2+Y**2)
-        Yl['2,+1']=2*c*Z*b*a
-        Yl['2,-1']=2*c*Z*b*a.conjugate()
-        a=np.exp(2*np.log(X+Y*1j))
+#        Yl['2,+1']=2*c*Z*b*a
+#        Yl['2,-1']=2*c*Z*b*a.conjugate()
+        Yl['2,+1']=2*c*Z*a
+        Yl['2,-1']=2*c*Z*a.conjugate()
+#        a=np.exp(2*np.log(X+Y*1j))
+#        b=b**2
+#        Yl['2,+2']=c*b*a
+#        Yl['2,-2']=c*b*a.conjugate()
+        a=np.exp(2*np.log(a/b))
         b=b**2
         Yl['2,+2']=c*b*a
         Yl['2,-2']=c*b*a.conjugate()
@@ -270,9 +278,9 @@ def Cqt(aqt,**kwargs):
 #            print('t={0}'.format(time()-t0))
         ct=ipc.returnCt(ref_num,ct)
     except:
-        pass
-#    finally:
-#        ipc.clear_data(ref_num)
+        print('Error in calculating correlation functions')
+    finally:
+        ipc.clear_data(ref_num)
     
     index=aqt['index']
     N=get_count(index)
@@ -303,7 +311,7 @@ def Cij_t(aqt,i,j,**kwargs):
             ct=np.zeros(index[-1]+1)+0j
         if name!='index' and name!='t':
             for k in range(n):
-                ct[index[k:]-index[k]]+=np.multiply(a[k:,i],a[k,j])
+                ct[index[k:]-index[k]]+=np.multiply(a[k:,i],a[k,j].conjugate())
     N0=get_count(index)
     nz=N0!=0
     N=N0[nz]

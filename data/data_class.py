@@ -323,6 +323,8 @@ class data(object):
                         
             ax[k].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
             
+            yl=ax[k].get_ylim()
+            ax[k].set_ylim([np.min([yl[0],0]),yl[1]])
             
             if k<nd-1:
                 if xaxis_lbl is not None:
@@ -338,6 +340,8 @@ class data(object):
         fig.subplots_adjust(hspace=0.25)
         
         fig.show()
+        
+        return ax
             
     def plot_cc(self,det_num,cutoff=None,ax=None,norm='y',**kwargs):
         if np.size(self.Rcc)==0:

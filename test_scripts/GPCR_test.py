@@ -38,7 +38,7 @@ fit0=data.fit()
 fit=fit0.iRED2rho()
 
 #Plot results
-fit.plot_rho()  #Plot detector responses
+ax=fit.plot_rho()  #Plot detector responses
 fit.plot_cc(2)  #Plot cross-correlation, for some detector (currently set to 1)
 
 
@@ -46,9 +46,11 @@ fit.plot_cc(2)  #Plot cross-correlation, for some detector (currently set to 1)
 data1=DR.Ct_fast.Ct2data(mol,n=15,dt=1) #Load correlation functions
 data1.detect=data.detect    #Copy detectors from the above eigenmode analysis (note, n must be the same for both analyses)
 fit1=data1.fit()        #Fit the data
-fit1.R_u[:]=0   #Set error bars to zero (I'm not sure how to estimate the error yet, but I guess right now it's being over estimated)
-fit1.R_l[:]=0
 fit1.plot_rho() #Plot the results
+
+#for k,a in enumerate(ax):
+#    a.plot(fit1.label,fit1.R[:,k],color='grey')
+#    a.autoscale(enable=True,tight=True)
 
 """
 The results from these two analyses should match (or at least be pretty similar).
