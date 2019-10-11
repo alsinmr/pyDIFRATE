@@ -181,7 +181,7 @@ def peptide_plane(attr,residue,value,chain=None):
             elif chain is not None:
                 f.write(':{0}@C,O/pdbSegment={1}'.format(res-1,chain))
             else:
-                f.write(':{0}@C,O'.format(resi-1))
+                f.write(':{0}@C,O'.format(res-1))
             f.write('\t{0}\n'.format(value[k]))
             
 def bond_attr(attr,atom1,atom2,value):

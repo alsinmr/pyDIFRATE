@@ -525,6 +525,47 @@ class data(object):
             
             plot_rho(self.sens.molecule,None,values,scaling=scaling,**kwargs)
 #            print('Selections over multiple residues/chains- not currently implemented')
+            
+    def draw_mode(self,mode_num=None,resi=None,fileout=None,scaling=None,**kwargs):
+        
+
+        values=self.ired['m'][mode_num]
+        
+      
+        res1=self.sens.molecule.sel1.resids
+        chain1=self.sens.molecule.sel1.segids
+        res2=self.sens.molecule.sel2.resids
+        chain2=self.sens.molecule.sel2.segids
+        
+
+        if np.size(res1)==np.size(res2) and (np.all(res1==res2) and np.all(chain1==chain2)):
+            resi0=resi
+            resi=res1
+            chain=chain1
+#            chain[chain=='PROA']='p'
+            
+            
+            
+            if resi0 is not None:
+                index=np.in1d(resi,resi0)
+                resi=resi[index]
+                chain=chain[index]
+                values=values[index]
+              
+            if scaling is None:
+                scale0=np.max(values)
+                scaling=1/scale0
+                
+            plot_rho(self.sens.molecule,resi,values,chain=chain,\
+                     fileout=fileout,scaling=scaling,color_scheme='rb',**kwargs)
+                
+        else:
+            if scaling is None:
+                scale0=np.max(values)
+                scaling=1/scale0
+            
+            plot_rho(self.sens.molecule,None,values,scaling=scaling,color_scheme='rb',**kwargs)
+#            print('Selections over multiple residues/chains- not currently implemented')        
         
     def save(self,filename):
         """
