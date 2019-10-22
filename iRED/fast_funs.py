@@ -8,8 +8,6 @@ Created on Wed Aug 28 10:24:19 2019
 
 import numpy as np
 import multiprocessing as mp
-from MDAnalysis.analysis.align import rotation_matrix
-from time import time
 from parCt import par_class as pct
 
 #%% Calculates a truncated time axis
@@ -203,6 +201,8 @@ def get_trunc_vec(molecule,index,**kwargs):
     
     """
     
+    
+    
     if molecule._vf is not None:
         vf=molecule.vec_fun
         special=True
@@ -265,14 +265,30 @@ def get_trunc_vec(molecule,index,**kwargs):
             X0,Y0,Z0=vf()
         else:
             "Else just get difference in atom positions"
-            pos=sel1[sel1in].positions-sel2[sel2in].positions
-    #        pos=sel1.positions[sel1in]-sel2.positions[sel2in]
-            X0=pos[:,0]
-            Y0=pos[:,1]
-            Z0=pos[:,2]
+            v=sel1[sel1in].positions-sel2[sel2in].positions
+            "We correct here for vectors extended across the simulation box"
+            box=np.repeat([uni.dimensions[0:3]],v.shape[0],axis=0)
+            
+            i=v>box/2
+            v[i]=v[i]-box[i]
+            
+            i=v<-box/2
+            v[i]=v[i]+box[i]
+            
+            i=v>box/2
+            if np.count_nonzero(i)>0:
+                print('Correcting')
+            "Store the results"
+            X0=v[:,0]
+            Y0=v[:,1]
+            Z0=v[:,2]
         
         "Make sure length is one"
         length=np.sqrt(X0**2+Y0**2+Z0**2)
+        if np.any(length>3):
+            print(molecule.sel1[length>3].resids)
+            print(length[length>3])
+            print(k)
         X[k,:]=np.divide(X0,length)
         Y[k,:]=np.divide(Y0,length)
         Z[k,:]=np.divide(Z0,length)
@@ -302,51 +318,69 @@ def align(vec0,uni,**kwargs):
     (possibly this isn't standard- shouldn't create problems for the time being).
     Next try all carbons, and finally all atoms)
     """
-    if 'align_ref' in kwargs:
-        uni0=uni.select_atoms(kwargs.get('align_ref'))
-    else:
-        uni0=uni.select_atoms('name CA')    #Standard alignment for proteins
-        if uni0.n_atoms==0:
-            uni0=uni.select_atoms('name C11')   #Not sure about this. Alignment for lipids?
-        if uni0.n_atoms==0:
-            uni0=uni.select_atoms('type C') #Try for all carbons
-        if uni0.n_atoms==0:
-            uni0=uni.atoms #Take all atoms
-    
-    ref0=uni0.positions-uni0.atoms.center_of_mass()
-    
-    SZ=np.shape(vec0.get('X'))
-    index=vec0['index']
-    "Pre-allocate the direction vector"
-    vec={'X':np.zeros(SZ),'Y':np.zeros(SZ),'Z':np.zeros(SZ),'t':vec0.get('t'),'index':index} 
-
-    nt=vec0['t'].size
-
-    
-    traj=uni.trajectory
-    ts=iter(traj)
-    for k,t0 in enumerate(index):
-        try:
-            traj[t0]     #This jumps to time point t in the trajectory
-        except:
-            "Maybe traj[t] doesn't work, so we skip through the iterable manually"
-            if k!=0:    
-                for _ in range(index[k]-index[k-1]):
-                    next(ts,None) 
-        "Ref positions"
-        pos=uni0.positions-uni0.atoms.center_of_mass()
-        
-        "Rotation matrix for this time point"
-        R,_=rotation_matrix(pos,ref0)
-        "Apply the rotation matrix to the input vector"
-        vec['X'][k,:]=vec0['X'][k,:]*R[0,0]+vec0['Y'][k,:]*R[0,1]+vec0['Z'][k,:]*R[0,2]
-        vec['Y'][k,:]=vec0['X'][k,:]*R[1,0]+vec0['Y'][k,:]*R[1,1]+vec0['Z'][k,:]*R[1,2]
-        vec['Z'][k,:]=vec0['X'][k,:]*R[2,0]+vec0['Y'][k,:]*R[2,1]+vec0['Z'][k,:]*R[2,2]
-        "Print out progress"
-        if k%int(np.size(index)/100)==0 or k+1==nt:
-            printProgressBar(k+1, np.size(index), prefix = 'Aligning:', suffix = 'Complete', length = 50) 
-        
-    return vec
+#    if 'align_ref' in kwargs:
+#        uni0=uni.select_atoms(kwargs.get('align_ref'))
+#    else:
+#        uni0=uni.select_atoms('name CA')    #Standard alignment for proteins
+#        if uni0.n_atoms==0:
+#            uni0=uni.select_atoms('name C11')   #Not sure about this. Alignment for lipids?
+#        if uni0.n_atoms==0:
+#            uni0=uni.select_atoms('type C') #Try for all carbons
+#        if uni0.n_atoms==0:
+#            uni0=uni.atoms #Take all atoms
+#            
+#    if uni0.n_segments>1:
+#        "DIfferent segments may be split up after unwrapping. We'll take the segment with the most atoms"
+#        count=list()
+#        for s in uni0.segments:
+#            count.append(s.atoms.n_atoms)
+#        uni0=uni0.segments[np.argmax(count)].atoms
+#    
+#    "Unwrap the segment before this calculation"
+##    make_whole(uni0)
+#    
+#    ref0=uni0.positions-uni0.atoms.center_of_mass()
+#    
+#    SZ=np.shape(vec0.get('X'))
+#    index=vec0['index']
+#    "Pre-allocate the direction vector"
+#    vec={'X':np.zeros(SZ),'Y':np.zeros(SZ),'Z':np.zeros(SZ),'t':vec0.get('t'),'index':index} 
+#
+#    nt=vec0['t'].size
+#
+#    
+#    traj=uni.trajectory
+#    ts=iter(traj)
+#    for k,t0 in enumerate(index):
+#        try:
+#            traj[t0]     #This jumps to time point t in the trajectory
+#        except:
+#            "Maybe traj[t] doesn't work, so we skip through the iterable manually"
+#            if k!=0:    
+#                for _ in range(index[k]-index[k-1]):
+#                    next(ts,None) 
+#        "Ref positions, first unwrapping the reference segment"
+##        make_whole(uni0)
+#        pos=uni0.positions-uni0.atoms.center_of_mass()
+#        
+#        "Rotation matrix for this time point"
+#        R,_=rotation_matrix(pos,ref0)
+#        "Apply the rotation matrix to the input vector"
+#        vec['X'][k,:]=vec0['X'][k,:]*R[0,0]+vec0['Y'][k,:]*R[0,1]+vec0['Z'][k,:]*R[0,2]
+#        vec['Y'][k,:]=vec0['X'][k,:]*R[1,0]+vec0['Y'][k,:]*R[1,1]+vec0['Z'][k,:]*R[1,2]
+#        vec['Z'][k,:]=vec0['X'][k,:]*R[2,0]+vec0['Y'][k,:]*R[2,1]+vec0['Z'][k,:]*R[2,2]
+#        
+##        vec['X'][k,:]=vec0['X'][k,:]*R[0,0]+vec0['Y'][k,:]*R[1,0]+vec0['Z'][k,:]*R[2,0]
+##        vec['Y'][k,:]=vec0['X'][k,:]*R[0,1]+vec0['Y'][k,:]*R[1,1]+vec0['Z'][k,:]*R[2,1]
+##        vec['Z'][k,:]=vec0['X'][k,:]*R[0,2]+vec0['Y'][k,:]*R[1,2]+vec0['Z'][k,:]*R[2,2]
+#        "Print out progress"
+#        if k%int(np.size(index)/100)==0 or k+1==nt:
+#            printProgressBar(k+1, np.size(index), prefix = 'Aligning:', suffix = 'Complete', length = 50) 
+#        
+#    return vec
+    print('Warning: the align function has been removed- please pre-align the trajectory')
+    print('Use molecule.align(sel) prior to processing')
+    return vec0
 
 
 

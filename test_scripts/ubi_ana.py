@@ -8,8 +8,8 @@ Created on Fri Aug  2 13:24:43 2019
 
 import DIFRATE as DR
 
-data=DR.io.load_NMR('../test_scripts/ubi_data.txt')     #Experimental data and experiment info
-data.sens.molecule.load_struct('../test_scripts/1d3z.pdb')  #Structure of ubiquitin
+data=DR.io.load_NMR('/Users/albertsmith/Documents/GitHub/pyDIFRATE/test_scripts/ubi_data.txt')     #Experimental data and experiment info
+data.sens.molecule.load_struct('/Users/albertsmith/Documents/GitHub/pyDIFRATE/test_scripts/1d3z.pdb')  #Structure of ubiquitin
 data.sens.molecule.select_atoms(Nuc='15N',resi=data.label)  #Set atoms
 data.sens.molecule.set_selection()
 data.sens.new_mdl(Model='IsoDif',tM=4.84e-9)    #Isotropic tumbling model

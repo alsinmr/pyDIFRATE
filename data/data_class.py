@@ -17,6 +17,8 @@ from detectors import detect
 os.chdir('../chimera')
 from chimera_funs import plot_cc as plt_cc3D
 from chimera_funs import plot_rho
+os.chdir('../plotting')
+import plotting_funs as pf
 os.chdir('../data')
 from fitting import fit_data
 from bin_in_out import save_DIFRATE
@@ -38,6 +40,7 @@ class data(object):
         self.conf=0.68
         
         self.S2=None
+        self._S2=None   #Hidden location for S2 calc in case we don't include it
         self.tot_cc=None
         self.tot_cc_norm=None
         
@@ -58,7 +61,7 @@ class data(object):
         
         self.load(**kwargs)
 #%% Some options for loading in data        
-    def load(self,**kwargs):
+    def load(self,subS2=True,**kwargs):
         EstErr=False #Default don't estimate error. This is overridden for 'Ct'
         "Load in correlation functions from an iRED calculation"
         if 'iRED' in kwargs:
@@ -67,7 +70,11 @@ class data(object):
             self.R=ired['DelCt']
             del ired['DelCt']
             nt=ired['t'].size
-            self.sens=Ct(t=ired['t'],S2=None,**kwargs)
+            
+            if subS2:
+                self.sens=Ct(t=ired['t'],S2=None,**kwargs)
+            else:
+                self.sens=Ct(t=ired['t'],**kwargs)
             
             if 'N' in self.ired:
                 stdev=1/np.sqrt(self.ired['N'])
@@ -83,7 +90,13 @@ class data(object):
         elif 'Ct' in kwargs:
             EstErr=True #Default estimate error for correlation functions
             ct=kwargs.get('Ct')
-            self.R=ct.get('Ct')                
+            self.R=ct.get('Ct')
+
+            
+            if not(subS2) and 'S2' in kwargs:
+                "Removes the S2 correction"
+                self._S2=kwargs.pop('S2')
+                                
             self.sens=Ct(t=ct.get('t'),**kwargs)
             nt=ct['t'].size
             if 'R_std' in ct:
@@ -164,11 +177,13 @@ class data(object):
                 if self.R_std is not None:
                     self.R_std=np.delete(self.R_std,exp_num,axis=1)
 
-                self.detect=None #Detectors are no longer valid, and so are deleted here
                 if self.sens is not None:
                     self.sens.del_exp(exp_num)
+                self.new_detect() #Detectors are no longer valid, and so are reset here
             else:
                 print('Warning: exp_num {0} was not found'.format(exp_num))
+                
+        
 
         
         
@@ -180,7 +195,7 @@ class data(object):
         return fit_data(self,detect,**kwargs)
       
 #%% Convert iRED data types into normal detector responses and cross-correlation matrices            
-    def iRED2rho(self):
+    def iRED2rho(self,all_modes=False):
         if self.ired is None or not isinstance(self.sens,detect):
             print('Function only applicable to iRED-derived detector responses')
             return
@@ -194,7 +209,8 @@ class data(object):
         
         rank=self.ired.get('rank')
         ne=2*rank+1
-        
+        if all_modes:
+            ne=-self.R.shape[0]
         
 #        if self.sens.molecule.sel1in is not None:
 #            nb0=np.size(self.sens.molecule.sel1in)
@@ -221,8 +237,9 @@ class data(object):
             
             lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R_u[0:-ne,k]],nb0,axis=0)
             out.R_u[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
-            
-            
+        
+        if all_modes:
+            ne=0    
         
         out.sens=self.sens
         
@@ -293,7 +310,7 @@ class data(object):
         else:
             index=np.arange(self.R.shape[0]).astype(int)
         
-        if np.size(self.label)!=0:
+        if np.size(self.label)==self.R.shape[0]:
             lbl=np.array(self.label)[index]
             if isinstance(lbl[0],str):
                 xaxis_lbl=lbl.copy()
@@ -311,16 +328,28 @@ class data(object):
             else:
                 ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1,sharex=ax[0]))
             
+#            if errorbars[0].lower()=='y':
+#                if self.R_l is None:
+#                    ax[k].errorbar(lbl,self.R[index,k],self.R_std[:,k],color=hdl[k].get_color(),\
+#                      **kwargs)
+#                else:
+#                    ax[k].errorbar(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],color=hdl[k].get_color(),\
+#                      **kwargs)
+#            else:
+#                ax[k].plot(lbl,self.R[index,k],color=hdl[k].get_color(),**kwargs)
+                        
             if errorbars[0].lower()=='y':
                 if self.R_l is None:
-                    ax[k].errorbar(lbl,self.R[index,k],self.R_std[:,k],color=hdl[k].get_color(),\
-                      **kwargs)
+                    pf.plot_rho(lbl,self.R[index,k],self.R_std[:,k],ax=ax[k],\
+                      color=hdl[k].get_color(),**kwargs)
                 else:
-                    ax[k].errorbar(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],color=hdl[k].get_color(),\
-                      **kwargs)
+                    pf.plot_rho(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],ax=ax[k],\
+                      color=hdl[k].get_color(),**kwargs)
             else:
-                ax[k].plot(lbl,self.R[index,k],color=hdl[k].get_color(),**kwargs)
-                        
+                pf.plot_rho(lbl,self.R[index,k],ax=ax[k],color=hdl[k].get_color(),**kwargs)
+                                 
+            
+            
             ax[k].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
             
             yl=ax[k].get_ylim()

@@ -7,6 +7,8 @@ Created on Thu Apr  4 15:05:19 2019
 """
 
 import MDAnalysis as mda
+from MDAnalysis.lib.mdamath import make_whole
+import MDAnalysis.analysis.align
 import numpy as np
 import os
 from vec_funs import new_fun
@@ -38,8 +40,8 @@ class molecule(object):
         if np.size(args)>0:
             self.load_struct(*args)
 
-    def load_struct(self,*args):   
-        self.mda_object=mda.Universe(*args)
+    def load_struct(self,*args,**kwargs):   
+        self.mda_object=mda.Universe(*args,**kwargs)
         
     def vec_special(self,Type,**kwargs):
         """
@@ -95,7 +97,8 @@ class molecule(object):
                 self.sel1=sel.select_atoms('name CA and around 1.4 (name HA or name HA2)')
                 self.sel2=sel.select_atoms('(name HA or name HA2) and around 1.4 name CA')
                 print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
-            self.label_in=self.sel1.resids                                
+#            self.label_in=self.sel1.resids           
+            self.label_in=self.sel1.resnums                     
         else:
             if sel1!=None:
                 if index1!=None:
@@ -178,7 +181,7 @@ class molecule(object):
         if np.shape(self.label_in)[0]==nr:
             self.label=self.label_in
         
-    def MDA2pdb(self,tstep=None,select=None,**kwargs):
+    def MDA2pdb(self,tstep=None,select='protein',make_whole=True,**kwargs):
         "Provide a molecule, print a certain frame to pdb for later use in chimera"
         
 
@@ -190,7 +193,11 @@ class molecule(object):
             
         dir_path = os.path.dirname(os.path.realpath(__file__))
     
-        full_path=os.path.join(dir_path,os.path.basename(self.mda_object.filename)+'_{0}'.format(tstep)+'.pdb')
+    
+        if self.pdb is not None and os.path.exists(self.pdb):
+            os.remove(self.pdb)
+            
+        full_path=os.path.join(dir_path,os.path.basename(self.mda_object.trajectory.filename)+'_{0}'.format(tstep)+'.pdb')
         
         try:
             uni.trajectory[tstep]
@@ -202,10 +209,12 @@ class molecule(object):
         if select is not None:
             a=uni.select_atoms(select)
         else:
-            a=uni.select_atoms('protein')
-            if a.n_atoms==0:
-                a=uni.select_atoms('name *')
-                
+            a=uni.atoms
+
+        
+        if make_whole:
+            self.mk_whole(sel=a)
+        
         a.write(full_path)
         
         self.pdb=full_path
@@ -220,6 +229,122 @@ class molecule(object):
         
         open_chimera(self,**kwargs)
         
+    def mk_whole(self,sel=None):
+        """
+        Unwraps all segments in a selection of the MD analysis universe 
+        (by default, the selection is the union self.sel1 snd self.sel2)
+        
+        self.unwrap(sel=None)
+        
+        Note that the unwrapping only remains valid while the trajectory remains
+        on the current frame (re-run for every frame)
+        
+        This program needs to be run with MDA2pdb in most cases (automatic)
+        If obtaining vectors, we need to run this if the 'align' option is being
+        used. It is not necessary if we only look at individual bonds without
+        aligning, since we can correct box crossings simply by searching for bonds
+        that are too long.
+        """
+        
+        "Default selection (segments in self.sel1 and self.sel2)"
+        if sel is None:
+            if self.sel1 is not None:
+                if self.sel2 is not None:
+                    sel=self.sel1.union(self.sel2)
+                else:
+                    sel=self.sel1
+            elif self.sel2 is not None:
+                sel=self.sel2
+            else:
+                sel=self.mda_object.atoms
+        elif isinstance(sel,str):
+            sel=self.mda_object.select_atoms(sel=sel)
+            
+        for seg in sel.segments:
+            try:
+                make_whole(seg.atoms)
+            except:
+                print('Failed to make segment {0} whole'.format(seg.segid))
+            
+    def align(self,select,tstep=0,overwrite=False):
+        """
+        Alignment of the trajectory to a reference selection (usually the CA of
+        the protein. Important if the molecule rotates during the MD simulation.
+        Should be performed before any analysis is performed (this will write
+        a new trajectory in the same location as the original trajectory)
+        
+        align(select,tstep=0,overwrite=False)
+        
+        select should be an MDAnalysis selection string
+        
+        tstep determines the reference time step (index)
+        
+        overwrite allows one to re-align the trajectory (otherwise, an existing
+        alignment may be loaded, possibly with a different reference selection)
+        """
+        
+        
+        "Get the mda universe object, and set trajectory to start"
+        uni=self.mda_object
+        uni.trajectory.rewind()
+        "Where will the new trajectory be written?"
+        directory=os.path.dirname(uni.trajectory.filename)
+        base=os.path.basename(uni.trajectory.filename)
+
+        if len(base)>=7 and base[0:7]=='rmsfit_' and overwrite:
+            print('Warning: re-aligned a trajectory that has already been aligned before')
+        
+        filename='rmsfit_'+base
+        newfile=os.path.join(directory,filename)
+        
+
+        "Load the file if it already exists"
+        if not(overwrite) and os.path.exists(newfile):
+            print('Aligned file:\n {0}\n already exists. Loading existing file'.format(newfile))
+            print('To re-calculate aligned trajectory, set overwrite=True')
+            self.load_struct(uni.filename,newfile)
+        else:
+            "Create a reference pdb (the first frame of the trajectory)"
+            if self.pdb is not None:
+                "We won't delete an existing pdb"
+                pdb=self.pdb
+                pdb_id=self.pdb_id
+                self.pdb=None
+            else:
+                pdb=None
+            
+            "Get the reference pdb from the first trajectory"
+            self.MDA2pdb(tstep=0,select=None)
+            
+            ref=mda.Universe(uni.filename,self.pdb)
+            
+            alignment=mda.analysis.align.AlignTraj(uni,ref,select=select,verbose=True,pbc=True)
+            alignment.run()
+            
+            if newfile!=alignment.filename:
+                print('Warning: Unexpected filename used by MDanalysis')
+            
+            self.load_struct(uni.filename,alignment.filename)
+            
+            "Reload existing pdb if given"
+            if pdb is not None:
+                os.remove(self.pdb)
+                self.pdb=pdb
+                self.pdb_id=pdb_id
+        
+        
+        "Reset the selections"
+        if self.sel1 is not None:
+            self.sel1=self.mda_object.atoms[self.sel1.indices]
+        if self.sel2 is not None:
+            self.sel2=self.mda_object.atoms[self.sel2.indices]
+        try:
+            self.set_selection()
+        except:
+            pass
+            
+
+        return
     
     def del_MDA_object(self):
         """
@@ -293,3 +418,7 @@ class molecule(object):
             out.mda_object=uni
         return out
         
+    def __del__(self):
+        if self.pdb is not None and os.path.exists(self.pdb):
+            os.remove(self.pdb)
+    

@@ -110,7 +110,7 @@ class rates(mdl.model):
                 self.__sys.update({k : None})
 
         
-        self.__cleanup(ne) 
+        self.__cleanup(ne)
         self.__set_defaults(ne)
                 
         "Copy all experiments from a previous rates variable, input as info"
@@ -135,7 +135,7 @@ class rates(mdl.model):
         else:
             self.info=pd.concat([self.info,info],axis=1,ignore_index=True)
             
-        self._clear_stored()
+        self.del_mdl_calcs()
         
 #%% Make sure inputs all are the correct type (numpy arrays)         
     "Function to make sure all inputs are arrays, and have the correct sizes"    
@@ -235,7 +235,7 @@ class rates(mdl.model):
         if self.__sys.get('Nuc1')[k] is None:
             self.__sys.get('Nuc1')[k]='1H'
         if self.__sys.get('dXY')[k] is None:
-            self.__sys.get('dXY')[k]=dff.dipole_coupling(.1105,'13C',self.Nuc1[k])
+            self.__sys.get('dXY')[k]=dff.dipole_coupling(.1105,'13C',self.__sys['Nuc1'][k])
         if self.__sys.get('CSA')[k] is None:
             self.__sys.get('CSA')[k]=20
         if self.__sys.get('theta')[k] is None:
@@ -435,7 +435,10 @@ class rates(mdl.model):
         
             
         ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
-        ax.set_ylabel(r'$R$ / s$^{-1}$')
+        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
+            ax.set_ylabel(r'$R$ (normalized)')
+        else:
+            ax.set_ylabel(r'$R$ / s$^{-1}$')
         ax.set_xlim(self.z()[[0,-1]])
         ax.set_title('Rate Constant Sensitivity (no model)')
         

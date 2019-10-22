@@ -398,18 +398,18 @@ class model(object):
             for m in self.__R0CSA:
                 m=None
         else:    
-            for m in self.__Reff:
+            for k,m in enumerate(self.__Reff):
                 if m is not None:
-                    np.delete(m,exp_num,axis=1)
-            for m in self.__ReffCSA:
+                    self.__Reff[k]=np.delete(m,exp_num,axis=1)
+            for k,m in enumerate(self.__ReffCSA):
                 if m is not None:
-                    np.delete(m,exp_num,axis=1)
-            for m in self.__R0:
+                    self.__ReffCSA[k]=np.delete(m,exp_num,axis=1)
+            for k,m in enumerate(self.__R0):
                 if m is not None:
-                    np.delete(m,exp_num,axis=1)
-            for m in self.__R0CSA:
+                    self.__R0[k]=np.delete(m,exp_num,axis=1)
+            for k,m in enumerate(self.__R0CSA):
                 if m is not None:
-                    np.delete(m,exp_num,axis=1)
+                    self.__R0CSA[k]=np.delete(m,exp_num,axis=1)
                 
     def zeff(self,t,tau=None):
         if tau==None:
@@ -463,7 +463,10 @@ class model(object):
             
             
         ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
-        ax.set_ylabel(r'$R$ / s$^{-1}$')
+        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
+            ax.set_ylabel(r'$R$ (normalized)')
+        else:
+            ax.set_ylabel(r'$R$ / s$^{-1}$')
         ax.set_xlim(self.z()[[0,-1]])
         ax.set_title('Sensitivity for Model #{0}'.format(mdl_num))
         

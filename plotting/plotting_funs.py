@@ -77,3 +77,59 @@ def plot_cc(Rcc,lbl=None,ax=None,norm='y',**kwargs):
     fig.show()
     
     return ax
+
+
+def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwargs):
+    """
+    Plots a set of rates or detector responses. 
+    """
+    
+    if ax==None:
+        ax=plt.figure().add_subplot()
+    
+    "We divide the x-axis up where there are gaps between the indices"
+    lbl1=list()
+    R1=list()
+    R_u1=list()
+    R_l1=list()
+    
+    if split:
+        s0=np.where(np.concatenate(([True],np.diff(lbl)>1,[True])))[0]
+    else:
+        s0=np.array([0,np.size(R1)])
+    
+    for s1,s2 in zip(s0[:-1],s0[1:]):
+        lbl1.append(lbl[s1:s2])
+        R1.append(R[s1:s2])
+        if R_std is not None:
+            if np.ndim(R_std)==2:
+                R_l1.append(R_std[0][s1:s2])
+                R_u1.append(R_std[1][s1:s2])
+            else:
+                R_l1.append(R_std[s1:s2])
+                R_u1.append(R_std[s1:s2])
+        else:
+            R_l1.append(None)
+            R_u1.append(None)
+    
+    "Plotting style (plot or scatter, scatter turns the linestyle to '' and adds a marker)"
+    if style.lower()[0]=='s':
+        if 'marker' not in kwargs:
+            kwargs['marker']='o'
+        if 'linestyle' not in kwargs:
+            kwargs['linestyle']=''
+        
+    
+    for lbl,R,R_u,R_l in zip(lbl1,R1,R_u1,R_l1):
+        if R_l is None:
+            ax.plot(lbl,R,color=color,**kwargs)
+        else:
+            ax.errorbar(lbl,R,[R_l,R_u],color=color,**kwargs)
+        if color is None:
+            color=ax.get_children()[0].get_color()
+                
+    return ax    
+    
+    
+    
+    

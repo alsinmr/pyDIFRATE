@@ -16,7 +16,7 @@ os.chdir('../r_class')
 from detectors import detect as dt
 os.chdir('../data')
 
-def fit_data(data,detect=None,**kwargs):
+def fit_data(data,detect=None,bounds=True,**kwargs):
     """
     Subsequent fitting is currently failing (I think), because we are later trying to 
     fit the detectors that result from the R2 exchange correction. Should have an 
@@ -87,14 +87,32 @@ def fit_data(data,detect=None,**kwargs):
             para=True
         else:
             para=False
+    elif not(bounds):
+        para=False
     else:
         if nmc==0:
             para=True
         else:
             para=True
     
-    
-    if not(para):
+    if not(bounds):
+        Y=list()
+        for k in range(nb):
+            if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
+                R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
+            else:
+                R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
+            r=detect.r(bond=k)
+            r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
+                        
+            nstd=norm.ppf(1/2+conf/2)
+            std=np.sqrt(np.sum(np.linalg.pinv(r)**2,axis=1))
+            u=nstd*std
+            l=nstd*std
+            rho=np.dot(np.linalg.pinv(r),R)
+            Y.append((rho,std,u,l))
+        
+    elif not(para):
         "Series processing (only on specific user request)"
         Y=list()
         for k in range(nb):
@@ -204,4 +222,4 @@ def para_fit(X):
         l=rho-Y1sort[int(in_l)]
         u=Y1sort[int(in_u)]-rho
        
-    return rho,std,u,l
+    return rho,std,l,u

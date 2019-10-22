@@ -293,11 +293,17 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
             
     
     "Create attribute files for radius size and coloring"
+    i=value<=1  #Index out values above 1
+    value=value[i] #Index out values above 1
     if style.lower()=='pp':
+        resi=resi[i] #Index out values above 1
+        chain=chain[i]
         if sc_rad is not None:
             peptide_plane('radius',resi,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0),chain)
         peptide_plane('rho',resi,value,chain)
     elif style.lower()=='bond':
+        atom1=atom1[i] #Index out values above 1
+        atom2=atom2[i] #Index out values above 1
         if sc_rad is not None:
             bond_attr('radius',atom1,atom2,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0))
         bond_attr('rho',atom1,atom2,value)

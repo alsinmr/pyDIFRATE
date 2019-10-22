@@ -115,11 +115,15 @@ def rate(tc,exper):
     column of a pandas array), for a given set of correlation times, tc.
     """
     try:
-        fun=globals()[exper.loc['Type']]
-        R=fun(tc,exper)
-        return R
+        if exper.loc['Type'] in globals():
+            fun=globals()[exper.loc['Type']]
+            R=fun(tc,exper)
+            return R
+        else:
+            print('Experiment type {0} was not recognized'.format(exper.loc['Type']))
+            return
     except:
-        print('Experiment type {0} was not recognized'.format(exper.loc['Type']))
+        print('Calculation of experiment {0} failed. Check parameters.'.format(exper.loc['Type']))
         pass
     
     
@@ -220,7 +224,6 @@ def R1p(tc,exper):
     else:
         theta=np.arccos(off/ve)
     
-    
     R10=R1(tc,exper)    #We do this first, because it includes all R1 contributions
     "Start here with the dipole contributions"
     if Nuc1 is not None:
@@ -245,7 +248,7 @@ def R1p(tc,exper):
     "Here should follow the quadrupole treatment!!!"    
     
     "Add together R1 and R1p contributions, depending on the offset"
-    R+=R10+np.sin(theta)**2*(R1del-R10/2) #Add together the transverse and longitudinal contributions    
+    R+=R10+np.sin(theta)**2*(R1del-R10/2) #Add together the transverse and longitudinal contributions   
     return R
 
 def R2(tc,exper):

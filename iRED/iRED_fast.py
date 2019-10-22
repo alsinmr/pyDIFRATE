@@ -62,10 +62,10 @@ def iRED_full(mol,rank=2,n=100,nr=10,**kwargs):
         vec=align_mean(vec)
         
         
-
         n_added_vecs=vec0.get('X').shape[1]
         for k in ['X','Y','Z']:
-            vec[k]=np.concatenate((vec.get(k),vec0.get(k)),axis=1)        
+            vec[k]=np.concatenate((vec.get(k),vec0.get(k)),axis=1)      
+        
         aligned=True
     else:
         aligned=False
@@ -95,7 +95,7 @@ def iRED2data(molecule,rank=2,**kwargs):
     
     ired=iRED_full(molecule,**kwargs)
     
-    Ctdata=data(iRED=ired,molecule=molecule)
+    Ctdata=data(iRED=ired,molecule=molecule,**kwargs)
     Ctdata.sens.molecule=molecule
 #    Ctdata.sens.molecule.set_selection()
     Ctdata.detect.molecule=Ctdata.sens.molecule
@@ -235,9 +235,10 @@ def Ylm(vec,rank=2):
 #        b=b**2
 #        Yl['2,+2']=c*b*a
 #        Yl['2,-2']=c*b*a.conjugate()
-        a=np.exp(2*np.log(a/b))
-        Yl['2,+2']=c*b2*a
-        Yl['2,-2']=c*b2*a.conjugate()
+        a2=a
+        a2[a!=0]=np.exp(2*np.log(a[a!=0]/b[a!=0]))
+        Yl['2,+2']=c*b2*a2
+        Yl['2,-2']=c*b2*a2.conjugate()
         
     Yl['t']=vec['t']
     Yl['index']=vec['index']
