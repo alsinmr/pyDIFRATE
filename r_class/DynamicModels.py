@@ -265,7 +265,9 @@ def Combined(tMdl1,AMdl1,tMdl2,AMdl2):
         S21=1-np.sum(AMdl1,axis=0)  
         S22=1-np.sum(AMdl2,axis=0)          
 
-        AMdl=np.zeros(np.concatenate(([(nt1+1)*(nt2+1)-1],AMdl2.shape[1:])))
+
+
+        AMdl=np.zeros(np.concatenate(([(nt1+1)*(nt2+1)-1],AMdl2.shape[1:])).astype(int))
         AMdl[0:nt1]=np.multiply(np.repeat([S22],AMdl1.shape[0],axis=0),AMdl1)
         AMdl[nt1:nt1+nt2]=np.multiply(np.repeat([S21],AMdl2.shape[0],axis=0),AMdl2)
         

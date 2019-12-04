@@ -22,6 +22,11 @@ def trunc_t_axis(nt,n=100,nr=10,**kwargs):
     
     """
     
+    if n==-1:
+        index=np.arange(nt)
+        return index
+    
+    "Step size: this log-spacing will lead to the first skip after n time points"
     logdt0=np.log10(1.50000001)/n
     
     index=list()
@@ -33,8 +38,11 @@ def trunc_t_axis(nt,n=100,nr=10,**kwargs):
         
     index=np.array(index)
 
+    "Repeat this indexing nr times throughout the trajectory"
     index=np.repeat(index,nr,axis=0)+np.repeat([np.arange(0,nt,nt/nr)],index.size,axis=0).reshape([index.size*nr])
     
+    "Eliminate indices >= nt, eliminate repeats, and sort the index"
+    "(repeats in above line lead to unsorted axis, unique gets rid of repeats and sorts)"
     index=index[index<nt]
     index=np.unique(index).astype('int')
     

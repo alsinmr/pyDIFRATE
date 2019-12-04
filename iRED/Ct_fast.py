@@ -38,7 +38,8 @@ os.chdir('../iRED')
 #from MDAnalysis.analysis.align import rotation_matrix
 #from psutil import virtual_memory
 #from fast_index import trunc_t_axis,get_count
-from fast_funs import trunc_t_axis,S2calc,Ct,get_trunc_vec
+from fast_funs import S2calc,Ct,get_trunc_vec,align_mean
+from fast_index import trunc_t_axis
 
 def Ct2data(molecule,n=100,nr=10,**kwargs):
     """
@@ -59,9 +60,14 @@ def Ct2data(molecule,n=100,nr=10,**kwargs):
         
     vec=get_trunc_vec(mol,index,**kwargs)
     
+    if 'align_iRED' in kwargs and kwargs.get('align_iRED').lower()[0]=='y':
+        vec=align_mean(vec)
+    
     ct=Ct(vec,**kwargs)
     
+
     S2=S2calc(vec)
+            
     
     Ctdata=data(molecule=mol,Ct=ct,S2=S2,**kwargs)
     

@@ -9,6 +9,7 @@ Created on Sun May 12 17:26:01 2019
 import os
 import numpy as np
 import MDAnalysis as md
+from shutil import copyfile
 os.chdir('../Struct')
 os.chdir('../chimera') 
 
@@ -98,11 +99,17 @@ def plot_cc(mol,resi,values,resi0,chain=None,chain0=None,scaling=1,\
     if scaling is not None:
         values=values*scaling
     
+    
     "Make sure the auto-correlated value is 1 no matter what"
+    #Why is this necessary?
     if kwargs.get('style')=='bond':
         values[index]=1
     else:
-        values[resi==resi0]=1
+        if chain is not None and chain0 is not None:
+            i=np.logical_and(resi==resi0,chain==chain0)
+            values[i]=1
+        else:
+            values[resi==resi0]=1
         
     chimera_setup(resi,values,fileout,chain=chain,filename=filename,loc0=resi0,chain0=chain0,scaling=scaling,scene=scene,**kwargs)
     
@@ -124,11 +131,15 @@ def plot_rho(mol,resi,values,chain=None,chain0=None,scaling=1,\
     if kwargs.get('style')=='bond':
         resi0=resi
         if mol.sel1in is None:
-            mol.sel1in=np.arange(mol.sel1.n_atoms)
+            sel1in=np.arange(mol.sel1.n_atoms)
+        else:
+            sel1in=mol.sel1in
         if mol.sel2in is None:
-            mol.sel2in=np.arange(mol.sel2.n_atoms)
-        atom1=mol.sel1.ids[mol.sel1in]
-        atom2=mol.sel2.ids[mol.sel2in]
+            sel2in=np.arange(mol.sel2.n_atoms)
+        else:
+            sel2in=mol.sel2in    
+        atom1=mol.sel1.ids[sel1in]
+        atom2=mol.sel2.ids[sel2in]
         "Currently we don't use resi0- we should consider whether this should be included in the indexing"
         resi=(uni2pdb_index(atom1,mol.pdb_id),uni2pdb_index(atom2,mol.pdb_id))
     
@@ -139,9 +150,9 @@ def plot_rho(mol,resi,values,chain=None,chain0=None,scaling=1,\
     chimera_setup(resi,values,fileout,chain=chain,filename=filename,scaling=scaling,scene=scene,**kwargs)
 
 
-def peptide_plane(attr,residue,value,chain=None):
+def peptide_plane(attr,residue,value,rand_index,chain=None):
     "Generate attribute files for a full peptide plane"
-    full_path=get_path('attr_'+attr+'.txt')
+    full_path=get_path('attr_'+attr+'{0:06d}.txt'.format(rand_index))
     with open(full_path,'w+') as f:
         
         "File header"
@@ -184,7 +195,7 @@ def peptide_plane(attr,residue,value,chain=None):
                 f.write(':{0}@C,O'.format(res-1))
             f.write('\t{0}\n'.format(value[k]))
             
-def bond_attr(attr,atom1,atom2,value):
+def bond_attr(attr,atom1,atom2,value,rand_index):
     
     
     a1,b1=np.unique(atom1,return_inverse=True)
@@ -200,7 +211,7 @@ def bond_attr(attr,atom1,atom2,value):
         val2[k]=np.mean(value[b2==k])
     
     "Generate attributes file for individual bonds"
-    full_path=get_path('attr_'+attr+'.txt')
+    full_path=get_path('attr_'+attr+'{0:06d}.txt'.format(rand_index))
     with open(full_path,'w+') as f:
         "File header"
         f.write('attribute: {0}\n'.format(attr))
@@ -258,7 +269,14 @@ def bond_sel_string(atom1,atom2):
 #%% Writes out a script to open chimera with detector information plotted on the molecule
 def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=None,filename=None,scene=None,\
                    sc_rad=3.2,loc0=None,chain0=None,chimera_commands=None,png_opts=None,edit=True,scaling=None,**kwargs):
-    full_path=get_path('chimera_script.py')
+    
+    
+    """
+    We stick a random number after all the files so we can safely run multiple
+    instances of this function
+    """ 
+    rand_index=np.random.randint(1e6)   
+    full_path=get_path('chimera_script{0:06d}.py'.format(rand_index))
     
     
     if style.lower()=='pp':
@@ -299,20 +317,20 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
         resi=resi[i] #Index out values above 1
         chain=chain[i]
         if sc_rad is not None:
-            peptide_plane('radius',resi,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0),chain)
-        peptide_plane('rho',resi,value,chain)
+            peptide_plane('radius',resi,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0),rand_index,chain)
+        peptide_plane('rho',resi,value,rand_index,chain)
     elif style.lower()=='bond':
         atom1=atom1[i] #Index out values above 1
         atom2=atom2[i] #Index out values above 1
         if sc_rad is not None:
-            bond_attr('radius',atom1,atom2,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0))
-        bond_attr('rho',atom1,atom2,value)
+            bond_attr('radius',atom1,atom2,np.max([np.power(np.abs(value),1/3)*sc_rad,np.zeros(np.size(value))*.001],axis=0),rand_index)
+        bond_attr('rho',atom1,atom2,value,rand_index)
     else:
         print('Style not defined')
         return
     
     with open(full_path,'w+') as f:
-        
+        f.write('import os\n')
         f.write('from chimera import runCommand as rc\n')
         "Load scene if given"
         
@@ -343,9 +361,9 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
         
         
         "Define the attributes (color and radius)"
-        WrCC(f,'defattr {0} raiseTool false'.format(get_path('attr_rho.txt')))
+        WrCC(f,'defattr {0} raiseTool false'.format(get_path('attr_rho{0:06d}.txt'.format(rand_index))))
         if sc_rad is not None:
-            WrCC(f,'defattr {0} raiseTool false'.format(get_path('attr_radius.txt')))
+            WrCC(f,'defattr {0} raiseTool false'.format(get_path('attr_radius{0:06d}.txt'.format(rand_index))))
         
         
         "Define the color scheme (currently red/blue or red-shade)"
@@ -426,8 +444,22 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
                 "Default settings"
                 WrCC(f,'copy file {0} png width 2000 height 1000 dpi 300 supersample 3'.format(fileout))
                 
+
+            
+        
+        f.write('os.remove("'+get_path('attr_radius{0:06d}.txt'.format(rand_index))+'")\n')
+        f.write('os.remove("'+get_path('attr_rho{0:06d}.txt'.format(rand_index))+'")\n')
+        f.write('os.remove("'+full_path+'")\n')
+        f.write('os.remove("'+full_path+'c")\n') 
+        
         if not edit and fileout is not None:
             WrCC(f,'stop')
+    
+    "Copy the created chimera files simply to names in the chimera folder (ex. for debugging)"
+    
+    copyfile(full_path,full_path[:-9]+'.py')
+    copyfile(get_path('attr_radius{0:06d}.txt'.format(rand_index)),get_path('attr_radius.txt'))
+    copyfile(get_path('attr_rho{0:06d}.txt'.format(rand_index)),get_path('attr_rho.txt'))
     """
     There's a problem here: we spawn the chimera process, which calls a few 
     different files that we've just created. They always have the same name, so
@@ -436,6 +468,7 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
     We should later try to have different file names for the generated files, 
     and figure out a way to delete those files on exit from chimera.
     """
+    "Above issue should be resolved (delete comment eventually"
     os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
     
 def WrCC(f,command):
@@ -450,7 +483,11 @@ def uni2pdb_index(index,pdb_index):
     
     i=np.zeros(np.size(index))
     for k,ind in enumerate(index):
-        i[k]=np.where(ind==pdb_index)[0][0]
-    return i
+        try:
+            i[k]=np.argwhere(ind==pdb_index).squeeze()
+        except:
+            print(ind)
+            print(pdb_index)
+    return i+1
     
     

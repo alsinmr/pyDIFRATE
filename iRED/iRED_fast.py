@@ -14,12 +14,13 @@ from data_class import data
 os.chdir('../iRED')
 from MDAnalysis.analysis.align import rotation_matrix
 from psutil import virtual_memory
-from fast_funs import trunc_t_axis,S2calc,Ct,get_trunc_vec,get_count
+from fast_funs import S2calc,Ct,get_trunc_vec,align_mean
+from fast_index import trunc_t_axis,get_count
 from par_iRED import par_class as ipc
 from time import time
 
 #%% Run the full iRED analysis
-def iRED_full(mol,rank=2,n=100,nr=10,**kwargs):
+def iRED_full(mol,rank=2,n=100,nr=10,align_iRED=False,refVecs=None,**kwargs):
     """
     Runs the full iRED analysis for a given selection (or set of vec_special functions)
     Arguments are the rank (0 or 1), the sampling (n,nr), whether to align the 
@@ -39,9 +40,9 @@ def iRED_full(mol,rank=2,n=100,nr=10,**kwargs):
     index=trunc_t_axis(nt,n,nr)
     vec=get_trunc_vec(mol,index,**kwargs)
     
-    if 'align_iRED' in kwargs and kwargs.get('align_iRED').lower()[0]=='y':
-        if 'refVecs' in kwargs:
-            vec0=kwargs['refVecs']
+    if align_iRED:
+        if refVecs is not None:
+            vec0=refVecs
             if isinstance(vec0,dict):
                 pass
             elif len(vec0)==2 and isinstance(vec0[0],str) and isinstance(vec0[1],str):
@@ -84,6 +85,48 @@ def iRED_full(mol,rank=2,n=100,nr=10,**kwargs):
           'N':ct['N'],'index':ct['index'],'DelCt':dct['DelCt'].T,'CtInf':ctinf,\
           'Aligned':aligned,'n_added_vecs':n_added_vecs}
             
+    return ired
+
+#%% Process with iRED from a vector
+def vec2iRED(vec,rank=2,align_iRED=False,refVecs=None,**kwargs):
+    """
+    Takes a vector object and returns the iRED object (vec contains X,Y,Z,t, and
+    usually an index for sparse sampling of the time axis)
+    
+    If align_iRED is set to True, then by default, vec will be used aligned and
+    unaligned for a reference vector. The reference vectors (refVecs) may be
+    used to replace the unaligned input vector
+    
+    iRED=vec2iRED(vec,rank=2,align_iRED=False,**kwargs)
+    """
+
+    if align_iRED:
+        if refVecs is None:
+            vec0=vec
+        else:
+            vec0=refVecs
+        vec=align_mean(vec)
+        
+        n_added_vecs=vec0.get('X').shape[1]
+        for k in ['X','Y','Z']:
+            vec[k]=np.concatenate((vec[k],vec0[k]),axis=1)
+        aligned=True
+    else:
+        aligned=False
+        n_added_vecs=0
+        
+    Mmat(vec,rank)
+    Yl=Ylm(vec,rank)
+    aqt=Aqt(Yl,M)
+    
+    "parallel calculation of correlation functions"
+    ct=Cqt(aqt)
+    ctinf=CtInf(aqt)
+    dct=DelCt(ct,ctinf)
+    ired={'rank':rank,'M':M['M'],'lambda':M['lambda'],'m':M['m'],'t':ct['t'],\
+          'N':ct['N'],'index':ct['index'],'DelCt':dct['DelCt'].T,'CtInf':ctinf,\
+          'Aligned':aligned,'n_added_vecs':n_added_vecs}
+    
     return ired
 
 #%% Generate a data object with iRED results
@@ -226,7 +269,7 @@ def Ylm(vec,rank=2):
         a=(X+Y*1j)
         b=np.sqrt(X**2+Y**2)
         b2=b**2
-        b[b==0]=1
+#        b[b==0]=1
 #        Yl['2,+1']=2*c*Z*b*a
 #        Yl['2,-1']=2*c*Z*b*a.conjugate()
         Yl['2,+1']=2*c*Z*a
@@ -235,8 +278,8 @@ def Ylm(vec,rank=2):
 #        b=b**2
 #        Yl['2,+2']=c*b*a
 #        Yl['2,-2']=c*b*a.conjugate()
-        a2=a
-        a2[a!=0]=np.exp(2*np.log(a[a!=0]/b[a!=0]))
+        a2=a**2
+#        a2[a!=0]=np.exp(2*np.log(a[a!=0]/b[a!=0]))
         Yl['2,+2']=c*b2*a2
         Yl['2,-2']=c*b2*a2.conjugate()
         
@@ -367,59 +410,117 @@ def DelCt(ct,ctinf):
     
     return delCt
 
-def align_mean(vec0):
-    """
-    Aligns the mean direction of a set of vectors along the z-axis. This can be
-    useful for iRED analysis, to mitigate the orientational dependence of the 
-    iRED analysis procedure.
-    
-    vec = align_mean(vec0)
-    """
-    nt=vec0.get('X').shape[1]
-    
-    "Mean direction of the vectors"
-    X0=vec0['X'].mean(axis=1)
-    Y0=vec0['Y'].mean(axis=1)
-    Z0=vec0['Z'].mean(axis=1)
-    
-    "Normalize the length"
-    length=np.sqrt(X0**2+Y0**2+Z0**2)
-    X0=np.divide(X0,length)
-    Y0=np.divide(Y0,length)
-    Z0=np.divide(Z0,length)
-    
-    "Angle away from the z-axis"
-    beta=np.arccos(Z0)
-    
-    "Angle of rotation axis away from y-axis"
-    "Rotation axis is at (-Y0,X0): cross product of X0,Y0,Z0 and (0,0,1)"
-    theta=np.arctan2(-Y0,X0)
-    
-    
-    xx=np.cos(-theta)*np.cos(-beta)*np.cos(theta)-np.sin(-theta)*np.sin(theta)
-    yx=-np.cos(theta)*np.sin(-theta)-np.cos(-theta)*np.cos(-beta)*np.sin(theta)
-    zx=np.cos(-theta)*np.sin(-beta)
-    
-    X=np.repeat(np.transpose([xx]),nt,axis=1)*vec0.get('X')+\
-    np.repeat(np.transpose([yx]),nt,axis=1)*vec0.get('Y')+\
-    np.repeat(np.transpose([zx]),nt,axis=1)*vec0.get('Z')
-    
-    xy=np.cos(-theta)*np.sin(theta)+np.cos(-beta)*np.cos(theta)*np.sin(-theta)
-    yy=np.cos(-theta)*np.cos(theta)-np.cos(-beta)*np.sin(-theta)*np.sin(theta)
-    zy=np.sin(-theta)*np.sin(-beta)
-    
-    Y=np.repeat(np.transpose([xy]),nt,axis=1)*vec0.get('X')+\
-    np.repeat(np.transpose([yy]),nt,axis=1)*vec0.get('Y')+\
-    np.repeat(np.transpose([zy]),nt,axis=1)*vec0.get('Z')
 
-    xz=-np.cos(theta)*np.sin(-beta)
-    yz=np.sin(-beta)*np.sin(theta)
-    zz=np.cos(-beta)
-    
-    Z=np.repeat(np.transpose([xz]),nt,axis=1)*vec0.get('X')+\
-    np.repeat(np.transpose([yz]),nt,axis=1)*vec0.get('Y')+\
-    np.repeat(np.transpose([zz]),nt,axis=1)*vec0.get('Z')
 
-    vec={'X':X,'Y':Y,'Z':Z,'t':vec0['t'],'index':vec0['index']}
+def iRED2dist(bond,data,nbins=None,all_modes=False):
+    """
+    Estimates a distribution of correlation times for a given bond in the iRED 
+    analysis. We calculate a correlation time for each mode (we fit detector 
+    responses to a single mode). Then, we calculate the amplitude of each mode
+    on the selected bond. Finally, we calculate a histogram from the results.
     
-    return vec
+    z,A=iRED2dist(bond,fit,nbins=None)
+    
+    Note, that fit needs to be the detector fit of the iRED modes, not the final
+    fit (resulting from fit.iRED2rho())
+    """
+    
+    "Get the best-fit correlation time for each mode"
+#    z0,_,_=fit2tc(data.R,data.sens.rhoz(),data.sens.z(),data.R_std)
+    z0=avgz(data.R,data.sens.z(),data.sens.rhoz())
+    
+    if bond in data.label:
+        i=np.argwhere(bond==data.label).squeeze()
+    else:
+        i=bond
+    
+    m0=data.ired['m'].T
+    l0=data.ired['lambda']
+    
+    A0=np.zeros(z0.shape)
+    
+    for k,(l,m) in enumerate(zip(l0,m0)):
+        A0[k]=m[i]**2*l
+        
+    
+    if nbins is None:
+        nbins=np.min([data.sens.z().size,z0.size/10])
+        
+    #Axis for histogram    
+    z=np.linspace(data.sens.z()[0],data.sens.z()[-1],nbins)
+    
+    i=np.digitize(z0,z)-1
+    
+    if all_modes:
+        ne=-A0.size
+    else:
+        ne=data.ired['rank']*2+1
+    
+    A=np.zeros(z.shape)
+    for k,a in enumerate(A0[:-ne]):
+        A[i[k]]+=a
+    
+    return z,A
+
+def avgz(R,z,rhoz):
+    """
+    Estimates an "average" z for a set of detector responses, determined simply
+    by the weighted average of the z0 for each detector (weighted by the
+    detector responses). Note that we use max-normalized detectors for this 
+    calculation
+    """
+    nd,nz=np.shape(rhoz)
+    z0=np.sum(np.repeat([z],nd,axis=0)*rhoz,axis=1)/np.sum(rhoz,axis=1)
+    nb=R.shape[0]
+    norm=np.max(rhoz,axis=1)
+    
+    R=np.divide(R,np.repeat([norm],nb,axis=0))
+    
+    z=np.divide(np.multiply(R,np.repeat([z0],nb,axis=0)).sum(axis=1),R.sum(axis=1))
+    
+    return z
+    
+def fit2tc(R,rhoz,tc,R_std=None):
+    """
+    Estimates a single correlation time for a set of detector responses, based 
+    on the sensitivities of thoses detectors (in principle, may be applied to
+    any sensitivity object, but with better performance for optimized detectors)
+    
+    tc,A=fit2tc(R,sens)
+    
+    R may be a 2D matrix, in which case each row is a separate set of detector
+    responses (and will be analyzed separately)
+    """    
+    
+    R=np.atleast_2d(R)  #Make sure R is a 2D matrix
+    if R_std is None:
+        R_std=np.ones(R.shape)
+    
+    
+    nd,nz=rhoz.shape    #Number of detectors, correlation times
+    nb=R.shape[0]       #Number of bonds
+    
+    err=list()      #Storage for error
+    A=list()        #Storage for fit amplitudes
+    
+    
+    for X in rhoz.T:
+        R0=np.divide(R,R_std)
+        rho=np.divide(np.repeat([X],nb,axis=0),R_std)
+        A.append(np.divide(np.mean(np.multiply(rho,R0),axis=1),np.mean(rho**2,axis=1)))
+        err.append(np.power(R0-rho*np.repeat(np.transpose([A[-1]]),nd,axis=1),2).sum(axis=1))
+        
+    A0=np.array(A)
+    err=np.array(err)
+    
+    i=err.argmin(axis=0)
+    tc=np.array(tc[i])
+    
+    A=np.zeros(nb)
+    Rc=np.zeros(R.shape)
+    
+    for k in range(nb):
+        A[k]=A0[i[k],k]
+        Rc[k]=A[k]*rhoz[:,i[k]]
+    
+    return tc,A,Rc

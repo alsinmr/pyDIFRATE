@@ -88,7 +88,7 @@ class data(object):
                 self.R_std=np.dot(norm,[self.sens.info.loc['stdev']])
             
         elif 'Ct' in kwargs:
-            EstErr=True #Default estimate error for correlation functions
+            EstErr=False #Default estimate error for correlation functions
             ct=kwargs.get('Ct')
             self.R=ct.get('Ct')
 
@@ -106,6 +106,7 @@ class data(object):
                 stdev=1/np.sqrt(ct['N'])
                 stdev[0]=1e-6
                 self.sens.info.loc['stdev']=stdev
+                self.new_detect()
                 self.R_std=np.repeat([stdev],self.R.shape[0],axis=0)
             else:
                 self.R_std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
@@ -195,7 +196,19 @@ class data(object):
         return fit_data(self,detect,**kwargs)
       
 #%% Convert iRED data types into normal detector responses and cross-correlation matrices            
-    def iRED2rho(self,all_modes=False):
+    def iRED2rho(self,mode_index=None):
+        """
+        Convert the fitting of iRED data to the auto-correlated detectors and
+        cross correlation matrices. By default, omits the last 2*rank+1 modes 
+        (3 or 5 modes). Alternatively, the user may provide a boolean array with
+        size equal to the number of modes, or a list of the modes to be used
+        
+        fit=fit0.iRED2rho()
+        
+        or
+        
+        fit=fit0.iRED2rho(mode_index)
+        """
         if self.ired is None or not isinstance(self.sens,detect):
             print('Function only applicable to iRED-derived detector responses')
             return
@@ -209,8 +222,13 @@ class data(object):
         
         rank=self.ired.get('rank')
         ne=2*rank+1
-        if all_modes:
-            ne=-self.R.shape[0]
+        
+        if mode_index is None:
+            mode_index=np.ones(nb,dtype=bool)
+            mode_index[-ne:]=False
+        else:
+            mode_index=np.array(mode_index,dtype=bool)
+        
         
 #        if self.sens.molecule.sel1in is not None:
 #            nb0=np.size(self.sens.molecule.sel1in)
@@ -226,20 +244,18 @@ class data(object):
         out.R_u=np.zeros([nb0,nd])
         
         for k in range(0,nd):
-            lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R[0:-ne,k]],nb0,axis=0)
-            out.R[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
+            lambda_rho=np.repeat([self.ired.get('lambda')[mode_index]*self.R[mode_index,k]],nb0,axis=0)
+            out.R[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,mode_index]**2,axis=1)
              
-            lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R_std[0:-ne,k]],nb0,axis=0)
-            out.R_std[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
+            lambda_rho=np.repeat([self.ired.get('lambda')[mode_index]*self.R_std[mode_index,k]],nb0,axis=0)
+            out.R_std[:,k]=np.sqrt(np.sum(lambda_rho*self.ired.get('m')[0:nb0,mode_index]**2,axis=1))
             
-            lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R_l[0:-ne,k]],nb0,axis=0)
-            out.R_l[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
+            lambda_rho=np.repeat([self.ired.get('lambda')[mode_index]*self.R_l[mode_index,k]],nb0,axis=0)
+            out.R_l[:,k]=np.sqrt(np.sum(lambda_rho*self.ired.get('m')[0:nb0,mode_index]**2,axis=1))
             
-            lambda_rho=np.repeat([self.ired.get('lambda')[0:-ne]*self.R_u[0:-ne,k]],nb0,axis=0)
-            out.R_u[:,k]=np.sum(lambda_rho*self.ired.get('m')[0:nb0,0:-ne]**2,axis=1)
+            lambda_rho=np.repeat([self.ired.get('lambda')[mode_index]*self.R_u[mode_index,k]],nb0,axis=0)
+            out.R_u[:,k]=np.sqrt(np.sum(lambda_rho*self.ired.get('m')[0:nb0,mode_index]**2,axis=1))
         
-        if all_modes:
-            ne=0    
         
         out.sens=self.sens
         
@@ -248,7 +264,7 @@ class data(object):
         for k in range(0,nd):
             out.Rcc.append(np.zeros([nb0,nb0]))
         "Loop over all eigenmodes"
-        for k in range(0,nb-ne): #We exclude the 2*rank+1 global motions
+        for k in np.argwhere(mode_index).squeeze(): #We only use the user-specified modes (or by default, leave at last 2*rank+1 modes)
             m=self.ired.get('m')[0:nb0,k]
             mat=self.ired.get('lambda')[k]*np.dot(np.transpose([m]),[m])
             "Calculate total correlation"
@@ -276,32 +292,45 @@ class data(object):
 
         return out
     
-    def plot_rho(self,fig=None,plot_sens='y',index=None,errorbars='n',**kwargs):
+    def plot_rho(self,fig=None,plot_sens='y',index=None,rho_index=None,errorbars='n',**kwargs):
         if fig is None:
             fig=plt.figure()
             
         nd=self.R.shape[1]
         
+        if rho_index is None:
+            rho_index=np.arange(nd)
+        else:
+            rho_index=np.array(rho_index)
+        
+        
+        if hasattr(self.sens,'detect_par') and self.sens.detect_par['R2_ex_corr'][0].lower()=='y' and\
+            nd-1 in rho_index:
+            R2ex=True
+        else:
+            R2ex=False
+        
         if plot_sens.lower()[0]=='y' and self.sens is not None:
-            nplts=nd+2
+            nplts=np.size(rho_index)+2
             ax0=fig.add_subplot(int(nplts/2)+1,1,1)
-            if hasattr(self.sens,'detect_par') and self.sens.detect_par['R2_ex_corr'][0].lower()=='y':
-                nd0=nd-1
-            else:
-                nd0=nd
-            hdl=ax0.plot(self.sens.z(),self.sens._rho(np.arange(0,nd),bond=None).T)
+            
+            temp=self.sens._rho(rho_index,bond=None)
+            if R2ex:
+                temp[-1][:]=0
+                
+            hdl=ax0.plot(self.sens.z(),temp.T)
             ax0.set_xlabel(r'$\log_{10}(\tau$ / s)')
             ax0.set_ylabel(r'$\rho(z)$')
             ax0.set_xlim(self.sens.z()[[0,-1]])
-            temp=self.sens._rho(np.arange(nd0),bond=None)
             mini=np.min(temp)
             maxi=np.max(temp)
             ax0.set_ylim([mini-(maxi-mini)*.05,maxi+(maxi-mini)*.05])
 
-            if nd0!=nd:
-                hdl[-1].set_alpha(0)
+                
+            color=[h.get_color() for h in hdl]
         else:
-            nplts=nd
+            nplts=np.size(rho_index)
+            color=plt.rcParams['axes.prop_cycle'].by_key()['color']
             
         ax=list()
         
@@ -321,12 +350,11 @@ class data(object):
             lbl=np.arange(np.size(index))
             xaxis_lbl=None
         
-        
-        for k in range(0,nd):
+        for k,ri in enumerate(rho_index):
             if k==0:
-                ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1))
+                ax.append(fig.add_subplot(nplts,1,k+nplts-np.size(rho_index)+1))
             else:
-                ax.append(fig.add_subplot(nplts,1,k+nplts-nd+1,sharex=ax[0]))
+                ax.append(fig.add_subplot(nplts,1,k+nplts-np.size(rho_index)+1,sharex=ax[0]))
             
 #            if errorbars[0].lower()=='y':
 #                if self.R_l is None:
@@ -340,31 +368,31 @@ class data(object):
                         
             if errorbars[0].lower()=='y':
                 if self.R_l is None:
-                    pf.plot_rho(lbl,self.R[index,k],self.R_std[:,k],ax=ax[k],\
-                      color=hdl[k].get_color(),**kwargs)
+                    pf.plot_rho(lbl,self.R[index,ri],self.R_std[:,ri],ax=ax[-1],\
+                      color=color[k],**kwargs)
                 else:
-                    pf.plot_rho(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],ax=ax[k],\
-                      color=hdl[k].get_color(),**kwargs)
+                    pf.plot_rho(lbl,self.R[index,ri],[self.R_l[index,ri],self.R_u[index,ri]],ax=ax[-1],\
+                      color=color[k],**kwargs)
             else:
-                pf.plot_rho(lbl,self.R[index,k],ax=ax[k],color=hdl[k].get_color(),**kwargs)
+                pf.plot_rho(lbl,self.R[index,ri],ax=ax[-1],color=color[k],**kwargs)
                                  
             
             
-            ax[k].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
+            ax[-1].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
             
-            yl=ax[k].get_ylim()
-            ax[k].set_ylim([np.min([yl[0],0]),yl[1]])
+            yl=ax[-1].get_ylim()
+            ax[-1].set_ylim([np.min([yl[0],0]),yl[1]])
             
-            if k<nd-1:
+            if k<np.size(rho_index)-1:
                 if xaxis_lbl is not None:
-                    ax[k].set_xticklabels(xaxis_lbl)
-                plt.setp(ax[k].get_xticklabels(),visible=False)
+                    ax[-1].set_xticklabels(xaxis_lbl)
+                plt.setp(ax[-1].get_xticklabels(),visible=False)
             else:
                 if xaxis_lbl is not None:
-                    ax[k].set_xticks(lbl)
-                    ax[k].set_xticklabels(xaxis_lbl,rotation=90)
-                if nd0!=nd:
-                    ax[k].set_ylabel(r'$R_2^{ex} / s^{-1}$')
+                    ax[-1].set_xticks(lbl)
+                    ax[-1].set_xticklabels(xaxis_lbl,rotation=90)
+                if R2ex:
+                    ax[-1].set_ylabel(r'$R_2^{ex} / s^{-1}$')
                 
         fig.subplots_adjust(hspace=0.25)
         
@@ -397,7 +425,7 @@ class data(object):
                 x=self.Rcc[det_num]
             
             
-        if self.label is not None:
+        if self.label is not None and len(self.label)==self.Rcc[det_num].shape[0]:
             lbl=self.label
             if isinstance(lbl[0],str):
                 xaxis_lbl=lbl.copy()
@@ -559,7 +587,8 @@ class data(object):
         
 
         values=self.ired['m'][mode_num]
-        
+        if self.ired['n_added_vecs']!=0:
+            values=values[0:-self.ired['n_added_vecs']]
       
         res1=self.sens.molecule.sel1.resids
         chain1=self.sens.molecule.sel1.segids

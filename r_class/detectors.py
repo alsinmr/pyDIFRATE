@@ -321,7 +321,7 @@ class detect(mdl.model):
             self.__r_info(None,**kwargs)
 
 #%% Automatic generation of detectors from a set of sensitivities                 
-    def r_auto(self,n,bond=None,**kwargs):
+    def r_auto(self,n,bond=None,parallel=True,**kwargs):
         self.n=n
         "Get input or defaults"
         if 'inclS2' in kwargs:
@@ -374,7 +374,7 @@ class detect(mdl.model):
             Y.append((Vt,k))
 
         "Default is parallel processing"
-        if 'parallel' in kwargs and kwargs.get('parallel').lower()[0]=='n':
+        if not(parallel):
             X=list()
             for k in range(0,ntc):
                 X.append(linprog_par(Y[k]))
@@ -507,8 +507,8 @@ class detect(mdl.model):
             except:
                 pass
         R2ex=('R2_ex_corr' in kwargs and kwargs.get('R2_ex_corr').lower()[0]=='y') or\
-            self.detect_par['R2_ex_corr'][0].lower()=='y'
-            
+            ('R2_ex_corr' not in kwargs and self.detect_par['R2_ex_corr'][0].lower()=='y')
+   
         "Save the results into the detect object"
 #        self.r0=self.__r
         if bond is None:
@@ -539,7 +539,7 @@ class detect(mdl.model):
             self.__rhoCSA[bond]=np.dot(T,VCSA)
             self.SVD[bond]['T']=T
             self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rho[bond].copy()}
-            if R2ex:
+            if R2ex:                
                 self.R2_ex_corr(bond,**kwargs)
             self.__r_info(bond,**kwargs)
             self.__r_norm(bond,**kwargs)
@@ -550,7 +550,7 @@ class detect(mdl.model):
                     kwargs.pop('Normalization')
                 self.r_target(n,self.__rho[bond],bonds,**kwargs)
 
-    def r_target(self,target=None,n=None,bond=None,**kwargs):
+    def r_target(self,target=None,n=None,bond=None,parallel=True,**kwargs):
         "Set sensitivities as close to some target function as possible"
         
         if target is None:
@@ -613,7 +613,7 @@ class detect(mdl.model):
                 Y.append((Vt,target))
                 
             "Default is parallel processing"
-            if 'parallel' in kwargs and kwargs.get('parallel').lower()[0]=='n':
+            if not(parallel):
                 T=list()
                 for k in Y:
                     T.append(lsqlin_par(k))
@@ -736,6 +736,7 @@ class detect(mdl.model):
             if np.ndim(exp_num)>0:
                 exp_num=exp_num[0]
             self.info=self.info.drop(exp_num,axis=1)
+            self.info.columns=range(len(self.info.columns))
             if self.__rhoAvg is not None:
                 self.__rhoAvg=np.delete(self.__rhoAvg,exp_num,axis=0)
             nb=self._nb()
@@ -818,7 +819,7 @@ class detect(mdl.model):
             else:
                 self.__rho[bond][k,:]=rhoz[k,:]/sc
                 self.__rhoCSA[bond][k,:]=self.__rhoCSA[bond][k,:]/sc
-                self.SVD[bond]['T'][k,:]=self.SVD[bond]['T'][k,:]
+                self.SVD[bond]['T'][k,:]=self.SVD[bond]['T'][k,:]/sc
                 self.__r[bond][:,k]=self.__r[bond][:,k]*sc
                 
                 
@@ -872,19 +873,16 @@ class detect(mdl.model):
                         return
         
         index=[False]*nb
-        
         for k in range(nb):
             if self.__r[k] is not None:
-                
                 z0,_,_=self.r_info(k)
                 nd=z0.shape[0]
                 if nd==nd0:
                     index[k]=True
-            
-                
+                    
         a=dict()
         flds=['z0','Del_z','stdev']
-
+        
         if np.any(index):        
             for f in flds:
                 x=list()
@@ -899,10 +897,10 @@ class detect(mdl.model):
             "Re-do calculation for average detectors"
             z0,Del_z,stdev=self.r_info(bond=None)
             a.update({'z0':z0,'Del_z':Del_z,'stdev':stdev})
-        
+            
         self.info=pd.DataFrame.from_dict(a)
         self.info=self.info.transpose()
-           
+
     def r_info(self,bond=None,**kwargs):
         """
         |Returns z0, Del_z, and the standard deviation of a detector
@@ -977,7 +975,6 @@ class detect(mdl.model):
         """
         nb=self._nb()
         
-
         match=True
         if self.__r[0].ndim==2:
             nd0=np.shape(self.__r[0])[1]
@@ -994,7 +991,6 @@ class detect(mdl.model):
         else:
             a=np.atleast_1d(bond)
             
-
         for k in a:
             if self.__r[0].ndim==2:
                 nd=np.shape(self.__r[k])[1]
@@ -1173,7 +1169,7 @@ class detect(mdl.model):
         
 
              
-        if bond is None:
+        if bond is None or self._nb()==1:
             bond=0
         
         if np.size(self.__rho[bond])==1:
@@ -1414,6 +1410,20 @@ def linprog_par(Y):
         target=np.zeros(ntc)
         
     try:
+#        if k<Vt.shape[1]/2:
+#            equals=Vt[:,[k,-1]].T
+#            v=[1,0]
+#        else:
+#            equals=Vt[:,[0,k]].T
+#            v=[0,1]
+#        if k==Vt.shape[1]-1:
+#            equals=[Vt[:,k].T]
+#            v=1
+#        else:
+#            equals=Vt[:,[k,-1]].T
+#            v=[1,0]
+
+#        x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,equals,v,bounds=(-500,500),method='interior-point',options={'disp' :False,})
         x=linprog(np.sum(Vt,axis=1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),method='interior-point',options={'disp' :False,})
         x=x['x']
         if np.any(np.dot(Vt.T,x)<(np.min(target)-.0001)):

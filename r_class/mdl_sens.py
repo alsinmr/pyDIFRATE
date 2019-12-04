@@ -65,6 +65,7 @@ class model(object):
             self.tMdl.append(tMdl)
             self.AMdl.append(AMdl)
         elif Model=='Combined' and 'mdl_nums' in kwargs:
+            
             mdl_nums=kwargs.get('mdl_nums')
             if not isinstance(mdl_nums,np.ndarray):
                 mdl_nums=np.array(mdl_nums)
@@ -261,14 +262,13 @@ class model(object):
         SZ0=np.concatenate([np.atleast_1d(SZA),[SZR[0]]])
         
         "Contributions to relaxation coming from model with non-zero S2"
-        if np.size(A)>1:
+        if np.ndim(A)>1:
             S2=1-np.sum(A[:,0,:],axis=1)
             S2CSA=1-np.sum(A[:,1,:],axis=1)
         else:
             S2=[1-np.sum(A)]
             S2CSA=S2
             
-
         SZ1=[SZeff[0],np.prod(SZeff[1:])]
 
         """
@@ -280,7 +280,6 @@ class model(object):
         Reff=np.reshape(Reff,SZeff)
         ReffCSA=np.reshape(ReffCSA,SZeff)
         
-     
         R0=np.zeros(SZ0)
         R0CSA=np.zeros(SZ0)
         
@@ -296,7 +295,6 @@ class model(object):
                 
             Reff0=np.reshape(np.dot(M,np.reshape(R,SZ1).T).T-np.transpose([R00]),[1,np.prod(SZeff)])
             ReffCSA0=np.reshape(np.dot(M,np.reshape(RCSA,SZ1).T).T-np.transpose([R0CSA0]),[1,np.prod(SZeff)])
-
             if iso:
                 Reff+=A[k]*np.reshape(Reff0,SZeff)
                 R0+=A[k]*np.reshape(R00,SZ0)
@@ -314,14 +312,13 @@ class model(object):
         
         Reff+=ReffCSA
         R0+=R0CSA
-        
         return Reff,R0,ReffCSA,R0CSA
         
     def z2zeff(self,tc):
         
         z=self.z()
         zeff=z+np.log10(tc)-np.log10(tc+10**z)  #Calculate the effective log-correlation time
-        zeff[zeff<z[0]]=z[0]                    #Cleanup: no z shorter than z[0]
+        zeff[zeff<=z[0]]=z[0]+1e-12                    #Cleanup: no z shorter than z[0]
         zeff[zeff>=z[-1]]=z[-1]-1e-12           #Cleanup: no z longer than z[-1]
         i=np.digitize(zeff,z,right=False)-1     #Index to find longest z such that z<zeff
         sz=np.size(z)
@@ -333,7 +330,12 @@ class model(object):
         M[np.arange(0,sz),i+1]=1-wt
         
         zi=np.log10(tc)                        #Calculate the log of input tc
+        if zi<=z[0]:
+            zi=z[0]+1e-12                     #Cleanup: no z shorter than z[0]
+        if zi>=z[-1]:
+            zi=z[-1]-1e-12
         i=np.digitize(zi,z,right=False)-1     #Index to find longest z such that z<zeff
+        
         M0=np.zeros([sz])                     #Pre-allocate Matrix for rho->rho_eff transform
         
         wt=(z[i+1]-zi)/dz[i]

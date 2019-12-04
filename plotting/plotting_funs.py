@@ -84,8 +84,8 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
     Plots a set of rates or detector responses. 
     """
     
-    if ax==None:
-        ax=plt.figure().add_subplot()
+    if ax is None:
+        ax=plt.figure().add_subplot(111)
     
     "We divide the x-axis up where there are gaps between the indices"
     lbl1=list()
@@ -112,10 +112,13 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
             R_l1.append(None)
             R_u1.append(None)
     
-    "Plotting style (plot or scatter, scatter turns the linestyle to '' and adds a marker)"
+    "Plotting style (plot,bar, or scatter, scatter turns the linestyle to '' and adds a marker)"
     if style.lower()[0]=='s':
         if 'marker' not in kwargs:
             kwargs['marker']='o'
+        if 'linestyle' not in kwargs:
+            kwargs['linestyle']=''
+    elif style.lower()[0]=='b':
         if 'linestyle' not in kwargs:
             kwargs['linestyle']=''
         
@@ -125,6 +128,10 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
             ax.plot(lbl,R,color=color,**kwargs)
         else:
             ax.errorbar(lbl,R,[R_l,R_u],color=color,**kwargs)
+        if style.lower()[0]=='b':
+            kw=kwargs.copy()
+            if 'linestyle' in kw: kw.pop('linestyle')
+            ax.bar(lbl,R,color=color,**kw)
         if color is None:
             color=ax.get_children()[0].get_color()
                 

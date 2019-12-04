@@ -9,60 +9,7 @@ Created on Wed Aug 28 10:24:19 2019
 import numpy as np
 import multiprocessing as mp
 from parCt import par_class as pct
-
-#%% Calculates a truncated time axis
-def trunc_t_axis(nt,n=100,nr=10,**kwargs):
-    """
-    Calculates a log-spaced sampling schedule for an MD time axis. Parameters are
-    nt, the number of time points, n, which is the number of time points to 
-    load in before the first time point is skipped, and finally nr is how many
-    times to repeat that schedule in the trajectory (so for nr=10, 1/10 of the
-    way from the beginning of the trajectory, the schedule will start to repeat, 
-    and this will be repeated 10 times)
-    
-    """
-    
-    """We set n=-1 to just get the full axis. We'll eventually eliminate the
-    various non-fast functions and simply acquire them this way
-    """
-    if n==-1:
-        index=np.arange(nt)
-        return index
-    
-    "Step size: this log-spacing will lead to the first skip after n time points"
-    logdt0=np.log10(1.50000001)/n
-    
-    index=list()
-    index.append(0)
-    dt=0
-    while index[-1]<nt: #Step through until the last index is greater than nt
-        index.append(index[-1]+np.round(10**dt))
-        dt+=logdt0
-        
-    index=np.array(index)
-    
-    "Repeat this indexing nr times throughout the trajectory"
-    index=np.repeat(index,nr,axis=0)+np.repeat([np.arange(0,nt,nt/nr)],index.size,axis=0).reshape([index.size*nr])
-    
-    "Eliminate indices >= nt, eliminate repeats, and sort the index"
-    "(repeats in above line lead to unsorted axis, unique gets rid of repeats and sorts)"
-    index=index[index<nt]
-    index=np.unique(index.astype('int'))
-    return index
-
-#%% Determine how many frame pairs are averaged into each time point
-def get_count(index):
-    """
-    Returns the number of averages for each time point in the sparsely sampled 
-    correlation function
-    """
-    N=np.zeros(index[-1]+1)
-    n=np.size(index)
-   
-    for k in range(n):
-        N[index[k:]-index[k]]+=1
-        
-    return N
+from fast_index import get_count
 
 #%% Estimate the order parameter
 def S2calc(vec):
@@ -275,9 +222,6 @@ def get_trunc_vec(molecule,index,**kwargs):
             i=v<-box/2
             v[i]=v[i]+box[i]
             
-            i=v>box/2
-            if np.count_nonzero(i)>0:
-                print('Correcting')
             "Store the results"
             X0=v[:,0]
             Y0=v[:,1]
@@ -285,9 +229,10 @@ def get_trunc_vec(molecule,index,**kwargs):
         
         "Make sure length is one"
         length=np.sqrt(X0**2+Y0**2+Z0**2)
-        if np.any(length>3):
-            print(molecule.sel1[length>3].resids)
-            print(length[length>3])
+        if np.any(length>2):
+#            print(molecule.sel1[molecule.sel1in[length>3]].names)
+#            print(molecule.sel2[molecule.sel2in[length>3]].names)
+#            print(length[length>3])
             print(k)
         X[k,:]=np.divide(X0,length)
         Y[k,:]=np.divide(Y0,length)
@@ -309,6 +254,88 @@ def get_trunc_vec(molecule,index,**kwargs):
 #        vec=align_mean(vec)
            
     return vec
+
+def align_mean(vec0):
+    """
+    Aligns the mean direction of a set of vectors along the z-axis. This can be
+    useful for iRED analysis, to mitigate the orientational dependence of the 
+    iRED analysis procedure.
+    
+    vec = align_mean(vec0)
+    """
+    
+    
+    """At some point, we should consider whether it would make sense to use a 
+    tensor alignment instead of a vector alignment
+    """
+    vec=vec0.copy()  #Just operate on the copy here, to avoid accidental edits
+    
+    X,Y,Z=vec['X'],vec['Y'],vec['Z']    #Coordinates
+    
+#    nt=X.shape[0]
+
+    "Mean direction of the vectors"
+    X0,Y0,Z0=X.mean(axis=0),Y.mean(axis=0),Z.mean(axis=0)
+    
+    "Normalize the length"
+    length=np.sqrt(X0**2+Y0**2+Z0**2)
+    X0,Y0,Z0=np.divide([X0,Y0,Z0],length)
+    
+    #%% Calculate sines and cosines of beta,gamma rotations
+    "beta"
+    cB=Z0
+    sB=np.sqrt(1-cB**2)
+    
+    "gamma"
+    lXY=np.sqrt(X0**2+Y0**2)
+    cG=X0/lXY
+    sG=Y0/lXY
+    
+    "apply rotations"
+    X,Y=cG*X+sG*Y,-sG*X+cG*Y    #Apply gamma
+    X,Z=cB*X-sB*Z,sB*X+cB*Z   #Apply beta
+    X,Y=cG*X-sG*Y,sG*X+cG*Y  #Reverse gamma rotation
+    
+    "return results"
+    vec['X'],vec['Y'],vec['Z']=X,Y,Z
+    
+    return vec
+    
+#    "Angle away from the z-axis"
+#    beta=np.arccos(Z0)
+#    
+#    "Angle of rotation axis away from y-axis"
+#    "Rotation axis is at (-Y0,X0): cross product of X0,Y0,Z0 and (0,0,1)"
+#    theta=np.arctan2(-Y0,X0)
+    
+    
+#    xx=np.cos(-theta)*np.cos(-beta)*np.cos(theta)-np.sin(-theta)*np.sin(theta)
+#    yx=-np.cos(theta)*np.sin(-theta)-np.cos(-theta)*np.cos(-beta)*np.sin(theta)
+#    zx=np.cos(-theta)*np.sin(-beta)
+#    
+#    X=np.repeat([xx],nt,axis=0)*vec0.get('X')+\
+#    np.repeat([yx],nt,axis=0)*vec0.get('Y')+\
+#    np.repeat([zx],nt,axis=0)*vec0.get('Z')
+#    
+#    xy=np.cos(-theta)*np.sin(theta)+np.cos(-beta)*np.cos(theta)*np.sin(-theta)
+#    yy=np.cos(-theta)*np.cos(theta)-np.cos(-beta)*np.sin(-theta)*np.sin(theta)
+#    zy=np.sin(-theta)*np.sin(-beta)
+#    
+#    Y=np.repeat([xy],nt,axis=0)*vec0.get('X')+\
+#    np.repeat([yy],nt,axis=0)*vec0.get('Y')+\
+#    np.repeat([zy],nt,axis=0)*vec0.get('Z')
+#
+#    xz=-np.cos(theta)*np.sin(-beta)
+#    yz=np.sin(-beta)*np.sin(theta)
+#    zz=np.cos(-beta)
+#    
+#    Z=np.repeat([xz],nt,axis=0)*vec0.get('X')+\
+#    np.repeat([yz],nt,axis=0)*vec0.get('Y')+\
+#    np.repeat([zz],nt,axis=0)*vec0.get('Z')
+
+#    vec={'X':X,'Y':Y,'Z':Z,'t':vec0['t'],'index':vec0['index']}
+    
+#    return vec
 
 #%% Removes 
 def align(vec0,uni,**kwargs):

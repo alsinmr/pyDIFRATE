@@ -16,7 +16,7 @@ os.chdir('../r_class')
 from detectors import detect as dt
 os.chdir('../data')
 
-def fit_data(data,detect=None,bounds=True,**kwargs):
+def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel=True,**kwargs):
     """
     Subsequent fitting is currently failing (I think), because we are later trying to 
     fit the detectors that result from the R2 exchange correction. Should have an 
@@ -41,7 +41,7 @@ def fit_data(data,detect=None,bounds=True,**kwargs):
     out=dc.data()
     "The new sensitivities of the output data are the detectors used"
     out.sens=detect.copy()
-    out.sens._disable()    #Clear the input sensitivities (restricts)
+    out.sens._disable()    #Clear the input sensitivities (restricts ability to further edit sens)
     
     "Delete the estimation of R2 due to exchange if included in the data here"
     if hasattr(data.sens,'detect_par') and data.sens.detect_par['R2_ex_corr'][0].lower()=='y':
@@ -58,8 +58,8 @@ def fit_data(data,detect=None,bounds=True,**kwargs):
     out.R=np.zeros([nb,nd])
     
     "Set some defaults for error analysis"
-    if 'ErrorAna' in kwargs:
-        ea=kwargs.get('ErrorAna')
+    if ErrorAna is not None:
+        ea=ErrorAna
         if ea.lower()[0:2]=='mc':
             if len(ea)>2:
                 nmc=int(ea[2:])
@@ -81,20 +81,20 @@ def fit_data(data,detect=None,bounds=True,**kwargs):
         print('Subtracting S2')
     
 
-    "Set up parallel processing"
-    if 'parallel' in kwargs:
-        if kwargs.get('parallel')[0].lower()=='y':
-            para=True
-        else:
-            para=False
-    elif not(bounds):
-        para=False
-    else:
-        if nmc==0:
-            para=True
-        else:
-            para=True
-    
+#    "Set up parallel processing"
+#    if 'parallel' in kwargs:
+#        if kwargs.get('parallel')[0].lower()=='y':
+#            para=True
+#        else:
+#            para=False
+#    elif not(bounds):
+#        para=False
+#    else:
+#        if nmc==0:
+#            para=True
+#        else:
+#            para=True
+#    
     if not(bounds):
         Y=list()
         for k in range(nb):
@@ -112,7 +112,7 @@ def fit_data(data,detect=None,bounds=True,**kwargs):
             rho=np.dot(np.linalg.pinv(r),R)
             Y.append((rho,std,u,l))
         
-    elif not(para):
+    elif not(parallel):
         "Series processing (only on specific user request)"
         Y=list()
         for k in range(nb):
@@ -155,13 +155,7 @@ def fit_data(data,detect=None,bounds=True,**kwargs):
         with mp.Pool(processes=nc) as pool:
             Y=pool.map(para_fit,X0)
 
-            
-    "Options to not save the input- possibly useful for MD data analysis"
-    if 'save_input' in kwargs and kwargs.get('save_input').lower()[0]=='n':
-        sv_in=False
-    else:
-        sv_in=True
-       
+
 
     Rc=np.zeros(data.R.shape)
 
@@ -175,14 +169,14 @@ def fit_data(data,detect=None,bounds=True,**kwargs):
         out.R_std[k,:]=Y[k][1]
         out.R_l[k,:]=Y[k][2]
         out.R_u[k,:]=Y[k][3]
-        Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])
+        Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])+detect.R0in(k)
 
-    if sv_in:
+    if save_input:
         out.Rc=Rc
         
     out.sens.info.loc['stdev']=np.median(out.R_std,axis=0)
         
-    if sv_in:
+    if save_input:
         out.Rin=data.R
         out.Rin_std=data.R_std
     
@@ -209,6 +203,7 @@ def para_fit(X):
         nstd=norm.ppf(1/2+X[4]/2)
         u=nstd*std
         l=nstd*std
+        
     else:
         Y1=list()
         nmc=max([X[5],np.ceil(2/X[4])])
@@ -223,3 +218,88 @@ def para_fit(X):
         u=Y1sort[int(in_u)]-rho
        
     return rho,std,l,u
+
+#%% Function to force a data object to be fully consistent with a positive dynamics distribution
+def opt2dist(data,sens=None,parallel=True,return_dist=False,in_place=False,**kwargs):
+    """
+    Takes a distribution and sensitivity object (usually contained in the data
+    object, but can be provided separately), and for each bond/residue, optimizes
+    a distribution that approximately yields the set of detectors, while requiring
+    that the distribution itself only contains positive values and has an integral
+    of 1 (or 1-S2, if S2 is stored in data). Note that the distribution itself 
+    is not a good reporter on dynamics; it is neither regularized or a stable
+    description of dynamics. However, its use makes the detector responses more
+    physically consistent
+    
+    opt_data=opt2dist(data,sens=None,para=True,return_dist=False,in_place=False)
+    
+    returns 0, 1, or 2 values, depending on the setting of return_dist and in_place
+    
+    """
+    
+    nb=data.R.shape[0]
+    
+    if data.S2 is None:
+        S2=np.zeros(nb)
+    else:
+        S2=data.S2
+        
+    if sens is None:
+        sens=data.sens
+
+    "data required for optimization"
+    X=[(R,R_std,sens._rho(bond=k),S2r) for k,(R,R_std,S2r) in enumerate(zip(data.R,data.R_std,S2))]        
+    
+    if parallel:
+        nc=mp.cpu_count()
+        if 'n_cores' in kwargs:
+            nc=np.min([kwargs.get('n_cores'),nc])
+            
+        with mp.Pool(processes=nc) as pool:
+            Y=pool.map(dist_opt,X)
+    else:
+        Y=[dist_opt(X0) for X0 in X]
+    
+    out=data if in_place else data.copy() #We'll edit out, which might be the same object as data
+    
+    dist=list()
+    for k,y in enumerate(Y):
+        out.R[k]=y[0]
+        dist.append(y[1])
+        
+    "Output"
+    if in_place and return_dist:
+        return dist
+    elif in_place:
+        return
+    elif return_dist:
+        return (out,dist)
+    else:
+        return out
+    
+def dist_opt(X):
+    """
+    Optimizes a distribution that yields detector responses, R, where the 
+    distribution is required to be positive, and have an integral of 1-S2
+    
+    Ropt,dist=dist_opt((R,R_std,rhoz,S2,dz))
+    
+    Note- intput is via tuple
+    """
+    
+    R,R_std,rhoz,S2=X
+    total=np.atleast_1d(1-S2)
+    """Later, we may need to play with the weighting here- at the moment, we
+    fit to having a sum of 1, but in fact it is not forced....it should be
+    """
+    
+    ntc=rhoz.shape[1]
+    rhoz=np.concatenate((rhoz/np.repeat(np.atleast_2d(R_std).T,ntc,axis=1),
+        np.atleast_2d(np.ones(ntc))),axis=0)
+    Rin=np.concatenate((R/R_std,total))
+    
+    dist=lsq(rhoz,Rin,bounds=(0,1))['x']
+    
+    Ropt=np.dot(rhoz[:-1],dist)*R_std
+    
+    return Ropt,dist

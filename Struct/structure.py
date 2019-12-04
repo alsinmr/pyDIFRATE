@@ -72,7 +72,8 @@ class molecule(object):
         else:
             print('No vector functions defined, run vec_special first')
         
-    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,index1=None,index2=None,Nuc=None,resi=None,select=None,**kwargs):
+#    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,index1=None,index2=None,Nuc=None,resi=None,select=None,**kwargs):
+    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,Nuc=None,resi=None,select=None,**kwargs):
         
         if select is not None:
             sel=self.mda_object.select_atoms(select)
@@ -101,20 +102,31 @@ class molecule(object):
             self.label_in=self.sel1.resnums                     
         else:
             if sel1!=None:
-                if index1!=None:
-                    self.sel1=sel.select_atoms(sel1)[index1]
-                else:
-                    self.sel1=sel.select_atoms(sel1)
+#                if index1!=None:
+#                    self.sel1=sel.select_atoms(sel1)[index1]
+#                else:
+#                    self.sel1=sel.select_atoms(sel1)
+                self.sel1=sel.select_atoms(sel1)
             if sel2!=None:
-                if index2!=None:
-                    self.sel2=sel.select_atoms(sel2)[index2]
-                else:
-                    self.sel2=sel.select_atoms(sel2)
+#                if index2!=None:
+#                    self.sel2=sel.select_atoms(sel2)[index2]
+#                else:
+#                    self.sel2=sel.select_atoms(sel2)
+                self.sel2=sel.select_atoms(sel2)
               
+            "I'm gradually eliminating any use of sel1in and sel2in, and replacing using this approach"
+            "This also makes index1 and index2 redundant"
             if sel1in is not None:
-                self.sel1in=sel1in
+#                self.sel1in=sel1in  
+                self.sel1=self.sel1[sel1in]
             if sel2in is not None:
-                self.sel2in=sel2in
+#                self.sel2in=sel2in
+                self.sel2=self.sel2[sel2in]
+                
+        try:
+            self.set_selection()    #Is this a good idea? Sets the selection, even if the user isn't done
+        except:
+            pass
         
     def clear_selection(self):
         self.sel1=None
@@ -181,7 +193,7 @@ class molecule(object):
         if np.shape(self.label_in)[0]==nr:
             self.label=self.label_in
         
-    def MDA2pdb(self,tstep=None,select='protein',make_whole=True,**kwargs):
+    def MDA2pdb(self,tstep=None,select='protein',make_whole=False,**kwargs):
         "Provide a molecule, print a certain frame to pdb for later use in chimera"
         
 

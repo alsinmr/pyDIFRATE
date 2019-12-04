@@ -6,7 +6,8 @@ Created on Thu Aug 29 12:36:42 2019
 @author: albertsmith
 """
 import numpy as np
-import traceback
+#import traceback
+from fast_index import get_count
 
 #%% Parallel class for fast parallel calculation
 class par_class():
@@ -131,16 +132,3 @@ class par_class():
                 except:
                     pass
                 
-#%% Determine how many frame pairs are averaged into each time point
-def get_count(index):
-    """
-    Returns the number of averages for each time point in the sparsely sampled 
-    correlation function
-    """
-    N=np.zeros(index[-1]+1)
-    n=np.size(index)
-   
-    for k in range(n):
-        N[index[k:]-index[k]]+=1
-        
-    return N

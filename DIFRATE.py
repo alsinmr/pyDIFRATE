@@ -35,6 +35,9 @@ from structure import molecule
 os.chdir('../chimera')
 import chimera_funs as chimera
 
+os.chdir('../tools')
+import tools
+
 os.chdir(curdir)
 
 
