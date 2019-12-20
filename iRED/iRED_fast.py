@@ -60,35 +60,15 @@ def iRED_full(mol,rank=2,n=100,nr=10,align_iRED=False,refVecs=None,**kwargs):
                 vec0=vec
         else:
             vec0=vec
-        vec=align_mean(vec)
-        
-        
-        n_added_vecs=vec0.get('X').shape[1]
-        for k in ['X','Y','Z']:
-            vec[k]=np.concatenate((vec.get(k),vec0.get(k)),axis=1)      
-        
-        aligned=True
     else:
-        aligned=False
-        n_added_vecs=0
-    
- 
-    M=Mmat(vec,rank)
-    Yl=Ylm(vec,rank)
-    aqt=Aqt(Yl,M)
-
-    "Parallel calculation of correlation functions"
-    ct=Cqt(aqt)
-    ctinf=CtInf(aqt)
-    dct=DelCt(ct,ctinf)
-    ired={'rank':rank,'M':M['M'],'lambda':M['lambda'],'m':M['m'],'t':ct['t'],\
-          'N':ct['N'],'index':ct['index'],'DelCt':dct['DelCt'].T,'CtInf':ctinf,\
-          'Aligned':aligned,'n_added_vecs':n_added_vecs}
-            
+        vec0=None
+        
+    ired=vec2iRED(vec,rank,align_iRED,refVecs=vec0,molecule=mol,**kwargs)
+        
     return ired
 
 #%% Process with iRED from a vector
-def vec2iRED(vec,rank=2,align_iRED=False,refVecs=None,**kwargs):
+def vec2iRED(vec,rank=2,align_iRED=False,align_type='ZDir',refVecs=None,**kwargs):
     """
     Takes a vector object and returns the iRED object (vec contains X,Y,Z,t, and
     usually an index for sparse sampling of the time axis)
@@ -100,22 +80,28 @@ def vec2iRED(vec,rank=2,align_iRED=False,refVecs=None,**kwargs):
     iRED=vec2iRED(vec,rank=2,align_iRED=False,**kwargs)
     """
 
-    if align_iRED:
-        if refVecs is None:
-            vec0=vec
-        else:
-            vec0=refVecs
-        vec=align_mean(vec)
-        
+    if refVecs is not None:
+        vec0=refVecs
         n_added_vecs=vec0.get('X').shape[1]
-        for k in ['X','Y','Z']:
-            vec[k]=np.concatenate((vec[k],vec0[k]),axis=1)
+    elif align_iRED:
+        vec0=vec.copy()
+        n_added_vecs=vec0.get('X').shape[1]
+    else:
+        vec0=None
+        n_added_vecs=0
+        
+
+    if align_iRED:
+        vec=align_mean(vec,rank,align_type)
         aligned=True
     else:
         aligned=False
-        n_added_vecs=0
         
-    Mmat(vec,rank)
+    if vec0 is not None:
+        for k in ['X','Y','Z']:
+            vec[k]=np.concatenate((vec[k],vec0[k]),axis=1)
+        
+    M=Mmat(vec,rank)
     Yl=Ylm(vec,rank)
     aqt=Aqt(Yl,M)
     
@@ -127,7 +113,11 @@ def vec2iRED(vec,rank=2,align_iRED=False,refVecs=None,**kwargs):
           'N':ct['N'],'index':ct['index'],'DelCt':dct['DelCt'].T,'CtInf':ctinf,\
           'Aligned':aligned,'n_added_vecs':n_added_vecs}
     
-    return ired
+    Ctdata=data(iRED=ired,**kwargs)
+#    Ctdata.sens.molecule=molecule
+#    Ctdata.detect.molecule=Ctdata.sens.molecule
+    
+    return Ctdata
 
 #%% Generate a data object with iRED results
 def iRED2data(molecule,rank=2,**kwargs):
@@ -136,13 +126,18 @@ def iRED2data(molecule,rank=2,**kwargs):
     """
     
     
-    ired=iRED_full(molecule,**kwargs)
+    """
+    Not sure what happened here. Looks like iRED_full performs all steps of this
+    calculation. Should get rid of one name or the other...
+    """
+    Ctdata=iRED_full(molecule,rank,**kwargs)
+#    ired=iRED_full(molecule,**kwargs)
     
-    Ctdata=data(iRED=ired,molecule=molecule,**kwargs)
-    Ctdata.sens.molecule=molecule
-#    Ctdata.sens.molecule.set_selection()
-    Ctdata.detect.molecule=Ctdata.sens.molecule
-    
+#    Ctdata=data(iRED=ired,molecule=molecule,**kwargs)
+#    Ctdata.sens.molecule=molecule
+##    Ctdata.sens.molecule.set_selection()
+#    Ctdata.detect.molecule=Ctdata.sens.molecule
+#    
     return Ctdata
 #%% Calculate the iRED M matrix
 def Mmat(vec,rank=2):
@@ -412,7 +407,7 @@ def DelCt(ct,ctinf):
 
 
 
-def iRED2dist(bond,data,nbins=None,all_modes=False):
+def iRED2dist(bond,data,nbins=None,all_modes=False,Type='avg'):
     """
     Estimates a distribution of correlation times for a given bond in the iRED 
     analysis. We calculate a correlation time for each mode (we fit detector 
@@ -427,7 +422,10 @@ def iRED2dist(bond,data,nbins=None,all_modes=False):
     
     "Get the best-fit correlation time for each mode"
 #    z0,_,_=fit2tc(data.R,data.sens.rhoz(),data.sens.z(),data.R_std)
-    z0=avgz(data.R,data.sens.z(),data.sens.rhoz())
+    if Type[0].lower()=='a':
+        z0=avgz(data.R,data.sens.z(),data.sens.rhoz())
+    else:
+        z0,_,_=fit2tc(data.R,data.sens.rhoz(),data.sens.z())
     
     if bond in data.label:
         i=np.argwhere(bond==data.label).squeeze()

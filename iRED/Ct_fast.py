@@ -60,18 +60,23 @@ def Ct2data(molecule,n=100,nr=10,**kwargs):
         
     vec=get_trunc_vec(mol,index,**kwargs)
     
+    Ctdata=vec2data(vec,molecule=mol,**kwargs)
+    return Ctdata
+
+def vec2data(vec,**kwargs):
+    """
+    Takes a vector and creates the corresponding data object
+    
+    data=vec2data(vec,**kwargs)
+    """
+    
     if 'align_iRED' in kwargs and kwargs.get('align_iRED').lower()[0]=='y':
         vec=align_mean(vec)
     
     ct=Ct(vec,**kwargs)
-    
-
     S2=S2calc(vec)
-            
+    Ctdata=data(Ct=ct,S2=S2,**kwargs)
     
-    Ctdata=data(molecule=mol,Ct=ct,S2=S2,**kwargs)
-    
-    "Still need to make sure that the standard deviation is properly imported from here!!!"
     return Ctdata
     
 def Ct_S2(molecule,n=100,nr=10,**kwargs):

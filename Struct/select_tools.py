@@ -30,22 +30,26 @@ def sel0_filter(mol,resids=None,segids=None,filter_str=None):
         print('mol needs to be a molecule object or an atom group')
         return
     
-    if resids is not None:
-        resids=np.atleast_1d(resids)
-        i=np.isin(sel0.residues.resids,resids)
-        sel0=sel0.residues[np.argwhere(i).squeeze()].atoms
     if segids is not None:
         segids=np.atleast_1d(segids)
         i=np.isin(sel0.segments.segids,segids)
-        sel0=sel0.segments[np.argwhere(i).squeeze()].atoms
+        sel_si=sel0.segments[np.argwhere(i).squeeze()].atoms
+        sel0=sel0.intersection(sel_si)
+    if resids is not None:
+        resids=np.atleast_1d(resids)
+        i=np.isin(sel0.residues.resids,resids)
+        sel_ri=sel0.residues[np.argwhere(i).squeeze()].atoms
+        sel0=sel0.intersection(sel_ri)
+
     if filter_str is not None:
-        sel0=sel0.select_atoms(filter_str)
-        
+        sel_fs=sel0.select_atoms(filter_str)
+        sel0=sel0.intersection(sel_fs)
+
     return sel0
 
 #%% Simple selection 
 
-def sel_simple(sel,mol=None,resids=None,segids=None,filter_str=None):
+def sel_simple(mol,sel=None,resids=None,segids=None,filter_str=None):
     """
     Takes a selection out of the molecule object, where that selection may
     be an atom group produced by the user, may be a selection string, or
@@ -64,14 +68,14 @@ def sel_simple(sel,mol=None,resids=None,segids=None,filter_str=None):
     """If sel has atoms as an attribute, we make sure it's an atom group
     (could be a residue group or universe, for example)
     """
-    if hasattr(sel,'atoms'): sel=sel.atoms 
+    if hasattr(mol,'atoms'): sel=mol.atoms 
     
     
-    if mol is None:
+    if sel is None:
         if not(isinstance(sel,mda.AtomGroup)):
             print('If the molecule object is not provided, then sel must be an atom group')
             return
-        sel=sel0_filter(sel,resids,segids,filter_str)
+        sel=sel0_filter(mol,resids,segids,filter_str)
         return sel
     
     if isinstance(sel,str):
@@ -107,10 +111,10 @@ def sel_lists(mol,sel=None,resids=None,segids=None,filter_str=None):
 
     "First apply sel, as a single selection or list of selections"
     if hasattr(sel,'atoms') or isinstance(sel,str) or sel==1 or sel==2:
-        sel=sel_simple(sel,mol)
+        sel=sel_simple(mol,sel)
         n=1
     elif isinstance(sel,list):
-        sel=[sel_simple(s,mol) for s in sel]
+        sel=[sel_simple(mol,s) for s in sel]
         n=len(sel)
     elif sel is None:
         sel=mol.mda_object.atoms
@@ -197,8 +201,58 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
         sel1=sel0.select_atoms('name CA and around 1.4 (name HA or name HA2)')
         sel2=sel0.select_atoms('(name HA or name HA2) and around 1.4 name CA')
         print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
+    elif Nuc.lower()=='ivl' or Nuc.lower()=='ivla' or Nuc.lower()=='ch3':
+        if Nuc.lower()=='ivl':
+            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name C*')
+            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name H*')
+        elif Nuc.lower()=='ivla':
+            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name C*')
+            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name H*')
+        else:
+            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name C*')
+            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name H*')
+        ids=list()
+        for s in sel0C:
+            if (sel0H+sel0C).select_atoms('name H* and around 1.15 atom {0} {1} {2}'.format(s.segid,s.resid,s.name)).n_atoms==3:
+                ids.append(s.id)
+        sel1=sel0[np.isin(sel0.ids,ids)]
+        sel1=sel1[np.repeat([np.arange(sel1.n_atoms)],3,axis=1).reshape(sel1.n_atoms*3)]
+        sel2=(sel1+sel0H).select_atoms('name H* and around 1.15 name C*')
           
     return sel1,sel2
+
+def find_bonded(sel,sel0=None,n=3,sort='dist',d=1.65):
+    """
+    Finds atoms bound to all atoms in a given selection. Search is based on distance.
+    Default is to define every atom under 1.6 A as bonded. It is recommended
+    to also provide a second selection (sel0) out of which to search for the bound
+    atoms. If not included, the full MD analysis universe is searched.
+    
+    Note- a list of selections is returned. One may ask for a certain number
+    of atoms (default 3), in which case the user may opt to choose the nearest
+    atoms (sort='dist'), or optionally the largest atoms (sort='mass')
+    """
+    
+    out=[None for _ in range(n)]
+    
+    if sel0 is None:
+        sel0=sel.universe
+    
+    for s in sel:
+        sel01=sel0.select_atoms('point {0} {1} {2} {3}'.format(*s.position,d))
+        sel01=sel01-s
+        if sort[0].lower()=='d':
+            i=np.argsort(((sel01.positions-s.position)**2).sum(axis=1))
+        else:
+            i=np.argsort(sel01.masses)[::-1]
+        sel01=sel01[i]
+        for k in range(n):
+            if out[k] is None:
+                out[k]=sel01[k]
+            else:
+                out[k]+=sel01[k]
+    return out        
+        
     
 #%% This allows us to use a specific keyword to make an automatic selection
 """
@@ -230,13 +284,13 @@ def peptide_plane(mol,resids=None,segids=None,filter_str=None):
     if resids is not None:
         sel0+=sel0_filter(mol,resids-1)
     
-    sel1=sel0.select_atoms('protein and (name N and around 1.4 (name C and around 1.4 name O))')
-    i=np.isin(sel1.resids,resids)
-    sel1=sel1[i]
+    selN=sel0.select_atoms('protein and (name N and around 1.4 (name C and around 1.4 name O))')
+    i=np.isin(selN.resids,resids)
+    selN=selN[i]
     sel0=sel0_filter(mol,resids-1,segids,filter_str)
 #    i=np.argwhere(np.isin(sel0.residues.resids,sel1.residues.resids-1)).squeeze()
-    sel2=sel0.residues.atoms.select_atoms('protein and (name C and around 1.4 name O)')
-    sel3=sel0.residues.atoms.select_atoms('protein and (name O and around 1.4 name C)')
-    
-    return sel1,sel2,sel3
+    selC=sel0.residues.atoms.select_atoms('protein and (name C and around 1.4 name O)')
+    selO=sel0.residues.atoms.select_atoms('protein and (name O and around 1.4 name C)')
+    selCA=sel0.residues.atoms.select_atoms('protein and (name CA and around 1.6 name C)')
+    return selN,selC,selO,selCA
     

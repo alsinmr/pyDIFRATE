@@ -298,8 +298,11 @@ def dist_opt(X):
         np.atleast_2d(np.ones(ntc))),axis=0)
     Rin=np.concatenate((R/R_std,total))
     
-    dist=lsq(rhoz,Rin,bounds=(0,1))['x']
-    
+    dist=0
+    while np.abs(np.sum(dist)-total)>1e-3:  #This is a check to see that the sum condition has been satisfied
+        dist=lsq(rhoz,Rin,bounds=(0,1))['x']
+        Rin[-1]=Rin[-1]*10
+        rhoz[-1]=rhoz[-1]*10
     Ropt=np.dot(rhoz[:-1],dist)*R_std
     
     return Ropt,dist

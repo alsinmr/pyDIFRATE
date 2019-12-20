@@ -11,11 +11,12 @@ from MDAnalysis.lib.mdamath import make_whole
 import MDAnalysis.analysis.align
 import numpy as np
 import os
-from vec_funs import new_fun
+from vec_funs import new_fun,print_frame_info
 import copy
 os.chdir('../chimera')
 from chimera_funs import open_chimera
 os.chdir('../Struct')
+import select_tools as selt
 
 class molecule(object):
     def __init__(self,*args):
@@ -30,6 +31,7 @@ class molecule(object):
         self.vCSA=np.array([])
         self.Ralign=list()
         self._vf=None
+        self._frame_info={'frame_index':list(),'label':None}
         
         self.pdb=None #Container for a pdb extracted from the mda_object
         self.pdb_id=None
@@ -50,10 +52,15 @@ class molecule(object):
         returns a value dependent on the current position in the md analysis
         trajectory. The function should return x,y,z components at the given time)
         """
-        if self._vf is None:
-            self._vf=list()
-            
-        self._vf.append(new_fun(Type,self,**kwargs))
+#        if self._vf is None:
+#            self._vf=list()
+#            
+#        self._vf.append(new_fun(Type,self,**kwargs))
+        
+        """I'm joining the vec_special and frames functionality.
+        vec_special as its own attribute will eventually be removed
+        """
+        self.new_frame(Type,**kwargs)   
         
     def clear_vec_special(self):
         self._vf=None
@@ -73,60 +80,140 @@ class molecule(object):
             print('No vector functions defined, run vec_special first')
         
 #    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,index1=None,index2=None,Nuc=None,resi=None,select=None,**kwargs):
-    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,Nuc=None,resi=None,select=None,**kwargs):
-        
-        if select is not None:
-            sel=self.mda_object.select_atoms(select)
+    
+    def new_frame(self,Type=None,frame_index=None,label=None,**kwargs):
+        """
+        Create a new frame, where possible frame types are found in vec_funs
+        """
+        if Type is None:
+            print_frame_info()
         else:
-            sel=self.mda_object.atoms
+            if self._vf is None: self._vf=list()
             
-        if resi is not None:
-            string=''
-            for res in resi:
-                string=string+'resid {0:.0f} or '.format(res)
-            string=string[0:-4]
-            sel=sel.select_atoms(string)
+            self._vf.append(new_fun(Type,self,**kwargs))    #Append the new function
+            "Load an index for this frame"
+            if frame_index is None:
+                nb=np.shape(self._vf[-1]())[-1]
+                self._frame_info['frame_index'].append(np.arange(nb))
+            else:
+                self._frame_info['frame_index'].append(frame_index)
+            if label is not None:
+                self._frame_info['label']=label
+    
+    def clear_frames(self):
+        self._vf=None
+        self._frame_info={'frame_index':list(),'label':None}
         
-        if Nuc is not None:
-            if Nuc.lower()=='15n' or Nuc.lower()=='n':                    
-                self.sel1=sel.select_atoms('(name H or name HN) and around 1.1 name N')
-                self.sel2=sel.select_atoms('name N and around 1.1 (name H or name HN)')
-            elif Nuc.lower()=='co':
-                self.sel1=sel.select_atoms('name C and around 1.4 name O')
-                self.sel2=sel.select_atoms('name O and around 1.4 name C')
-            elif Nuc.lower()=='ca':
-                self.sel1=sel.select_atoms('name CA and around 1.4 (name HA or name HA2)')
-                self.sel2=sel.select_atoms('(name HA or name HA2) and around 1.4 name CA')
-                print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
-#            self.label_in=self.sel1.resids           
-            self.label_in=self.sel1.resnums                     
+    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,Nuc=None,resids=None,segids=None,filter_str=None):
+        """
+        Selects the atoms to be used for bond definitions. 
+        sel1/sel2 : A string or an atom group (MDanalysis) defining the 
+                    first/second atom in the bond
+        sel1in/sel2in : Index to re-assign sel1/sel2 possibly to multiple bonds
+                        (example: if using string assignment, maybe to calculate
+                        for multiple H's bonded to the same C)
+        Nuc : Keyword argument for selecting a particular type of bond 
+              (for example, N, C, CA would selection NH, C=O bonds, or CA-HA 
+              bonds, respectively)
+        resids : Filter the selection defined by the above arguments for only
+                 certain residues
+        segids : Filter the selection defined by the above arguments for only 
+                 certain segments
+        filter_str : Filter the selection by a string (MDAnalysis string selection)
+        """
+        
+        if Nuc is None:
+            "Apply sel1 and sel2 selections directly"
+            if sel1 is not None:
+                self.sel1=selt.sel_simple(self,sel1,resids,segids,filter_str)
+                if sel1in is not None:
+                    self.sel1=self.sel1[sel1in]
+            if sel2 is not None:
+                self.sel2=selt.sel_simple(self,sel2,resids,segids,filter_str)
+                if sel2in is not None:
+                    self.sel2=self.sel2[sel2in]
         else:
-            if sel1!=None:
-#                if index1!=None:
-#                    self.sel1=sel.select_atoms(sel1)[index1]
-#                else:
-#                    self.sel1=sel.select_atoms(sel1)
-                self.sel1=sel.select_atoms(sel1)
-            if sel2!=None:
-#                if index2!=None:
-#                    self.sel2=sel.select_atoms(sel2)[index2]
-#                else:
-#                    self.sel2=sel.select_atoms(sel2)
-                self.sel2=sel.select_atoms(sel2)
-              
-            "I'm gradually eliminating any use of sel1in and sel2in, and replacing using this approach"
-            "This also makes index1 and index2 redundant"
-            if sel1in is not None:
-#                self.sel1in=sel1in  
-                self.sel1=self.sel1[sel1in]
-            if sel2in is not None:
-#                self.sel2in=sel2in
-                self.sel2=self.sel2[sel2in]
+            self.sel1,self.sel2=selt.protein_defaults(Nuc,self,resids,segids,filter_str)
                 
-        try:
-            self.set_selection()    #Is this a good idea? Sets the selection, even if the user isn't done
-        except:
-            pass
+        if self.sel1 is not None and self.sel2 is not None and self.sel1.n_atoms==self.sel2.n_atoms:
+            self.set_selection()
+            
+            "An attempt to generate a unique label under various conditions"
+            count,cont=0,True
+            while cont:
+                if count==0: #One bond per residue- just take the residue number
+                    label=self.sel1.resids  
+                elif count==1: #Multiple segments with same residue numbers
+                    label=np.array(['{0}_{1}'.format(s.segid,s.resid) for s in self.sel1])
+                elif count==2: #Same segment, but multiple bonds on the same residue (include names)
+                    label=np.array(['{0}_{1}_{2}'.format(s1.resid,s1.name,s2.name) for s1,s2 in zip(self.sel1,self.sel2)])
+                elif count==3: #Multiple bonds per residue, and multiple segments
+                    label=np.array(['{0}_{1}_{2}_{3}'.format(s1.segid,s1.resid,s1.name,s2.name) \
+                                    for s1,s2 in zip(self.sel1,self.sel2)])
+                "We give up after this"
+                count=count+1
+                if np.unique(label).size==label.size or count==4:
+                    cont=False
+                    
+            self.label=label
+            
+#    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,Nuc=None,resi=None,select=None,**kwargs):
+#        
+#        
+#        
+#        if select is not None:
+#            sel=self.mda_object.select_atoms(select)
+#        else:
+#            sel=self.mda_object.atoms
+#            
+#        if resi is not None:
+#            string=''
+#            for res in resi:
+#                string=string+'resid {0:.0f} or '.format(res)
+#            string=string[0:-4]
+#            sel=sel.select_atoms(string)
+#        
+#        if Nuc is not None:
+#            if Nuc.lower()=='15n' or Nuc.lower()=='n':                    
+#                self.sel1=sel.select_atoms('(name H or name HN) and around 1.1 name N')
+#                self.sel2=sel.select_atoms('name N and around 1.1 (name H or name HN)')
+#            elif Nuc.lower()=='co':
+#                self.sel1=sel.select_atoms('name C and around 1.4 name O')
+#                self.sel2=sel.select_atoms('name O and around 1.4 name C')
+#            elif Nuc.lower()=='ca':
+#                self.sel1=sel.select_atoms('name CA and around 1.4 (name HA or name HA2)')
+#                self.sel2=sel.select_atoms('(name HA or name HA2) and around 1.4 name CA')
+#                print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
+##            self.label_in=self.sel1.resids           
+#            self.label_in=self.sel1.resnums                     
+#        else:
+#            if sel1!=None:
+##                if index1!=None:
+##                    self.sel1=sel.select_atoms(sel1)[index1]
+##                else:
+##                    self.sel1=sel.select_atoms(sel1)
+#                self.sel1=sel.select_atoms(sel1)
+#            if sel2!=None:
+##                if index2!=None:
+##                    self.sel2=sel.select_atoms(sel2)[index2]
+##                else:
+##                    self.sel2=sel.select_atoms(sel2)
+#                self.sel2=sel.select_atoms(sel2)
+#              
+#            "I'm gradually eliminating any use of sel1in and sel2in, and replacing using this approach"
+#            "This also makes index1 and index2 redundant"
+#            if sel1in is not None:
+##                self.sel1in=sel1in  
+#                self.sel1=self.sel1[sel1in]
+#            if sel2in is not None:
+##                self.sel2in=sel2in
+#                self.sel2=self.sel2[sel2in]
+#                
+#        try:
+#            self.set_selection()    #Is this a good idea? Sets the selection, even if the user isn't done
+#        except:
+#            pass
+    
         
     def clear_selection(self):
         self.sel1=None
@@ -134,8 +221,9 @@ class molecule(object):
         self.sel1in=None
         self.sel2in=None
     
-    def add_label(self,label=None):
-        self.label_in=label
+    #Seems pretty unnecessary....remove if nothing breaks
+#    def add_label(self,label=None):
+#        self.label_in=label
         
     def set_selection(self,**kwargs):
         

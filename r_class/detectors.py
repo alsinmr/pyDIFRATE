@@ -519,8 +519,10 @@ class detect(mdl.model):
             self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rhoAvg.copy()}
             if R2ex:
                 self.R2_ex_corr(bond,**kwargs)
-            self.__r_info(bond,**kwargs)
             self.__r_norm(bond,**kwargs)
+            if inclS2[0].lower()=='y':
+                self.inclS2(bond=None,**kwargs)
+            self.__r_info(bond,**kwargs)
             if np.size(bonds)>0:
                 if 'NT' in kwargs: #We don't re-normalize the results of detectors obtained with r_target
                     kwargs.pop('NT')
@@ -541,8 +543,11 @@ class detect(mdl.model):
             self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rho[bond].copy()}
             if R2ex:                
                 self.R2_ex_corr(bond,**kwargs)
-            self.__r_info(bond,**kwargs)
+                        
             self.__r_norm(bond,**kwargs)
+            if inclS2[0].lower()=='y':
+                self.inclS2(bond=k,**kwargs)
+            self.__r_info(bond,**kwargs)
             if np.size(bonds)>0:
                 if 'NT' in kwargs: #We don't re-normalize the results of detectors obtained with r_target
                     kwargs.pop('NT')
@@ -600,7 +605,10 @@ class detect(mdl.model):
             self.__rhoAvg=rhoz
             self.SVDavg['T']=T
             if 'NT' in kwargs:
-                self.__r_norm(None,**kwargs)            
+                self.__r_norm(None,**kwargs)  
+            if ('inclS2' in kwargs and kwargs.get('inclS2').lower()[0]=='y') or\
+                self.detect_par['inclS2'][0].lower()=='y':
+                self.inclS2(bond=None,**kwargs)
             self.__r_info(bond,**kwargs)
         else:
             Y=list()
@@ -634,6 +642,9 @@ class detect(mdl.model):
                 if ('R2_ex_corr' in kwargs and kwargs.get('R2_ex_corr').lower()[0]=='y') or\
                     self.detect_par['R2_ex_corr'][0].lower()=='y':
                     self.R2_ex_corr(bond=k,**kwargs)
+                if ('inclS2' in kwargs and kwargs.get('inclS2').lower()[0]=='y') or\
+                    self.detect_par['inclS2'][0].lower()=='y':
+                    self.inclS2(bond=k,**kwargs)
                     
                 
         if 'sort_rho' not in kwargs:
@@ -693,7 +704,44 @@ class detect(mdl.model):
                 self.__r[k]=np.concatenate((self.__r[k],np.transpose([r_ex_vec])),axis=1)
                 self.__rho[k]=np.concatenate((self.__rho[k],[rhoz]),axis=0)
                 self.__rhoCSA[k]=np.concatenate((self.__rhoCSA[k],np.zeros([1,self.tc().size])))
-                
+    
+    def inclS2(self,bond=0,**kwargs):
+        """
+        Adds an additional detector calculated from a measured order parameter.
+        If using, one must include the last column of data.R as the order parameter
+        measurement (input as 1-S2)
+        """
+        self.detect_par['inclS2']='yes'
+        
+        nb=self._nb()
+        if nb==1:
+            bond=0  #No bond specificity, operate on bond 0
+
+        "Put together pretty quickly- should review and verify CSA behavior is correct"
+        "Note that we don't really expect users to use CSA w/ S2...could be though"
+        
+        bond=np.atleast_1d(bond)
+        for k in bond:
+            if self.detect_par['Normalization'][0].lower()=='m':
+                self.__r[k]=np.concatenate((\
+                        np.concatenate((np.zeros([self.__r[k].shape[0],1]),self.__r[k]),axis=1),\
+                        np.ones([1,self.__r[k].shape[1]+1])),axis=0)
+                self.__rho[k]=np.concatenate(([1-self.__rho[k].sum(axis=0)],\
+                          self.__rho[k]),axis=0)
+                self.__rhoCSA[k]=np.concatenate(([1-self.__rhoCSA[k].sum(axis=0)],\
+                          self.__rhoCSA[k]),axis=0)
+            elif self.detect_par['Normalization'][0].lower()=='i':
+                wt=linprog(-(self.__rho[k].sum(axis=1)).T,self.__rho[k].T,np.ones(self.__rho[k].shape[1]),\
+                           bounds=(-500,500),method='interior-point',options={'disp' :False,})['x']
+                rhoz0=[1-np.dot(self.__rho[k].T,wt).T]
+                rhoz0CSA=[1-np.dot(self.__rhoCSA[k].T,wt).T]
+                sc=rhoz0[0].sum()*np.diff(self.z()[:2])
+                self.__rho[k]=np.concatenate((rhoz0/sc,self.__rho[k]))
+                self.__rhoCSA[k]=np.concatenate((rhoz0CSA/sc,self.__rhoCSA[k]))
+                mat1=np.concatenate((np.zeros([self.__r[k].shape[0],1]),self.__r[k]),axis=1)
+                mat2=np.atleast_2d(np.concatenate((sc,wt.T),axis=0))
+                self.__r[k]=np.concatenate((mat1,mat2),axis=0)
+            
     def _remove_R2_ex(self):
         """
         Deletes the R2 exchange correction from all bonds and from the average
@@ -827,7 +875,7 @@ class detect(mdl.model):
         """ Calculates paramaters describing the detector sensitivities (z0, Del_z,
         and standard deviation of the detectors). Also resorts the detectors by
         z0, unless 'sort_rho' is set to 'no'. Does not return anything, but edits 
-        internal values, z0, Del_z
+        internal values, z0, Del_z, stdev
         """
         
 #        nb=np.shape(self.__R)[0]
@@ -950,7 +998,12 @@ class detect(mdl.model):
 
             
 
-            stdev=np.power(np.dot(np.linalg.pinv(r)**2,self.info_in.loc['stdev']**2),0.5)
+            
+            if self.detect_par['inclS2'][0].lower()=='y':
+                st0=np.concatenate(([.1],self.info_in.loc['stdev']))
+                stdev=np.power(np.dot(np.linalg.pinv(r)**2,st0**2),0.5)
+            else:
+                stdev=np.power(np.dot(np.linalg.pinv(r)**2,self.info_in.loc['stdev']**2),0.5)
             
             if bond is not None:
                 self.z0[bond]=z0

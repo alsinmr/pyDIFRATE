@@ -5,11 +5,14 @@ Created on Wed Aug 28 10:24:19 2019
 
 @author: albertsmith
 """
-
+import os
 import numpy as np
 import multiprocessing as mp
 from parCt import par_class as pct
 from fast_index import get_count
+os.chdir('../Struct')
+import vf_tools as vft
+os.chdir('../iRED')
 
 #%% Estimate the order parameter
 def S2calc(vec):
@@ -255,18 +258,24 @@ def get_trunc_vec(molecule,index,**kwargs):
            
     return vec
 
-def align_mean(vec0):
+def align_mean(vec0,rank=2,align_type='ZDir'):
     """
     Aligns the mean direction of a set of vectors along the z-axis. This can be
     useful for iRED analysis, to mitigate the orientational dependence of the 
     iRED analysis procedure.
     
     vec = align_mean(vec0)
+    
+    Options are introduced for the rotation of third angle:
+        Type='ZDir' : Sets gamma = -alpha (only option for rank 1 calc)
+        Type='tensor' : Aligns the rank 2 tensor, including the asymmetry
+        Type='xy-motion' : Aligns the z-component of the rank-2 tensor, and
+        maximizes correlation of the x and y components to the previous bond
     """
     
     
     """At some point, we should consider whether it would make sense to use a 
-    tensor alignment instead of a vector alignment
+    tensor alignment instead of a vector alignment.
     """
     vec=vec0.copy()  #Just operate on the copy here, to avoid accidental edits
     
@@ -274,41 +283,95 @@ def align_mean(vec0):
     
 #    nt=X.shape[0]
 
-    "Mean direction of the vectors"
-    X0,Y0,Z0=X.mean(axis=0),Y.mean(axis=0),Z.mean(axis=0)
-    
-    "Normalize the length"
-    length=np.sqrt(X0**2+Y0**2+Z0**2)
-    X0,Y0,Z0=np.divide([X0,Y0,Z0],length)
+
     
     #%% Calculate sines and cosines of beta,gamma rotations
-    "beta"
-    cB=Z0
-    sB=np.sqrt(1-cB**2)
-    
-    "gamma"
-    lXY=np.sqrt(X0**2+Y0**2)
-    cG=X0/lXY
-    sG=Y0/lXY
-    
-    "apply rotations"
-    X,Y=cG*X+sG*Y,-sG*X+cG*Y    #Apply gamma
+    if rank==1:
+        "Mean direction of the vectors"
+        X0,Y0,Z0=X.mean(axis=0),Y.mean(axis=0),Z.mean(axis=0)
+        
+        "Normalize the length"
+        length=np.sqrt(X0**2+Y0**2+Z0**2)
+        X0,Y0,Z0=np.divide([X0,Y0,Z0],length)
+
+        "beta"
+        cB,sB=Z0,np.sqrt(1-Z0**2)
+        
+        "gamma"
+        lXY=np.sqrt(X0**2+Y0**2)
+        i=lXY==0
+        lXY[i]=1.
+        cA,sA=[X0,Y0]/lXY
+        cA[i]=1.
+        cG,sG=cA,-sA
+    elif rank==2:
+        "Note, rank 2 also aligns the asymmetry of a motion so is a better alignment"
+        cossin=vft.getFrame([X,Y,Z]) #Get euler angles for this vector
+        D2c=vft.D2(*cossin)    #Calculate Spherical components
+        D20=D2c.mean(axis=1) #Calculate average
+        sc=vft.Spher2pars(D20)[2:] #Get euler angles
+        cA,sA,cB,sB,cG,sG=vft.pass2act(*sc)
+            
+    "apply rotations"    
+    X,Y=cA*X+sA*Y,-sA*X+cA*Y    #Apply alpha
     X,Z=cB*X-sB*Z,sB*X+cB*Z   #Apply beta
-    X,Y=cG*X-sG*Y,sG*X+cG*Y  #Reverse gamma rotation
+    if align_type.lower()[0]=='z':
+        X,Y=cA*X-sA*Y,sA*X+cA*Y #Rotate back by -alpha
+    else: #Tensor- default option (undone later if using xy-motion)
+        X,Y=cG*X+sG*Y,-sG*X+cG*Y  #Apply gamma
+    
+    if rank==2:
+        "Make sure axis is pointing along +z (rotate 180 around y)"
+        i=Z.mean(axis=0)<0
+        X[:,i],Z[:,i]=-X[:,i],-Z[:,i]
+        
+        
+    "Try to maximize the correlation by aligning X/Y deviations"
+    if align_type.lower()[0]=='x':
+        c,s=RMS2Dalign(X,Y)
+        X,Y=c*X+s*Y,-s*X+c*Y
+    
+    """
+    Note, I'd eventually like to try aligning the vectors to maximimize correlation
+    in all three dimensions, that is, an RMS3Dalign function...maybe wouldn't
+    make such a difference since we already align the mean tensor directions along z,
+    but worth some consideration
+    """
+    
+#        "Check that deviations from average direction go same way for all bonds "
+#        iX=(X[:,0]*X).mean(axis=0)-X[:,0].mean()*X.mean(axis=0)<0
+#        iY=(Y[:,0]*Y).mean(axis=0)-Y[:,0].mean()*Y.mean(axis=0)<0
+#        
+#        X[:,iX],Y[:,iY]=-X[:,iX],-Y[:,iY]
+#        
+#        iX,iY,iZ=X.mean(axis=0)<0,Y.mean(axis=0)<0,Z.mean(axis=0)<0
+#        X[:,iX],Y[:,iY],Z[:,iZ]=-X[:,iX],-Y[:,iY],-Z[:,iZ]
+#        "Can we really do this? I think flipping the axes should not influence dynamics"
+#        "Check 1- uncommenting below still yields D2 along z"
+#        "Check 2- small changes to detector responses observed....less convincing"
+
+#    "Check that rotation is correct (if uncommented, D20[1] and D20[3] should be ~zeros, and all elements ~real"
+#    cossin=vft.getFrame([X,Y,Z]) #Get euler angles for this vector
+#    D2c=vft.D2(*cossin)    #Calculate Spherical components
+#    D20=D2c.mean(axis=1) #Calculate average
+#    print(D20)
     
     "return results"
     vec['X'],vec['Y'],vec['Z']=X,Y,Z
-    
     return vec
-    
+#    nt=X.shape[0]   
+#    X0,Y0,Z0=X.mean(axis=0),Y.mean(axis=0),Z.mean(axis=0)    #Coordinates
+#    length=np.sqrt(X0**2+Y0**2+Z0**2)
+#    X0,Y0,Z0=np.divide([X0,Y0,Z0],length)
+#    
 #    "Angle away from the z-axis"
 #    beta=np.arccos(Z0)
 #    
 #    "Angle of rotation axis away from y-axis"
 #    "Rotation axis is at (-Y0,X0): cross product of X0,Y0,Z0 and (0,0,1)"
 #    theta=np.arctan2(-Y0,X0)
-    
-    
+#    
+#    
 #    xx=np.cos(-theta)*np.cos(-beta)*np.cos(theta)-np.sin(-theta)*np.sin(theta)
 #    yx=-np.cos(theta)*np.sin(-theta)-np.cos(-theta)*np.cos(-beta)*np.sin(theta)
 #    zx=np.cos(-theta)*np.sin(-beta)
@@ -332,10 +395,44 @@ def align_mean(vec0):
 #    Z=np.repeat([xz],nt,axis=0)*vec0.get('X')+\
 #    np.repeat([yz],nt,axis=0)*vec0.get('Y')+\
 #    np.repeat([zz],nt,axis=0)*vec0.get('Z')
-
+#
 #    vec={'X':X,'Y':Y,'Z':Z,'t':vec0['t'],'index':vec0['index']}
-    
+#    
 #    return vec
+    
+def RMS2Dalign(X,Y,return_angles=False):
+    """
+    Returns the optimal 2D rotation to bring a vector of X and Y coordinates onto
+    a reference set of coordinates (the X and Y may be a 2D matrix, where each
+    column is a new bond, for example). Returns, by default c and s, the cosine
+    and sine for the optimal rotation matrix (set return_angles=True to get the
+    angle directly)
+    """    
+
+    "Consider eliminating for-loop with direct SVD calc"
+    "see: https://lucidar.me/en/mathematics/singular-value-decomposition-of-a-2x2-matrix/"
+    
+    c=list()
+    s=list()
+    xr,yr=X[:,0],Y[:,0]
+    for x,y in zip(X.T,Y.T):
+        H=np.array([[(x*xr).sum(),(x*yr).sum()],[(y*xr).sum(),(y*yr).sum()]])
+        U,S,Vt=np.linalg.svd(H)
+        Ut,V=U.T,Vt.T
+        d=np.linalg.det(np.dot(V,Ut))
+        R=np.dot(V,np.dot([[1,0],[0,d]],Ut))
+        c.append(R[0,0])
+        s.append(R[0,1])
+        xr,yr=c[-1]*x+s[-1],-s[-1]*x+c[-1]*y
+#        print(R)
+    c=np.array(c)
+    s=np.array(s)
+    
+    if return_angles:
+        return np.arctan2(s,c)
+    else:
+        return c,s
+
 
 #%% Removes 
 def align(vec0,uni,**kwargs):

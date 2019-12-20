@@ -121,7 +121,10 @@ def getFrame(v1,v2=None,return_angles=False):
     
     "Gamma"
     lenXY=np.sqrt(X**2+Y**2)
+    i=lenXY==0
+    lenXY[i]=1  #cG and sG will be 0
     cG,sG=-X/lenXY,Y/lenXY
+    cG[i]=1. #Set cG to 1 where cG/sG is undefined (gamma=0)
     
     "Beta"
     cB,sB=Z,np.sqrt(1-Z**2)
@@ -134,7 +137,10 @@ def getFrame(v1,v2=None,return_angles=False):
         X,Y,_=Ry(v2,cB,-sB)
         
         lenXY=np.sqrt(X**2+Y**2)
+        i=lenXY==0
+        lenXY[i]=1  #cA and sA will still be 0
         cA,sA=X/lenXY,-Y/lenXY
+        cA[i]=1.
         
     if return_angles:
         return np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)
@@ -242,12 +248,17 @@ def R2euler(R,return_angles=False):
     R=(R.T*sgn).T
     
     cB=R[:,2,2]
-    sB=np.sqrt(1-cB**2)
-    cA=R[:,2,0]/sB
-    sA=R[:,2,1]/sB
-    cG=-R[:,0,2]/sB
-    sG=R[:,1,2]/sB
-    
+    cB[cB>1]=1.
+    cB[cB<-1]=-1.
+    sB=np.sqrt(1.-cB**2)
+    i=sB!=0
+    cA,sA,cG,sG=[np.ones(i.shape),np.zeros(i.shape),np.ones(i.shape),np.zeros(i.shape)]
+    cA[i]=R[i,2,0]/sB[i]
+    sA[i]=R[i,2,1]/sB[i]
+    cG[i]=-R[i,0,2]/sB[i]
+    sG[i]=R[i,1,2]/sB[i]
+    cG[np.logical_not(i)]=R[np.logical_not(i),0,0]
+    sG[np.logical_not(i)]=R[np.logical_not(i),0,1]
     
     if return_angles:
         return np.array((np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)))
@@ -419,7 +430,6 @@ def Spher2Cart(rho):
                  [0,0.5,0,-0.5,0],
                  [-0.5,0,-np.sqrt(1/6),0,-.5],
                  [0,.5*1j,0,.5*1j,0]])
-
     return np.dot(M,rho).real
     
     
@@ -441,25 +451,29 @@ def Spher2pars(rho,return_angles=False):
     """
 
     A0=np.atleast_2d(Spher2Cart(rho)) #Get the cartesian tensor
-    
+
     R=list()
     delta=list()
     eta=list()
     
     
-    for x in A0.T:
+    for k,x in enumerate(A0.T):
         Axx,Axy,Axz,Ayy,Ayz=x
         A=np.array([[Axx,Axy,Axz],[Axy,Ayy,Ayz],[Axz,Ayz,-Axx-Ayy]])    #Full matrix
-        "Up to this point, everything seems to work"
         D,V=np.linalg.eigh(A)   #Get eigenvalues, eigenvectors 
         i=np.argsort(np.abs(D))
-        D,V=D[i[[1,0,2]]],V[i[[1,0,2]]]     #Ordering is |azz|>=|axx|>=|ayy|
+        D,V=D[i[[1,0,2]]],V[:,i[[1,0,2]]]     #Ordering is |azz|>=|axx|>=|ayy|
         "V should have a determinant of +1 (proper vs. improper rotation)"
         V=V*np.sign(np.linalg.det(V))
+#        if k==55:
+#            V[:,1:]=-V[:,1:]
+#            print(np.dot(V.T,np.dot(D,V)))
+#            print(V)
+#            print(np.linalg.det(V))
+#            V[:,1:]=-V[:,1:]
         delta.append(D[2])
         eta.append((D[1]-D[0])/D[2])
         R.append(V)
-        
     
     delta=np.array(delta)
     eta=np.array(eta)
@@ -503,7 +517,8 @@ def RMSalign(v0,vref):
     return R
 
 
-
+    
+    
 #%% Sort by distance
 def sort_by_dist(v,maxd=1e4):
     """

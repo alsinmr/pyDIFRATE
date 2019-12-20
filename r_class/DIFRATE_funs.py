@@ -13,6 +13,7 @@ import re
 import numpy as np
 import os 
 
+#%% Some useful tools (Gyromagnetic ratios, spins, dipole couplings)
 def NucInfo(Nuc=None,info='gyro'):
     """ Returns the gyromagnetic ratio for a given nucleus. Usually, should be 
     called with the nucleus and mass number, although will default first to 
@@ -126,8 +127,16 @@ def rate(tc,exper):
         print('Calculation of experiment {0} failed. Check parameters.'.format(exper.loc['Type']))
         pass
     
+def S2(tc,exper):
+    """
+    Order parameter (note- one must provide 1-S2 into the data.R matrix!)
+    
+    Returns a uniform sensitivity, independent of correlation time
+    """
+    return np.ones(np.shape(tc))    
     
 def R1(tc,exper):
+    "Returns longitudinal relaxation rate constant"
     v0=exper['v0']*1e6
     dXY=exper['dXY']
     Nuc=exper['Nuc']

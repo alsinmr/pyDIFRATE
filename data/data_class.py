@@ -8,9 +8,6 @@ Created on Tue May  7 16:51:28 2019
 
 import numpy as np
 import os
-import matplotlib.pyplot as plt
-import matplotlib.patches as patch
-from matplotlib.collections import PatchCollection
 os.chdir('../r_class')
 from Ctsens import Ct
 from detectors import detect
@@ -112,11 +109,10 @@ class data(object):
                 self.R_std=np.repeat([self.sens.info.loc['stdev']],self.R.shape[0],axis=0)
             if 'S2' in kwargs:
                 self.S2=kwargs.get('S2')
-            molecule=kwargs.get('molecule')
             
         elif 'filename' in kwargs:
             "Can you really replace all of self like this?"
-            self=load_NMR(kwargs.get(filename))
+            self=load_NMR(kwargs['filename'])
             
         if 'EstErr' in kwargs:
             if kwargs.get('EstErr')[0].lower()=='n':
@@ -217,9 +213,7 @@ class data(object):
 
         nd=self.sens.rhoz(bond=0).shape[0]
         nb=self.R.shape[0]
-        
-
-        
+                
         rank=self.ired.get('rank')
         ne=2*rank+1
         
@@ -292,192 +286,37 @@ class data(object):
 
         return out
     
-    def plot_rho(self,fig=None,plot_sens='y',index=None,rho_index=None,errorbars='n',**kwargs):
-        if fig is None:
-            fig=plt.figure()
+    def plot_rho(self,fig=None,plot_sens=True,index=None,rho_index=None,errorbars=False,**kwargs):
+        """
+        Plots the full series of detector responses
+        Arguments:
+            fig: Specify which figure to plot into
+            plot_sens (True/False): Plot the sensitivity at the top of the figure
+            index: Specify which residues to plot
+            rho_index: Specify which detectors to plot
+            errobars (True/False): Display error bars
+            **kwargs: Plotting arguments (passed to plotting functions)
+        """
+        return pf.plot_rho_series(self,fig,plot_sens,index,rho_index,errorbars,**kwargs)
             
-        nd=self.R.shape[1]
-        
-        if rho_index is None:
-            rho_index=np.arange(nd)
-        else:
-            rho_index=np.array(rho_index)
-        
-        
-        if hasattr(self.sens,'detect_par') and self.sens.detect_par['R2_ex_corr'][0].lower()=='y' and\
-            nd-1 in rho_index:
-            R2ex=True
-        else:
-            R2ex=False
-        
-        if plot_sens.lower()[0]=='y' and self.sens is not None:
-            nplts=np.size(rho_index)+2
-            ax0=fig.add_subplot(int(nplts/2)+1,1,1)
-            
-            temp=self.sens._rho(rho_index,bond=None)
-            if R2ex:
-                temp[-1][:]=0
-                
-            hdl=ax0.plot(self.sens.z(),temp.T)
-            ax0.set_xlabel(r'$\log_{10}(\tau$ / s)')
-            ax0.set_ylabel(r'$\rho(z)$')
-            ax0.set_xlim(self.sens.z()[[0,-1]])
-            mini=np.min(temp)
-            maxi=np.max(temp)
-            ax0.set_ylim([mini-(maxi-mini)*.05,maxi+(maxi-mini)*.05])
-
-                
-            color=[h.get_color() for h in hdl]
-        else:
-            nplts=np.size(rho_index)
-            color=plt.rcParams['axes.prop_cycle'].by_key()['color']
-            
-        ax=list()
-        
-        if index is not None:
-            index=np.atleast_1d(index).astype(int)
-        else:
-            index=np.arange(self.R.shape[0]).astype(int)
-        
-        if np.size(self.label)==self.R.shape[0]:
-            lbl=np.array(self.label)[index]
-            if isinstance(lbl[0],str):
-                xaxis_lbl=lbl.copy()
-                lbl=np.arange(np.size(lbl))
-            else:
-                xaxis_lbl=None
-        else:
-            lbl=np.arange(np.size(index))
-            xaxis_lbl=None
-        
-        for k,ri in enumerate(rho_index):
-            if k==0:
-                ax.append(fig.add_subplot(nplts,1,k+nplts-np.size(rho_index)+1))
-            else:
-                ax.append(fig.add_subplot(nplts,1,k+nplts-np.size(rho_index)+1,sharex=ax[0]))
-            
-#            if errorbars[0].lower()=='y':
-#                if self.R_l is None:
-#                    ax[k].errorbar(lbl,self.R[index,k],self.R_std[:,k],color=hdl[k].get_color(),\
-#                      **kwargs)
-#                else:
-#                    ax[k].errorbar(lbl,self.R[index,k],[self.R_l[index,k],self.R_u[index,k]],color=hdl[k].get_color(),\
-#                      **kwargs)
-#            else:
-#                ax[k].plot(lbl,self.R[index,k],color=hdl[k].get_color(),**kwargs)
-                        
-            if errorbars[0].lower()=='y':
-                if self.R_l is None:
-                    pf.plot_rho(lbl,self.R[index,ri],self.R_std[:,ri],ax=ax[-1],\
-                      color=color[k],**kwargs)
-                else:
-                    pf.plot_rho(lbl,self.R[index,ri],[self.R_l[index,ri],self.R_u[index,ri]],ax=ax[-1],\
-                      color=color[k],**kwargs)
-            else:
-                pf.plot_rho(lbl,self.R[index,ri],ax=ax[-1],color=color[k],**kwargs)
-                                 
-            
-            
-            ax[-1].set_ylabel(r'$\rho_'+str(k)+'^{(\\theta,S)}$')
-            
-            yl=ax[-1].get_ylim()
-            ax[-1].set_ylim([np.min([yl[0],0]),yl[1]])
-            
-            if k<np.size(rho_index)-1:
-                if xaxis_lbl is not None:
-                    ax[-1].set_xticklabels(xaxis_lbl)
-                plt.setp(ax[-1].get_xticklabels(),visible=False)
-            else:
-                if xaxis_lbl is not None:
-                    ax[-1].set_xticks(lbl)
-                    ax[-1].set_xticklabels(xaxis_lbl,rotation=90)
-                if R2ex:
-                    ax[-1].set_ylabel(r'$R_2^{ex} / s^{-1}$')
-                
-        fig.subplots_adjust(hspace=0.25)
-        
-        fig.show()
-        
-        return ax
-            
-    def plot_cc(self,det_num,cutoff=None,ax=None,norm='y',**kwargs):
+    def plot_cc(self,det_num,cutoff=None,ax=None,norm=True,**kwargs):
         if np.size(self.Rcc)==0:
             print('Data object does not contain cross-correlation data')
             print('First, create a data object from iRED analysis (data=iRED2data(...))')
             print('Then, analyze with detectors, data.r_auto(...);fit0=data.fit(...)')
             print('Finally, convert fit into normal detector responses, fit=fit0.iRED2rho()')
             return
-        if ax==None:
-            fig=plt.figure()
-            ax=fig.add_subplot(111)
-        else:
-            fig=ax.figure
-            
-        if norm.lower()[0]=='y':
-            if det_num is None:
-                x=self.tot_cc_norm
-            else:
-                x=self.Rcc_norm[det_num]
-        else:
-            if det_num is None:
-                x=self.tot_cc
-            else:
-                x=self.Rcc[det_num]
-            
-            
-        if self.label is not None and len(self.label)==self.Rcc[det_num].shape[0]:
-            lbl=self.label
-            if isinstance(lbl[0],str):
-                xaxis_lbl=lbl.copy()
-                lbl=np.arange(np.size(lbl))
-            else:
-                xaxis_lbl=None
-        else:
-            lbl=np.arange(0,self.R.shape[0])
         
-        sz=(np.max(lbl)+1)*np.array([1,1])
-        mat=np.zeros(sz)
-        mat1=np.zeros([sz[0],sz[1],4])
-        mat2=np.ones([sz[0],sz[1],4])*0.75
-        mat2[:,:,3]=1
-        
-        for i,k in enumerate(lbl):
-            mat[k][np.array(lbl)]=x[i,:]
-            mat1[k,k,3]=1
-            mat2[k,np.array(lbl),3]=0
-            
-#        mat1[:,:,3]=-(mat1[:,:,3]-1)
-        
-        if 'cmap' in kwargs:
-            cmap=kwargs.get('cmap')
+        if det_num is None:
+            x=self.tot_cc
         else:
-            cmap='Blues'
-
-        cax=ax.imshow(np.abs(mat),interpolation=None,cmap=cmap)
-        ax.imshow(mat1,interpolation=None)
-        ax.imshow(mat2,interpolation=None)
-        fig.colorbar(cax)
-
-        if 'axis_label' in kwargs:
-            axlbl=kwargs.get('axis_label')
-        else:
-            axlbl='Residue'
-        
-        ax.set_xlabel(axlbl)
-        ax.set_ylabel(axlbl)
+            x=self.Rcc[det_num]
+         
+        ax=pf.plot_cc(x,self.label,ax,norm,**kwargs) 
         if det_num is None:
             ax.set_title('Total cross correlation')
         else:
-            ax.set_title(r'Cross correlation for $\rho_{' + '{}'.format(det_num) + '}$')
-        
-        
-        if xaxis_lbl is not None:
-            ax.set_xticks(lbl)
-            ax.set_xticklabels(xaxis_lbl,rotation=90)
-            ax.set_yticks(lbl)
-            ax.set_yticklabels(xaxis_lbl,rotation=0)
-        
-        fig.show()
+            ax.set_title(r'Cross correlation for $\rho_{' + '{}'.format(det_num) + '}$')   
         
         return ax
            
@@ -490,7 +329,10 @@ class data(object):
             index=bond
         elif any(np.atleast_1d(self.label)==bond):
             index=np.where(np.array(self.label)==bond)[0][0]
-
+        else:
+            print('Invalid bond selection')
+            return
+            
         if norm.lower()[0]=='y':
             if det_num is None:
                 values=self.tot_cc_norm[index,:]
@@ -526,16 +368,20 @@ class data(object):
         res2=self.sens.molecule.sel2.resids
         chain2=self.sens.molecule.sel2.segids
 
+        color_scheme=kwargs.pop('color_scheme') if 'color_scheme' in kwargs else 'blue'
+        
+
         if np.all(res1==res2) and np.all(chain1==chain2):
             "Color the whole peptide plane one color"
             resi=res1
             chain=chain1
 #            chain[chain=='PROA']='p'   #Why was this line here? I'm removing it, but let's see if it breaks something...
-            plt_cc3D(self.sens.molecule,resi,values,resi0=bond,chain=chain,chain0=chain[index],\
-                     fileout=fileout,scaling=scaling,color_scheme='blue',**kwargs)
+            plt_cc3D(self.sens.molecule,resi,values,resi0=resi[index],chain=chain,chain0=chain[index],\
+                     fileout=fileout,scaling=scaling,color_scheme=color_scheme,**kwargs)
         else:
             "Color the individual bonds specified in the molecule selections"
-            plt_cc3D(self.sens.molecule,None,values,resi0=bond,scaling=scaling,color_scheme='red',**kwargs)
+            "I'm not sure the indexing of resi0 is correct here!!!"
+            plt_cc3D(self.sens.molecule,None,values,resi0=res1[index],scaling=scaling,color_scheme=color_scheme,**kwargs)
 #            print('Selections over multiple residues/chains- not currently implemented')
         
         
