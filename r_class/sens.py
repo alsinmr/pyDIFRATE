@@ -12,6 +12,10 @@ import DIFRATE_funs as dff
 import matplotlib.pyplot as plt
 import mdl_sens as mdl
 import sens
+import os
+os.chdir('../tools')
+from DRtools import dipole_coupling
+os.chdir('../r_class')
 
 class rates(mdl.model):  
     def __init__(self,tc=None,**kwargs):
@@ -112,7 +116,7 @@ class rates(mdl.model):
         
         self.__cleanup(ne)
         self.__set_defaults(ne)
-                
+          
         "Copy all experiments from a previous rates variable, input as info"
         if 'info' in kwargs and isinstance(kwargs.get('info'),sens.rates):
             info0=kwargs.get('info').info
@@ -222,7 +226,7 @@ class rates(mdl.model):
         if np.size(self.__sys.get('Nuc1')[k])==1 and self.__sys.get('Nuc1')[k] is None:
             self.__sys.get('Nuc1')[k]='1H'
         if (np.size(self.__sys.get('dXY')[k])==1 and np.size(self.__sys.get('dXY')[k])==1) and any([self.__sys.get('dXY')[k] is None]):
-            self.__sys.get('dXY')[k]=dff.dipole_coupling(.102,'15N',self.__sys.get('Nuc1')[k])
+            self.__sys.get('dXY')[k]=dipole_coupling(.102,'15N',self.__sys.get('Nuc1')[k])
         if self.__sys.get('CSA')[k] is None:
             self.__sys.get('CSA')[k]=113
         if self.__sys.get('theta')[k] is None:
@@ -235,7 +239,7 @@ class rates(mdl.model):
         if self.__sys.get('Nuc1')[k] is None:
             self.__sys.get('Nuc1')[k]='1H'
         if self.__sys.get('dXY')[k] is None:
-            self.__sys.get('dXY')[k]=dff.dipole_coupling(.1105,'13C',self.__sys['Nuc1'][k])
+            self.__sys.get('dXY')[k]=dipole_coupling(.1105,'13C',self.__sys['Nuc1'][k])
         if self.__sys.get('CSA')[k] is None:
             self.__sys.get('CSA')[k]=20
         if self.__sys.get('theta')[k] is None:
@@ -258,9 +262,9 @@ class rates(mdl.model):
         if self.__sys.get('Nuc1')[k] is None:
             self.__sys.get('Nuc1')[k]=['1H','2H','2H']
         if self.__sys.get('dXY')[k] is None:
-            self.__sys.get('dXY')[k]=[dff.dipole_coupling(.1115,'1H','13C'),
-                      dff.dipole_coupling(.1110,'2H','13C'),
-                      dff.dipole_coupling(.1110,'2H','13C')]
+            self.__sys.get('dXY')[k]=[dipole_coupling(.1115,'1H','13C'),
+                      dipole_coupling(.1110,'2H','13C'),
+                      dipole_coupling(.1110,'2H','13C')]
         if self.__sys.get('CSA')[k] is None:
             self.__sys.get('CSA')[k]=16.6667  
         if self.__sys.get('theta')[k] is None:

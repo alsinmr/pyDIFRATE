@@ -70,7 +70,7 @@ def vec2data(vec,**kwargs):
     data=vec2data(vec,**kwargs)
     """
     
-    if 'align_iRED' in kwargs and kwargs.get('align_iRED').lower()[0]=='y':
+    if 'align_iRED' in kwargs and kwargs.get('align_iRED'):
         vec=align_mean(vec)
     
     ct=Ct(vec,**kwargs)

@@ -299,7 +299,7 @@ class data(object):
         """
         return pf.plot_rho_series(self,fig,plot_sens,index,rho_index,errorbars,**kwargs)
             
-    def plot_cc(self,det_num,cutoff=None,ax=None,norm=True,**kwargs):
+    def plot_cc(self,det_num,cutoff=None,ax=None,norm=True,index=None,**kwargs):
         if np.size(self.Rcc)==0:
             print('Data object does not contain cross-correlation data')
             print('First, create a data object from iRED analysis (data=iRED2data(...))')
@@ -311,8 +311,10 @@ class data(object):
             x=self.tot_cc
         else:
             x=self.Rcc[det_num]
+        if index is None:
+            index=np.arange(x.shape[0])
          
-        ax=pf.plot_cc(x,self.label,ax,norm,**kwargs) 
+        ax=pf.plot_cc(x,self.label,ax,norm,index,**kwargs) 
         if det_num is None:
             ax.set_title('Total cross correlation')
         else:
@@ -369,19 +371,27 @@ class data(object):
         chain2=self.sens.molecule.sel2.segids
 
         color_scheme=kwargs.pop('color_scheme') if 'color_scheme' in kwargs else 'blue'
-        
+            
+        if np.all(self.sens.molecule.sel1.names=='N') or np.all(self.sens.molecule.sel2.names=='N') and\
+            np.all(res1==res2) and np.all(chain1==chain2):
+            style='pp'
+        else:
+            style='bond'
 
-        if np.all(res1==res2) and np.all(chain1==chain2):
+        if style=='pp':
             "Color the whole peptide plane one color"
             resi=res1
             chain=chain1
-#            chain[chain=='PROA']='p'   #Why was this line here? I'm removing it, but let's see if it breaks something...
-            plt_cc3D(self.sens.molecule,resi,values,resi0=resi[index],chain=chain,chain0=chain[index],\
-                     fileout=fileout,scaling=scaling,color_scheme=color_scheme,**kwargs)
+            plt_cc3D(self.sens.molecule,resi,values,resi0=bond,chain=chain,chain0=chain[index],\
+                     fileout=fileout,scaling=scaling,color_scheme=color_scheme,style=style,**kwargs)
         else:
             "Color the individual bonds specified in the molecule selections"
             "I'm not sure the indexing of resi0 is correct here!!!"
-            plt_cc3D(self.sens.molecule,None,values,resi0=res1[index],scaling=scaling,color_scheme=color_scheme,**kwargs)
+            plt_cc3D(self.sens.molecule,None,values,resi0=index,scaling=scaling,color_scheme=color_scheme,style=style,**kwargs)
+            """I'm going in circles here for some reason. Just switched resi0=res[index]
+            to resi0=index. plot_cc in 'bond' mode expects the index found in molecule.sel1
+            and molecule.sel2. So this seems like it should be correct...but let's see
+            if it glitches again for lipids"""
 #            print('Selections over multiple residues/chains- not currently implemented')
         
         
@@ -433,6 +443,7 @@ class data(object):
         
 
         values=self.ired['m'][mode_num]
+#        values=values/np.abs(values).max()
         if self.ired['n_added_vecs']!=0:
             values=values[0:-self.ired['n_added_vecs']]
       

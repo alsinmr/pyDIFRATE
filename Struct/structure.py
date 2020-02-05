@@ -489,11 +489,11 @@ class molecule(object):
             uni=mda.Universe(info['filename'])
         self.mda_object=uni
         
-        sel0=uni.select_atoms('name *')
+        sel0=uni.atoms
         if 'sel1' in info:
-            self.sel1=sel0[info['sel1']]
+            self.sel1=sel0[info['sel1']-1]
         if 'sel2' in info:
-            self.sel2=sel0[info['sel2']]
+            self.sel2=sel0[info['sel2']-1]
         
         self.__MDA_info=None
         

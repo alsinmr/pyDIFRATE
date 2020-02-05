@@ -76,19 +76,61 @@ should have X,Y,Z as the first dimension (for example, such that we can apply
 X,Y,Z=v). Note this is the transpose of the outputs of MDanalysis positions
 """    
 
-def peptide_plane(molecule,resids=None,segids=None,filter_str=None):
-    "Peptide plane motion, defined by C,N,O positions"
-    selN,selC,selO,_=selt.peptide_plane(molecule,resids,segids,filter_str)
-    uni=molecule.mda_object
-    def sub():
-        box=uni.dimensions[0:3]
-        v1=selO.positions-selC.positions
-        v2=selN.positions-selC.positions
-        v1=vft.pbc_corr(v1.T,box)
-        v2=vft.pbc_corr(v2.T,box)
+def peptide_plane(molecule,resids=None,segids=None,filter_str=None,full=True):
+    """
+    Aligns the peptide plane motion. Two options exist, full=True performs an
+    RMS alignment of the N,H,CA of the given residue and C',O,CA of the previous
+    residue. 
+    full=False uses only the positions of the N of the given residue and C',O
+    of the previous.
     
-        return v1,v2
-    return sub
+    The former is notably slower, but also performs better when separating
+    librational motion
+    """
+    "Peptide plane motion, defined by C,N,O positions"
+    if full:
+        "Get selections" 
+        selCA,selH,selN,selCm1,selOm1,selCAm1=selt.peptide_plane(molecule,resids,segids,filter_str)
+        
+        "Get universe, reset time"
+        uni=molecule.mda_object
+        uni.trajectory.rewind()
+        
+        "Define function to calculate the vectors defining the plane"
+        def vfun():
+            v=list()
+            for CA,H,N,Cm1,Om1,CAm1 in zip(selCA,selH,selN,selCm1,selOm1,selCAm1):
+                v0=np.array([CA.position-N.position,
+                            H.position-N.position,
+                            N.position-Cm1.position,
+                            Cm1.position-Om1.position,
+                            Cm1.position-CAm1.position])
+                box=uni.dimensions[:3]
+                v.append(vft.pbc_corr(v0.T,box))
+            return v
+        
+        "Get the reference vectors (at t=0)"
+        vref=vfun()        
+        
+        def sub():
+            R=list()
+            vecs=vfun()
+            R=[vft.RMSalign(vr,v) for v,vr in zip(vecs,vref)]
+            return vft.R2vec(R)
+        return sub
+    else:
+        "Peptide plane motion, defined by C,N,O positions"
+        selN,selC,selO=selt.peptide_plane(molecule,resids,segids,filter_str,full)
+        uni=molecule.mda_object
+        def sub():
+            box=uni.dimensions[0:3]
+            v1=selO.positions-selC.positions
+            v2=selN.positions-selC.positions
+            v1=vft.pbc_corr(v1.T,box)
+            v2=vft.pbc_corr(v2.T,box)
+        
+            return v1,v2
+        return sub
     
 def bond(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None):
     "Bond defines the frame"
@@ -134,11 +176,59 @@ def superimpose(molecule,sel=None,resids=None,segids=None,filter_str=None):
         box=uni.dimensions[:3]
         for s,vr,i in zip(sel,vref,i0):
             v=vft.pbc_corr(np.diff(s.positions[i],axis=0).T,box)   #Calculate vectors, periodic boundary correction
-            R.append(vft.RMSalign(v,vr))    #Get alignment to reference vector
+            R.append(vft.RMSalign(vr,v))    #Get alignment to reference vector
             
         return vft.R2vec(R)     #This converts R back into two vectors
     return sub        
             
+
+def chain_rotate(molecule,sel=None,Nuc=None,resids=None,segids=None,filter_str=None):
+    """
+    Creates a frame for which a chain of atoms (usually carbons) is aligned
+    such that the vector formed by the previous and next heteroatom (not 1H)
+    are aligned along z.
+    
+    Note that the frame is selected with a single initial selection, and the
+    function automatically searches for the surrounding atoms. In case a methyl
+    carbon is included, the rotation is defined by the carbon itself and its
+    nearest neighbor, instead of the surrounding two atoms (which would then
+    have to include a methyl proton)
+    """
+
+    uni=molecule.mda_object
+
+    "Get the initial selection"
+    if Nuc is not None:
+        sel,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+    else:
+        sel=selt.sel_simple(molecule,sel,resids,segids,filter_str)
+    
+    "Get all atoms in the residues included in the initial selection"
+    resids=np.unique(sel.resids)
+    sel0=uni.residues[np.isin(uni.residues.resids,resids)].atoms
+    
+    "Get bonded"
+    sel1,sel2=selt.find_bonded(sel,sel0=sel0,n=2,sort='cchain')
+    
+    "Replace 1H with the original selection"
+    i=sel2.types=='H'
+    
+    sel20=sel2
+    sel2=uni.atoms[:0]
+    for s2,s,i0 in zip(sel20,sel,i):
+        if i0:
+            sel2+=s
+        else:
+            sel2+=s2
+            
+    
+    def sub():
+        box=uni.dimensions[0:3]
+        v=sel2.positions-sel1.positions
+        v=vft.pbc_corr(v.T,box)
+        return v
+    return sub
+    
 def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
     """
     Superimposes the C-X bond attached to a methyl carbon, and can separate
@@ -167,7 +257,7 @@ def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
         return v
     return sub
 
-def librations(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None):
+def librations(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None,full=True):
     """
     Defines a frame for which librations are visible. That is, for a given bond,
     defined by sel1 and sel2, we search for two other atoms bound to the 
@@ -196,17 +286,96 @@ def librations(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,fil
     resids=np.unique(sel1.resids)
     i=np.isin(sel1.universe.residues.resids,resids)    #Filter for atoms in the same residues
     sel0=sel1.universe.residues[i].atoms
-    
-    sel2,sel3=selt.find_bonded(sel1,sel0,n=2,sort='mass')
-    
-    uni=molecule.mda_object
-    def sub():
-        box=uni.dimensions[0:3]
-        v1=sel2.positions-sel1.positions
-        v2=sel2.positions-sel1.positions
-        v1=vft.pbc_corr(v1.T,box)
-        v2=vft.pbc_corr(v2.T,box)
-        return v1,v2
+    if full:
+        "Slightly improved performance if we align all 4 bonds to the carbon"
+        "Note, "
+        sel2,sel3,sel4,sel5=selt.find_bonded(sel1,sel0,n=4,sort='mass')
+        
+        def vfun():
+            v=list()
+            for v1,v2,v3,v4,v5 in zip(sel1,sel2,sel3,sel4,sel5):
+                v0=np.array([v2.position-v1.position,
+                            v3.position-v1.position,
+                            v4.position-v1.position,
+                            v5.position-v1.position])
+                box=uni.dimensions[:3]
+                v.append(vft.pbc_corr(v0.T,box))
+            return v
+        
+        uni=molecule.mda_object
+        uni.trajectory.rewind()
+        
+        vref=vfun()
+        
+        def sub():
+            R=list()
+            vecs=vfun()
+            R=[vft.RMSalign(vr,v) for v,vr in zip(vecs,vref)]
+            return vft.R2vec(R)
+    else:
+        sel2,sel3=selt.find_bonded(sel1,sel0,n=2,sort='mass')
+        
+        uni=molecule.mda_object
+        def sub():
+            box=uni.dimensions[0:3]
+            v1=sel2.positions-sel1.positions
+            v2=sel1.positions-sel3.positions
+            v1=vft.pbc_corr(v1.T,box)
+            v2=vft.pbc_corr(v2.T,box)
+            return v1,v2
     return sub
     
+def librations0(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None):
+    """
+    Defines a frame for which librations are visible. That is, for a given bond,
+    defined by sel1 and sel2, we search for two other atoms bound to the 
+    heteroatom (by distance). The reference frame is then defined by the 
+    heteroatom and the additional two atoms, leaving primarily librational
+    motion of the bond. We preferentially select the other two atoms for larger
+    masses, but they may also be protons (for example, a methyl H–C bond will 
+    be referenced to the next carbon but also another one of the protons of 
+    the methyl group)
+    
+    In case the heteroatom only has two bound partners, the second atom in the
+    bond will also be used for alignment, reducing the effect motion
+    (not very common in biomolecules)
+    
+    librations(sel1,sel2,Nuc,resids,segids,filter_str)
+    """
+    if Nuc is not None:
+        sel1,sel2=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+    else:
+        sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
+        sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)
         
+    if sel1.masses.sum()<sel2.masses.sum():
+        sel1,sel2=sel2,sel1 #Make sel1 the heteroatom
+    
+    resids=np.unique(sel1.resids)
+    i=np.isin(sel1.universe.residues.resids,resids)    #Filter for atoms in the same residues
+    sel0=sel1.universe.residues[i].atoms
+    sel2,sel3,sel4,sel5=selt.find_bonded(sel1,sel0,n=4,sort='mass')
+    
+    def vfun():
+        v=list()
+        for v1,v2,v3,v4,v5 in zip(sel1,sel2,sel3,sel4,sel5):
+            v0=np.array([v2.position-v1.position,
+                        v3.position-v1.position,
+                        v4.position-v1.position,
+                        v5.position-v1.position])
+            box=uni.dimensions[:3]
+            v.append(vft.pbc_corr(v0.T,box))
+        return v
+    
+    uni=molecule.mda_object
+    uni.trajectory.rewind()
+    
+    vref=vfun()
+    
+    def sub():
+        R=list()
+        vecs=vfun()
+        R=[vft.RMSalign(vr,v) for v,vr in zip(vecs,vref)]
+        return vft.R2vec(R)
+        
+    return sub        

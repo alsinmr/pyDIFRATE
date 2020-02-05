@@ -191,23 +191,28 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
     
     sel0=sel0_filter(mol,resids,segids,filter_str)
         
-    if Nuc.lower()=='15n' or Nuc.lower()=='n' or Nuc.lower()=='n15':                    
-        sel1=sel0.select_atoms('(name H or name HN) and around 1.1 name N')
-        sel2=sel0.select_atoms('name N and around 1.1 (name H or name HN)')
+    if Nuc.lower()=='15n' or Nuc.lower()=='n' or Nuc.lower()=='n15':       
+        sel1=sel0.select_atoms('name N and around 1.1 (name H or name HN)')                 
+        sel2=sel0.select_atoms('(name H or name HN) and around 1.1 name N')        
     elif Nuc.lower()=='co' or Nuc.lower()=='13co' or Nuc.lower()=='co13' or Nuc.lower()=='c':
         sel1=sel0.select_atoms('name C and around 1.4 name O')
         sel2=sel0.select_atoms('name O and around 1.4 name C')
     elif Nuc.lower()=='ca' or Nuc.lower()=='13ca' or Nuc.lower()=='ca13':
-        sel1=sel0.select_atoms('name CA and around 1.4 (name HA or name HA2)')
-        sel2=sel0.select_atoms('(name HA or name HA2) and around 1.4 name CA')
+        sel1=sel0.select_atoms('name CA and around 1.5 (name HA or name HA2)')
+        sel2=sel0.select_atoms('(name HA or name HA2) and around 1.5 name CA')
         print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
-    elif Nuc.lower()=='ivl' or Nuc.lower()=='ivla' or Nuc.lower()=='ch3':
-        if Nuc.lower()=='ivl':
-            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name C*')
-            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name H*')
-        elif Nuc.lower()=='ivla':
+    elif Nuc[:3].lower()=='ivl' or Nuc.lower()=='ch3':
+        if Nuc[-1].lower()=='t':    #Truncated list- only one C per residue
+            sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG2) or \
+                                         (resname ILE ile Ile and name CG2) or \
+                                         (resname LEU leu Leu and name CD1)')
+            
+        if Nuc[:4].lower()=='ivla':
             sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name C*')
             sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name H*')
+        elif Nuc[:3].lower()=='ivl':
+            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name C*')
+            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name H*')
         else:
             sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name C*')
             sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name H*')
@@ -223,17 +228,19 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
 
 def find_bonded(sel,sel0=None,n=3,sort='dist',d=1.65):
     """
-    Finds atoms bound to all atoms in a given selection. Search is based on distance.
-    Default is to define every atom under 1.6 A as bonded. It is recommended
-    to also provide a second selection (sel0) out of which to search for the bound
-    atoms. If not included, the full MD analysis universe is searched.
+    Finds bonded atoms for each input atom in a given selection. Search is based
+    on distance. Default is to define every atom under 1.65 A as bonded. It is 
+    recommended to also provide a second selection (sel0) out of which to search
+    for the bound atoms. If not included, the full MD analysis universe is searched.
     
     Note- a list of selections is returned. One may ask for a certain number
     of atoms (default 3), in which case the user may opt to choose the nearest
-    atoms (sort='dist'), or optionally the largest atoms (sort='mass')
+    atoms (sort='dist'), or optionally the largest atoms (sort='mass'), or
+    finally carbon chain (sort='cchain'), which preferentially yields C atoms in
+    the bonded list (and second yields the largest atoms)
     """
     
-    out=[None for _ in range(n)]
+    out=[sel[0:0] for _ in range(n)]
     
     if sel0 is None:
         sel0=sel.universe
@@ -243,14 +250,22 @@ def find_bonded(sel,sel0=None,n=3,sort='dist',d=1.65):
         sel01=sel01-s
         if sort[0].lower()=='d':
             i=np.argsort(((sel01.positions-s.position)**2).sum(axis=1))
+        elif sort[0].lower()=='c':
+            C=sel01.types=='C'
+            nC=np.logical_not(C)
+            i1=np.argsort(sel01[nC].masses)[::-1]
+            C=np.argwhere(C)[:,0]
+            nC=np.argwhere(nC)[:,0]
+            i=np.concatenate((C,nC[i1]))
         else:
             i=np.argsort(sel01.masses)[::-1]
         sel01=sel01[i]
         for k in range(n):
-            if out[k] is None:
-                out[k]=sel01[k]
-            else:
+            if len(sel01)>k:
                 out[k]+=sel01[k]
+            else:
+                out[k]+=s
+                
     return out        
         
     
@@ -272,25 +287,53 @@ def keyword_selections(keyword,mol,resids=None,segids=None,filter_str=None,**kwa
     
     return fun
 
-def peptide_plane(mol,resids=None,segids=None,filter_str=None):
+def peptide_plane(mol,resids=None,segids=None,filter_str=None,full=True):
     """
-    Selects N,C,CA of each peptide plane. One may also provide resids, segids,
+    Selects the peptide plane. One may also provide resids, segids,
     and a filter string. Note that we define the residue as the residue containing
-    the N atom (whereas the C and O of the same peptide plane are actually in
-    the previous peptide plane). N at the end of peptide chains are automatically
-    excluded.
+    the N atom (whereas the C, O, and one Ca of the same peptide plane are actually in
+    the previous residue).
+    
+    returns 6 selections:
+    selCA,selH,selN,selCm1,selOm1,selCAm1   
+    (selCA, selH, and selN are from residues in resids, and 
+    selCm1, selOm1, selCAm1 are from residues in resids-1)
+    
+    or if full = False, returns 3 selections
+    selN,selCm1,selOm1
+    
+    Note that peptide planes for which one of the defining atoms is missing will
+    be excluded
     """
     sel0=sel0_filter(mol,resids,segids,filter_str)
-    if resids is not None:
-        sel0+=sel0_filter(mol,resids-1)
+    if resids is None:
+        resids=sel0.resids
+    selm1=sel0_filter(mol,np.array(resids)-1,segids,filter_str)
     
-    selN=sel0.select_atoms('protein and (name N and around 1.4 (name C and around 1.4 name O))')
+    if full:
+        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.5 name HN H CD) and (around 1.4 (name C and around 1.4 name O))')
+    else:  #We don't need the HN to be present in this case  
+        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.4 (name C and around 1.4 name O))')
+
     i=np.isin(selN.resids,resids)
-    selN=selN[i]
-    sel0=sel0_filter(mol,resids-1,segids,filter_str)
-#    i=np.argwhere(np.isin(sel0.residues.resids,sel1.residues.resids-1)).squeeze()
-    selC=sel0.residues.atoms.select_atoms('protein and (name C and around 1.4 name O)')
-    selO=sel0.residues.atoms.select_atoms('protein and (name O and around 1.4 name C)')
-    selCA=sel0.residues.atoms.select_atoms('protein and (name CA and around 1.6 name C)')
-    return selN,selC,selO,selCA
+    selN=selN[i]    #Maybe we accidently pick up the N in the previous plane? Exclude it here
+    resids=selN.resids
+    "Re-filter the original selection for reduced resid list"
+    sel0=sel0_filter(sel0,resids)
+    selm1=sel0_filter(selm1,np.array(resids)-1)
+    if full:
+        selH=sel0.residues.atoms.select_atoms('protein and (name H HN CD and around 1.5 name N)')
+        selCA=sel0.residues.atoms.select_atoms('protein and (name CA and around 1.6 name N)')
     
+#    i=np.argwhere(np.isin(sel0.residues.resids,sel1.residues.resids-1)).squeeze()
+    selCm1=selm1.residues.atoms.select_atoms('protein and (name C and around 1.4 name O)')
+    selOm1=selm1.residues.atoms.select_atoms('protein and (name O and around 1.4 name C)')
+    if full:
+        selCAm1=selm1.residues.atoms.select_atoms('protein and (name CA and around 1.6 name C)')
+    
+    if full:
+        return selCA,selH,selN,selCm1,selOm1,selCAm1
+    else:
+        return selN,selCm1,selOm1
+    
+        

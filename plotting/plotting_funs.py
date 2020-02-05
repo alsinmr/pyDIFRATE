@@ -21,13 +21,16 @@ def plot_cc(Rcc,lbl=None,ax=None,norm=True,index=None,**kwargs):
         
         
     if norm:
-        dg=np.sqrt([np.diag(Rcc)])
-        x=Rcc/np.dot(dg.T,dg)
+        dg=np.sqrt([np.diag(Rcc)]) 
+        "Should we use abs here or not?"
+        x=np.abs(Rcc)/np.dot(dg.T,dg)
     else:
         x=Rcc
         
     if index is None:
         index=np.arange(x.shape[0])
+    x=x[index][:,index]
+    lbl=np.array(lbl)[index]
         
     if lbl is not None and len(lbl)==x.shape[0]:
         if isinstance(lbl[0],str):
@@ -54,7 +57,7 @@ def plot_cc(Rcc,lbl=None,ax=None,norm=True,index=None,**kwargs):
     
     if 'cmap' in kwargs:
         cmap=kwargs.get('cmap')
-    elif Rcc.min()<0:
+    elif mat.min()<0:
         cmap='RdBu_r'
         if norm:mat[0,0],mat[-1,-1]=1,-1
     else:
@@ -75,6 +78,7 @@ def plot_cc(Rcc,lbl=None,ax=None,norm=True,index=None,**kwargs):
     
     "Limit to 50 axis labels"
     while xaxis_lbl is not None and len(lbl)>50:
+        xaxis_lbl=np.array(xaxis_lbl)
         xaxis_lbl=xaxis_lbl[range(0,len(lbl),2)]
         lbl=lbl[range(0,len(lbl),2)] 
     
@@ -207,10 +211,18 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
     R_u1=list()
     R_l1=list()
     
+    lbl=np.array(lbl)   #Make sure this is a np array
+    if not(np.issubdtype(lbl.dtype,np.number)):
+        split=False
+        lbl0=lbl.copy()
+        lbl=np.arange(len(lbl0))
+    else:
+        lbl0=None
+    
     if split:
         s0=np.where(np.concatenate(([True],np.diff(lbl)>1,[True])))[0]
     else:
-        s0=np.array([0,np.size(R1)])
+        s0=np.array([0,np.size(R)])
     
     for s1,s2 in zip(s0[:-1],s0[1:]):
         lbl1.append(lbl[s1:s2])
@@ -248,7 +260,12 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
             ax.bar(lbl,R,color=color,**kw)
         if color is None:
             color=ax.get_children()[0].get_color()
-                
+    
+    if lbl0 is not None:
+        ax.set_xticks(lbl)
+        ax.set_xticklabels(lbl0,rotation=90)
+        
+            
     return ax    
     
     

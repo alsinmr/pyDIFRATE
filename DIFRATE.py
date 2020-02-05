@@ -36,7 +36,7 @@ os.chdir('../chimera')
 import chimera_funs as chimera
 
 os.chdir('../tools')
-import tools
+import DRtools as tools
 
 os.chdir(curdir)
 

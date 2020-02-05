@@ -206,6 +206,9 @@ def R(v0,cA,sA,cB,sB=None,cG=None,sG=None):
         
     v=R(v0,alpha,beta,gamma)
     """
+    if v0 is None:
+        return None
+    
     if sB is None:
         cA,sA,cB,sB,cG,sG=np.cos(cA),np.sin(cA),np.cos(sA),np.sin(sA),np.cos(cB),np.sin(cB)
         
@@ -465,12 +468,6 @@ def Spher2pars(rho,return_angles=False):
         D,V=D[i[[1,0,2]]],V[:,i[[1,0,2]]]     #Ordering is |azz|>=|axx|>=|ayy|
         "V should have a determinant of +1 (proper vs. improper rotation)"
         V=V*np.sign(np.linalg.det(V))
-#        if k==55:
-#            V[:,1:]=-V[:,1:]
-#            print(np.dot(V.T,np.dot(D,V)))
-#            print(V)
-#            print(np.linalg.det(V))
-#            V[:,1:]=-V[:,1:]
         delta.append(D[2])
         eta.append((D[1]-D[0])/D[2])
         R.append(V)

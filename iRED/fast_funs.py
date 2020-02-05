@@ -153,7 +153,7 @@ def get_trunc_vec(molecule,index,**kwargs):
     
     
     
-    if molecule._vf is not None:
+    if molecule._vf is not None and False:  #De-activate this functionality. Replace with frames
         vf=molecule.vec_fun
         special=True
     else:
