@@ -17,6 +17,92 @@ from iRED_fast import vec2iRED
 from fast_funs import get_trunc_vec
 os.chdir(curdir)
 
+
+"""
+The frame module is one of the more complex components of pyDIFRATE. It's worth
+noting the structure of some of the data elements here, for future reference.
+
+First, before executing the functions here, we need one or more frame functions.
+Typically, these are stored as part of the molecule object. mol._vf is a list of
+functions, where the length of the list is the number of frames. Each frame function
+returns either a 3xN matrix, or a list with two elements, each being a 3xN matrix.
+N is the number of sub-frames (for example, if using the "bond" frame, then there
+is a sub-frame for each bond). 3 is the number of spatial dimensions.
+
+When we run ini_vec_load, we loop over the trajectory and execute all frame 
+functions at each time point. This returns a dictionary object, where the element
+'v' contains the results of this.
+v is a list of lists. The outer list runs over the total number of frames in use,
+and the inner list runs over the number of time points in the trajectory that
+are used (other elements of the dict keep track of which time points are used).
+
+Here an important note: each frame function may return matrices of different 
+sizes. First, we may apply the same sub-frame of one frame to multiple frames of
+another frame. For example, our last frame is usually the "bond" frame, but we
+could have a "MOIz" frame as the outer frame, which would be the same for all
+bonds in part of a molecule. Then, we will have more sub-frames in the "bond" 
+frame than in the "MOIz" frame. This needs to be fixed in a latter step. The 
+second important point: some frames are defined by a single vector, and some
+frames by two vectors. For example, the "bond" frame is simply defined by a 
+single vector (direction of the bond), but the "superimpose" frame is described
+by two vectors. 
+
+Size of v: [# of frames, # of time points, []]
+where [] can have variable size/number of dimensions
+size of []: [2,# of dimensions(=3), # of sub-frames]  in case of two vectors
+or      []: [# of dimensions (=3), # of sub-frames]
+
+Within ini_vec_load, we swap around the dimensions, such that
+v: [# of frames,[]]
+[]:  if 1 vector [# of dimension(=3), # of sub-frames, # of time points]        
+[]: if 2 vectors [2, # of dimension(=3), # of sub-frames, # of time points]
+
+In the latter steps, we need to make sure all the matrix dimensions are the same.
+This is achieved, first by filling in None where only one vector describes the
+frame (occuring within applyFrame function)
+
+Size of v0: [# of frames,2]
+[]:  None  -- or --      
+[]: [ # of dimension(=3), # of sub-frames, # of time points]
+
+Within applyFrame, the apply_index function is run. In this case, all frames are
+indexed so that the inner dimensions have the same size. frame_index is usually
+stored in mol._frame_info['frame_index']. It should be a list of length equal
+to the number of frames, and the sublists should be 1D arrays with equal 
+number of elements. The values determine which sub-frame is applied. For some
+frames, usually this will just be an index from 0-# of sub-frames (for example,
+the "bond" frame should almost always be indexed from 0-# of bonds). Note, 
+individual elements of the frame_index may be set to None (nan in numpy), which
+will yield a nan vector to be returned. 
+
+After running apply_index, 
+
+Size of v: [# of frames, 2,[]]
+[]: None -- or --
+[]: [# of dimensions (=3), # of bonds, # of time points]
+(by bonds, effectively we mean the largest number of sub-frames)
+
+
+We then loop over each frame. For each frame, we acquire the cos/sin of the
+euler angles (if one vector provided, then alpha=-gamma, else we get 3 
+independent euler angles). These angle are then applied in reverse to all 
+inner frames (this would rotate the current frame to z, with the second vector, 
+if given, into the xz-plane). In the inner loops, we continue this process, where
+the vectors rotated by the outer frame are used. 
+
+At each frame, we use the acquired angles to apply to some vector. This vector
+could just be a vector along z (then rotated at each time point), but we often
+will apply to the vector pointing the same direction as the tensor average of
+the innermost frame (thus obtaining the influence of the outer frame on the
+detector responses/relaxation)
+
+The results are stored in a list of dictionaries. The list is the same length
+as the number of frames. In each dictionary, 'X','Y', and 'Z' are stored for
+the three dimensions. Then, the stored vectors in 'X','Y','Z' each have size 
+# of subframes, # of time points
+
+"""
+
 #%% Load data from a set of frames into multiple data objects
 def frames2data(mol,frame_funs=None,frame_index=None,ffavg='direction',n=100,nr=10,label=None,**kwargs):
     """
@@ -133,6 +219,11 @@ def ini_vec_load(traj,frame_funs,frame_index=None,index=None,dt=None):
     
     t=index*dt
     v=[list() for _ in range(nf)]
+    """v is a list of lists. The outer list runs over the number of frames (length of frame_funs)
+    The inner list runs over the timesteps of the trajectory (that is, the timesteps in index)
+    The inner list contains the results of executing the frame function (outer list) at that
+    time point (inner list)
+    """
       
     for c,i in enumerate(index):
         traj[i] #Go to current frame
@@ -154,7 +245,6 @@ def ini_vec_load(traj,frame_funs,frame_index=None,index=None,dt=None):
             v[k]=((v[k].swapaxes(0,1)).swapaxes(1,2)).swapaxes(2,3)
         else:
             v[k]=(v[k].swapaxes(0,1)).swapaxes(1,2)
-            
         SZ.append(v[k].shape[-2])
         
     SZ=np.array(SZ)
@@ -205,8 +295,8 @@ def applyFrame(vecs,ffavg='direction',return_avgs=False):
     v0=[v if len(v)==2 else [v,None] for v in v0]
     
     "Start by updating vectors with the frame index"
-    v0=[[apply_index(v0[k][0],fi[k]),apply_index(v0[k][1],fi[k])] for k in range(nf)]        
-    
+    v0=[[apply_index(v0[k][0],fi[k]),apply_index(v0[k][1],fi[k])] for k in range(nf)]
+
     
     vec_out=list()
     avgs=list()
@@ -220,7 +310,7 @@ def applyFrame(vecs,ffavg='direction',return_avgs=False):
     
     "Next sweep from outer frame in"
     for k in range(nf-1):
-        v1,v2=v0.pop(0) #Should have two vectors (or two and None)
+        v1,v2=v0.pop(0) #Should have two vectors (or v1 and None)
         
         "Get the euler angles"
         sc=vft.getFrame(v1,v2) #Cosines and sines of alpha,beta,gamma (6 values ca,sa,cb,sb,cg,sg)
@@ -240,7 +330,7 @@ def applyFrame(vecs,ffavg='direction',return_avgs=False):
             "Averaged tensor from last frame"
             v1,v2=v0[-1]
             sc0=vft.getFrame(v1,v2)
-            Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame 0
+            Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame -1
             out=vft.Spher2pars(Davg)    #Convert into delta,eta,euler angles
             avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]}) #Returns in a dict
             
@@ -388,13 +478,26 @@ def apply_index(v0,index):
     Applies the frame index to a set of variables (the frame index is applied
     to the second dimension)
     """
+    
     if v0 is None:
         return None
     
+    "SZ : [# of dimesions (=3), # of bonds, # of time points]"
     SZ=[np.shape(v0)[0],np.size(index),np.shape(v0)[2]]
     vout=np.zeros(SZ)
+    
+    if np.any(np.isnan(index)):
+        inan=np.isnan(index)    #Keep track of where nan are
+        i=index.copy()  #Don't edit the original!
+        i[inan]=0   #Just set to the first frame in the index
+    else:
+        i=index
+        inan=None
+    
     for k,v in enumerate(v0):
-        vout[k]=v[np.array(index).astype(int)]
+        vout[k]=v[np.array(i).astype(int)]
+        if inan is not None:
+            vout[k][inan]=1 if k==2 else 0
     return vout
     
 

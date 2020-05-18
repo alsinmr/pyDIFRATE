@@ -262,8 +262,8 @@ def Ylm(vec,rank=2):
         c=np.sqrt(15/(32*np.pi))
         Yl['2,0']=c*np.sqrt(2/3)*(3*Z**2-1)
         a=(X+Y*1j)
-        b=np.sqrt(X**2+Y**2)
-        b2=b**2
+#        b=np.sqrt(X**2+Y**2)
+#        b2=b**2
 #        b[b==0]=1
 #        Yl['2,+1']=2*c*Z*b*a
 #        Yl['2,-1']=2*c*Z*b*a.conjugate()
@@ -275,8 +275,8 @@ def Ylm(vec,rank=2):
 #        Yl['2,-2']=c*b*a.conjugate()
         a2=a**2
 #        a2[a!=0]=np.exp(2*np.log(a[a!=0]/b[a!=0]))
-        Yl['2,+2']=c*b2*a2
-        Yl['2,-2']=c*b2*a2.conjugate()
+        Yl['2,+2']=c*a2
+        Yl['2,-2']=c*a2.conjugate()
         
     Yl['t']=vec['t']
     Yl['index']=vec['index']

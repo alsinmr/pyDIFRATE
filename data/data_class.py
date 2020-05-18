@@ -38,6 +38,7 @@ class data(object):
         
         self.S2=None
         self._S2=None   #Hidden location for S2 calc in case we don't include it
+        self.S2_std=None
         self.tot_cc=None
         self.tot_cc_norm=None
         
@@ -58,7 +59,7 @@ class data(object):
         
         self.load(**kwargs)
 #%% Some options for loading in data        
-    def load(self,subS2=True,**kwargs):
+    def load(self,subS2=False,**kwargs):
         EstErr=False #Default don't estimate error. This is overridden for 'Ct'
         "Load in correlation functions from an iRED calculation"
         if 'iRED' in kwargs:
@@ -221,7 +222,12 @@ class data(object):
             mode_index=np.ones(nb,dtype=bool)
             mode_index[-ne:]=False
         else:
-            mode_index=np.array(mode_index,dtype=bool)
+            if len(mode_index)==self.ired['M'].shape[0]:
+                mode_index=np.array(mode_index,dtype=bool)
+            else:
+                mo=mode_index.copy()
+                mode_index=np.zeros(nb,dtype=bool)
+                mode_index[mo]=True
         
         
 #        if self.sens.molecule.sel1in is not None:

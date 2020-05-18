@@ -109,10 +109,13 @@ def load_NMR(filename):
                 for k in rate_args:
                     data.sens.new_exp(**k)
             elif a.strip().lower()=='data':
-                R,Rstd,label=read_data(f,keys0)
+                R,Rstd,label,S2,S2_std=read_data(f,keys0)
                 data.R=R
                 data.R_std=Rstd
                 data.label=label
+                if S2 is not None:
+                    data.S2=S2
+                    data.S2_std=S2_std
             elif a.strip().lower()=='model':
                 mdl_args.append(read_model(f,keys0))
     
@@ -159,10 +162,12 @@ def read_data(f,keys0):
     cont=True
     R=list()
     Rstd=list()
+    S2=list()
+    S2_std=list()
     label=None
     ne=0
     
-    keys1=['R','Rstd','label','R_std']
+    keys1=['R','Rstd','label','R_std','S2','S2_std']
     
     while not(eof(f)) and cont:
         pos=f.tell()
@@ -175,6 +180,10 @@ def read_data(f,keys0):
                 Rstd.append(read_lines(f,np.concatenate((keys0,keys1))))
             elif a.strip()=='label':
                 label=read_label(f,np.concatenate((keys0,keys1)))
+            elif a.strip()=='S2':
+                S2.append(read_lines(f,np.concatenate((keys0,keys1))))
+            elif a.strip()=='S2_std':
+                S2_std.append(read_lines(f,np.concatenate((keys0,keys1))))
         elif np.isin(a.strip(),keys0):
             cont=False
             f.seek(pos)
@@ -191,6 +200,16 @@ def read_data(f,keys0):
     else:
         Rstd=None
     
+    if len(S2)!=0:
+        S2=np.atleast_1d(np.concatenate(S2,axis=0).squeeze())
+    else:
+        S2=None
+        
+    if len(S2_std)!=0:
+        S2_std=np.atleast_1d(np.concatenate(S2_std,axis=0).squeeze())
+    else:
+        S2_std=None
+        
 
     if Rstd is None:
         print('Warning: Standard deviations are not provided')
@@ -201,11 +220,14 @@ def read_data(f,keys0):
         print('Warning: Shape of standard deviation does not match shape of rate constants')
         print('Standard deviations set equal to 1/10 of the median of the rate constants')
         ne=R.shape[0]        
-        Rstd=np.repeat([np.median(R,axis=0)],ne,axis=0)
+        Rstd=np.repeat([np.median(R,axis=0)]/10,ne,axis=0)
         
+    if (S2 is not None and S2_std is None) or (S2 is not None and S2.size!=S2_std.size):
+        print('Warning: Shape of S2 does not match the shape of S2_std')
+        print('Standard deviations set to 0.01')
+        S2_std=np.ones(S2.shape)*0.01
     
-    
-    return R,Rstd,label
+    return R,Rstd,label,S2,S2_std
 
 def read_lines(f,keys0):
     """

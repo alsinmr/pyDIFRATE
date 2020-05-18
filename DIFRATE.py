@@ -21,7 +21,7 @@ import DIFRATE_funs as funs
 
 os.chdir('../data')
 from data_class import data
-from fitting import fit_data as fit
+import fitting
 import in_out as io
 
 os.chdir('../iRED')
@@ -31,12 +31,17 @@ import Ct_fast
 
 os.chdir('../Struct')
 from structure import molecule
+import frame2traj
 
 os.chdir('../chimera')
 import chimera_funs as chimera
 
 os.chdir('../tools')
 import DRtools as tools
+
+os.chdir('../plotting')
+
+import plotting_funs as plot
 
 os.chdir(curdir)
 

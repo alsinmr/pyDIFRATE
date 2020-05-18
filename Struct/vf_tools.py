@@ -30,6 +30,8 @@ def pbc_corr(v0,box):
     that no vector should be longer than half the box. If we find such vectors,
     we will add/subtract the box length in the appropriate dimension(s)
     
+    Input should be 3xN vector and 3 element box dimensions
+    
     v = pbc_corr(v0,box)
     """
     
@@ -48,10 +50,31 @@ def pbc_corr(v0,box):
         
     return v.T
 
+
+#%% Periodic boundary condition for positions
+def pbc_pos(v0,box):
+    """
+    Sometimes, we are required to work with an array of positions instead of
+    a pair of positions (allowing easy calculation of a vector and determining
+    if the vector wraps around the box). In this case, we take differences 
+    between positions, and make sure the differences don't yield a step around
+    the box edges. The whole molecule, however, may jump around the box after
+    this correction. This should matter, since all calculations are orientational,
+    so the center position is irrelevant.
+    
+    Input is a 3xN vector and a 3 element box
+    """
+    
+    v=np.concatenate((np.zeros([3,1]),np.diff(v0,axis=1)),axis=1)
+    v=pbc_corr(v,box)
+    
+    return np.cumsum(v,axis=1)+np.atleast_2d(v0[:,0]).T.repeat(v.shape[1],axis=1)
+    
+    
 #%% Vector normalization
 def norm(v0):
     """
-    Normalizes a vector to a length of one.
+    Normalizes a vector to a length of one. Input should be a 3xN vector.
     """
     X,Y,Z=v0
     length=np.sqrt(X**2+Y**2+Z**2)
@@ -116,6 +139,9 @@ def getFrame(v1,v2=None,return_angles=False):
     alpha,beta,gamma = getFrame(v1,v2,return_angles=True)
     """
     
+    "Set nan values along z (these indicate an unused frame)"
+    ii=np.isnan(v1[0,:,0])
+        
     "Normalize"
     X,Y,Z=norm(v1)
     
@@ -142,6 +168,12 @@ def getFrame(v1,v2=None,return_angles=False):
         cA,sA=X/lenXY,-Y/lenXY
         cA[i]=1.
         
+#    cA[ii]=1
+#    sA[ii]=0
+#    cB[ii]=1
+#    sB[ii]=0
+#    cG[ii]=1
+#    sG[ii]=0
     if return_angles:
         return np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)
     else:
@@ -414,7 +446,7 @@ def D2vec(v1,v2=None,m=None,mp=0):
     """
     
     cA,sA,cB,sB,cG,sG=getFrame(v1,v2)
-    "I think these already the passive angles above"
+    "I think these are already the passive angles above"
     
     return D2(cA,sA,cB,sB,cG,sG,m,mp)
 
@@ -514,7 +546,95 @@ def RMSalign(v0,vref):
     return R
 
 
+#%% Fit points to a plane
+def RMSplane(v,weight=None):
+    """
+    For a set of points (v: 3xN array), calculates the normal vector for a plane
+    fitted to that set of points. May include a weighting (weight: N elements)
+    """
+    v=np.array(norm(v))
     
+    "Default, uniform weighting"
+    if weight is None:
+        weight=np.ones(v.shape[1])
+        
+    "Subtract away the centroid"
+    v=(v.T-v.mean(axis=1)).T
+    
+    """Applying weighting, taking singular value decomposition, return
+    row of U corresponding to the smallest(last) singular value"""
+    return svd(v*weight)[0].T[2]
+
+#%% Get principle axes of moment of inertia
+def principle_axis_MOI(v):
+    """
+    Calculates the principle axis system of the moment of inertia, without
+    considering weights of individual particles. A 3xN numpy array should be 
+    provided. The smallest component of the moment of inertia is returned in the
+    0 element, and largest in the 2 element
+    
+    Note- the directions of the principle axes can switch directions (180 deg)
+    between frames, due to the symmetry of the MOI tensor. This can be corrected
+    for with a reference vector. The dot product of the reference vector and the
+    vector for a given frame should remain positive. If it doesn't, then switch
+    the direction of the vector (v=v*np.sign(np.dot(v.T,v)))
+    """
+    
+    """
+    Ixx=sum_i m_i*(y_i^2+z_i^2)
+    Iyy=sum_i m_i*(x_i^2+z_i^2)
+    Izz=sum_i m_i*(x_i^2+y_i^2)
+    Ixy=Iyx=-sum_i m_i*x_i*y_i
+    Ixz=Izx=-sum_i m_i*x_i*z_i
+    Iyz=Izy=-sum_i m_i*y_i*z_i
+    """
+    
+    
+    v=v-np.atleast_2d(v.mean(axis=1)).T.repeat(v.shape[1],axis=1) #v after subtracting center of mass
+    
+    H=np.dot(v,v.T)
+    
+    I=-1*H
+    I[0,0]=H[1,1]+H[2,2]
+    I[1,1]=H[0,0]+H[2,2]
+    I[2,2]=H[1,1]+H[0,0]
+    _,V=np.linalg.eigh(I)
+    
+    return V
+
+#%% Project onto axis
+def projZ(v0,vr=[0,0,1]):
+    """
+    Takes the projection of a vector, v0, onto another vector, vr.
+    
+    Input should be 3xN vectors (vnorm can also be a 1D, 3 element vector, or
+    both inputs can be 3 element vectors).
+    
+    Input does not need to be normalized, but also note that output is not 
+    normalized
+    
+    Default project is along z
+    """
+    v0=np.atleast_2d(v0)
+    if np.ndim(vr)==1 or np.shape(vr)[1]==1:    #Make matrices the same size
+        vr=np.atleast_2d(vr).T.repeat(np.shape(v0)[1],axis=1) 
+    
+    return np.atleast_2d((norm(v0)*norm(vr)).sum(axis=0))*vr
+
+#%% Project onto plane
+def projXY(v0,vnorm=[0,0,1]):
+    """
+    Takes the projection of a vector, v0, onto a plane defined by its normal 
+    vector, vnorm. 
+    
+    Input should be 3xN vectors (vnorm can also be a 1D, 3 element vector, or
+    both inputs can be 3 element vectors).
+    
+    Input does not need to be normalized, but also note that output is not 
+    normalized
+    """
+    
+    return v0-projZ(v0,vnorm)  
     
 #%% Sort by distance
 def sort_by_dist(v,maxd=1e4):

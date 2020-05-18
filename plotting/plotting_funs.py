@@ -30,9 +30,10 @@ def plot_cc(Rcc,lbl=None,ax=None,norm=True,index=None,**kwargs):
     if index is None:
         index=np.arange(x.shape[0])
     x=x[index][:,index]
-    lbl=np.array(lbl)[index]
+
         
     if lbl is not None and len(lbl)==x.shape[0]:
+        lbl=np.array(lbl)[index]
         if isinstance(lbl[0],str):
             xaxis_lbl=lbl.copy()
             lbl=np.arange(np.size(lbl))
@@ -104,9 +105,9 @@ def plot_rho_series(data,fig=None,plot_sens=True,index=None,rho_index=None,error
         
     nd=data.R.shape[1]
     
-    rho_index=np.arange(nd) if rho_index is None else np.array(rho_index)
+    rho_index=np.atleast_1d(np.arange(nd) if rho_index is None else np.array(rho_index))
     
-    if hasattr(data.sens,'detect_par') and data.sens.detect_par['R2_ex_corr'][0].lower()=='y' and\
+    if hasattr(data.sens,'detect_par') and data.sens.detect_par['R2_ex_corr'] and\
         nd-1 in rho_index:
         R2ex=True
     else:

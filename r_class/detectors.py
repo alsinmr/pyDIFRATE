@@ -60,7 +60,7 @@ class detect(mdl.model):
 #            mdl_num=mdl_num[0]
 #        
         "Delete detector used for R2 exchange correction"
-        if hasattr(sens,'detect_par') and sens.detect_par['R2_ex_corr'][0].lower()=='y':
+        if hasattr(sens,'detect_par') and sens.detect_par['R2_ex_corr']:
             sens=sens.copy()    #We don't want to edit the original sensitivy object
             ne=ne-1
             exp_num=exp_num[exp_num!=sens.info.axes[1][-1]]
@@ -182,9 +182,9 @@ class detect(mdl.model):
         
         "Some global defaults"
         self.detect_par={'Normalization':'M',   #Normalization of detectors
-                         'inclS2':'no',
+                         'inclS2':False,
                          'NegAllow':0.5,
-                         'R2_ex_corr':'no'} 
+                         'R2_ex_corr':False} 
         
         
         "Pass the normalization"
@@ -325,15 +325,15 @@ class detect(mdl.model):
         self.n=n
         "Get input or defaults"
         if 'inclS2' in kwargs:
-            inclS2=kwargs.get('inclS2')
+            inclS2=kwargs['inclS2']
             self.detect_par['inclS2']=inclS2
         else:
-            inclS2=self.detect_par.get('inclS2')
+            inclS2=self.detect_par['inclS2']
         if 'Neg' in kwargs:
-            Neg=kwargs.get('Neg')
+            Neg=kwargs['Neg']
             self.detect_par['NegAllow']=Neg
         else:
-            Neg=self.detect_par.get('NegAllow')
+            Neg=self.detect_par['NegAllow']
           
             
         nb=self._nb()
@@ -506,8 +506,8 @@ class detect(mdl.model):
                         rhoz[k,:]=np.dot(T[k,:],Vt)
             except:
                 pass
-        R2ex=('R2_ex_corr' in kwargs and kwargs.get('R2_ex_corr').lower()[0]=='y') or\
-            ('R2_ex_corr' not in kwargs and self.detect_par['R2_ex_corr'][0].lower()=='y')
+        R2ex=('R2_ex_corr' in kwargs and kwargs['R2_ex_corr']) or\
+            ('R2_ex_corr' not in kwargs and self.detect_par['R2_ex_corr'])
    
         "Save the results into the detect object"
 #        self.r0=self.__r
@@ -520,7 +520,7 @@ class detect(mdl.model):
             if R2ex:
                 self.R2_ex_corr(bond,**kwargs)
             self.__r_norm(bond,**kwargs)
-            if inclS2[0].lower()=='y':
+            if inclS2:
                 self.inclS2(bond=None,**kwargs)
             self.__r_info(bond,**kwargs)
             if np.size(bonds)>0:
@@ -545,7 +545,7 @@ class detect(mdl.model):
                 self.R2_ex_corr(bond,**kwargs)
                         
             self.__r_norm(bond,**kwargs)
-            if inclS2[0].lower()=='y':
+            if inclS2:
                 self.inclS2(bond=k,**kwargs)
             self.__r_info(bond,**kwargs)
             if np.size(bonds)>0:
@@ -565,8 +565,8 @@ class detect(mdl.model):
                 print('No target provided, and no sensitivity from r_auto available')
                 return
 
-            R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
-            inS2=self.detect_par['inclS2'][0].lower()=='y'
+            R2ex=self.detect_par['R2_ex_corr']
+            inS2=self.detect_par['inclS2']
             target=self.rhoz(bond=None)
             if R2ex:
                 target=target[:-1]
@@ -606,8 +606,8 @@ class detect(mdl.model):
             self.SVDavg['T']=T
             if 'NT' in kwargs:
                 self.__r_norm(None,**kwargs)  
-            if ('inclS2' in kwargs and kwargs.get('inclS2').lower()[0]=='y') or\
-                self.detect_par['inclS2'][0].lower()=='y':
+            if ('inclS2' in kwargs and kwargs['inclS2']) or\
+                self.detect_par['inclS2']:
                 self.inclS2(bond=None,**kwargs)
             self.__r_info(bond,**kwargs)
         else:
@@ -639,11 +639,11 @@ class detect(mdl.model):
                 self.SVD[k]['T']=T[index]
                 if 'NT' in kwargs:
                     self.__r_norm(None,**kwargs)
-                if ('R2_ex_corr' in kwargs and kwargs.get('R2_ex_corr').lower()[0]=='y') or\
-                    self.detect_par['R2_ex_corr'][0].lower()=='y':
+                if ('R2_ex_corr' in kwargs and kwargs['R2_ex_corr']) or\
+                    self.detect_par['R2_ex_corr']:
                     self.R2_ex_corr(bond=k,**kwargs)
-                if ('inclS2' in kwargs and kwargs.get('inclS2').lower()[0]=='y') or\
-                    self.detect_par['inclS2'][0].lower()=='y':
+                if ('inclS2' in kwargs and kwargs['inclS2']) or\
+                    self.detect_par['inclS2']:
                     self.inclS2(bond=k,**kwargs)
                     
                 
@@ -671,7 +671,7 @@ class detect(mdl.model):
         corrects for exchange, and returns the estimated exchange contribution at 
         the lowest field at which R2 was measured.
         """
-        self.detect_par.update({'R2_ex_corr':'yes'})
+        self.detect_par.update({'R2_ex_corr':True})
         
         index=self.info_in.loc['Type']=='R2'
         if np.where(index)[0].size<2:
@@ -711,7 +711,7 @@ class detect(mdl.model):
         If using, one must include the last column of data.R as the order parameter
         measurement (input as 1-S2)
         """
-        self.detect_par['inclS2']='yes'
+        self.detect_par['inclS2']=True
         
         nb=self._nb()
         if nb==1:
@@ -722,7 +722,18 @@ class detect(mdl.model):
         
         bond=np.atleast_1d(bond)
         for k in bond:
-            if self.detect_par['Normalization'][0].lower()=='m':
+            if self.detect_par['Normalization'][:2].lower()=='mp':
+                wt=linprog(-(self.__rho[k].sum(axis=1)).T,self.__rho[k].T,np.ones(self.__rho[k].shape[1]),\
+                           bounds=(-500,500),method='interior-point',options={'disp' :False,})['x']
+                rhoz0=[1-np.dot(self.__rho[k].T,wt).T]
+                rhoz0CSA=[1-np.dot(self.__rhoCSA[k].T,wt).T]
+                sc=np.atleast_1d(rhoz0[0].max())
+                self.__rho[k]=np.concatenate((rhoz0/sc,self.__rho[k]))
+                self.__rhoCSA[k]=np.concatenate((rhoz0CSA/sc,self.__rhoCSA[k]))
+                mat1=np.concatenate((np.zeros([self.__r[k].shape[0],1]),self.__r[k]),axis=1)
+                mat2=np.atleast_2d(np.concatenate((sc,wt.T),axis=0))
+                self.__r[k]=np.concatenate((mat1,mat2),axis=0)
+            elif self.detect_par['Normalization'][0].lower()=='m':
                 self.__r[k]=np.concatenate((\
                         np.concatenate((np.zeros([self.__r[k].shape[0],1]),self.__r[k]),axis=1),\
                         np.ones([1,self.__r[k].shape[1]+1])),axis=0)
@@ -751,10 +762,10 @@ class detect(mdl.model):
         detect._remove_R2_ex()
         """
         
-        if self.detect_par['R2_ex_corr'][0].lower()=='n':
+        if not(self.detect_par['R2_ex_corr']):
             return
         else:
-            self.detect_par['R2_ex_corr']='no'
+            self.detect_par['R2_ex_corr']=False
             if self.info is not None:
                 self.info=self.info.drop(self.info.axes[1][-1],axis=1)
             if self.__rAvg is not None:
@@ -966,8 +977,8 @@ class detect(mdl.model):
                 np.repeat([self.z()],nd,axis=0)),axis=1),\
                 np.sum(self.rhoz(bond),axis=1))
                         
-            iS2=self.detect_par['inclS2'][0].lower()=='y'
-            R2ex=self.detect_par['R2_ex_corr'][0].lower()=='y'
+            iS2=self.detect_par['inclS2']
+            R2ex=self.detect_par['R2_ex_corr']
                     
             if iS2 and R2ex:
                 i0=np.argsort(z0[1:-1])
@@ -999,7 +1010,7 @@ class detect(mdl.model):
             
 
             
-            if self.detect_par['inclS2'][0].lower()=='y':
+            if self.detect_par['inclS2']:
                 st0=np.concatenate(([.1],self.info_in.loc['stdev']))
                 stdev=np.power(np.dot(np.linalg.pinv(r)**2,st0**2),0.5)
             else:
@@ -1062,18 +1073,18 @@ class detect(mdl.model):
                 if 'sort_rho' in kwargs and kwargs.get('sort_rho').lower()[0]=='n':
                     i=np.arange(0,np.size(z0))
                     i0=i
-                    if self.detect_par['inclS2'][0].lower()=='y':
+                    if self.detect_par['inclS2']:
                         i0=i0[1:]
-                    if self.detect_par['R2_ex_corr'][0].lower()=='y':
+                    if self.detect_par['R2_ex_corr']:
                         i0=i0[0:-1]
                 else:
-                    if self.detect_par['inclS2'][0].lower()=='y' and self.detect_par['R2_ex_corr'][0].lower()=='y':
+                    if self.detect_par['inclS2'] and self.detect_par['R2_ex_corr']:
                         i0=np.argsort(z0[1:-1])
                         i=np.concatenate(([0],i0,[np.size(z0)]))
-                    elif self.detect_par['inclS2'][0].lower()=='y':
+                    elif self.detect_par['inclS2']:
                         i0=np.argsort(z0[1:])
                         i=np.concatenate(([0],i0))
-                    elif self.detect_par['R2_ex_corr'][0].lower()=='y':
+                    elif self.detect_par['R2_ex_corr']:
                         i0=np.argsort(z0[0:-1])
                         i=np.concatenate((i0,[np.size(z0)]))
                     else:
@@ -1088,10 +1099,10 @@ class detect(mdl.model):
                 self.Del_z[k]=np.diff(self.z()[0:2])*np.divide(np.sum(self.__rho[k],axis=1),
                           np.max(self.__rho[k],axis=1))
                 stdev=np.sqrt(np.dot(self.SVD[k]['T']**2,1/self.SVD[k]['S'][0:np.size(i0)]**2))
-                if self.detect_par['inclS2'][0].lower()=='y':
+                if self.detect_par['inclS2']:
                     "THIS IS WRONG. ADD STANDARD DEVIATION LATER!!!"
                     stdev=np.concatenate(([0],stdev))
-                if self.detect_par['R2_ex_corr'][0].lower()=='y':
+                if self.detect_par['R2_ex_corr']:
                     stdev=np.concatenate((stdev,[0]))
                 self.SVD[k]['stdev']=stdev
                 if match:
@@ -1300,7 +1311,7 @@ class detect(mdl.model):
                 nd=self.rhoz(bond).shape[-2]
             else:
                 nd=self.rhoz(bond[0]).shape[-2]
-            if hasattr(self,'detect_par') and self.detect_par['R2_ex_corr'][0].lower()=='y':
+            if hasattr(self,'detect_par') and self.detect_par['R2_ex_corr']:
                 nd=nd-1
             rho_index=np.arange(0,nd)
             

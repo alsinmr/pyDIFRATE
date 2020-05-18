@@ -18,12 +18,13 @@ os.chdir('../iRED')
 def S2calc(vec):
     """
     Calculates an estimate of the order parameter, according to
-    3/2*(<x^2>+<y^2>+<z^2>+2<x*y>+2<x*z>+2<y*z>)-1/2 with averages performed
+    3/2*(<x^2>^2+<y^2>^2+<z^2>^2+2<x*y>^2+2<x*z>^2+2<y*z>^2)-1/2 with averages performed
     over the complete vector
     
     S2=S2calc(vec)
     """
-    v=[vec.get('X'),vec.get('Y'),vec.get('Z')]
+    v=np.array([vec.get('X'),vec.get('Y'),vec.get('Z')])
+    v=v/np.sqrt((v**2).sum(axis=0))
     S2=np.zeros(np.shape(vec.get('X'))[1])
     for k in v:
         for m in v:

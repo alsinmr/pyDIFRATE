@@ -16,7 +16,7 @@ os.chdir('../r_class')
 from detectors import detect as dt
 os.chdir('../data')
 
-def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel=True,**kwargs):
+def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel=True,subS2=True,**kwargs):
     """
     Subsequent fitting is currently failing (I think), because we are later trying to 
     fit the detectors that result from the R2 exchange correction. Should have an 
@@ -77,8 +77,11 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     out.conf=conf
     
     
-    if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
+    if data.S2 is not None and subS2 and not(detect.detect_par['inclS2']):
         print('Subtracting S2')
+        subS2=True
+    else:
+        subS2=False
     
 
 #    "Set up parallel processing"
@@ -98,12 +101,7 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     if not(bounds):
         Y=list()
         for k in range(nb):
-            if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
-                R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
-            else:
-                R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
-            r=detect.r(bond=k)
-            r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
+            r,R,_,_=fit_prep(k,data,detect,subS2)
                         
             nstd=norm.ppf(1/2+conf/2)
             std=np.sqrt(np.sum(np.linalg.pinv(r)**2,axis=1))
@@ -116,35 +114,15 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
         "Series processing (only on specific user request)"
         Y=list()
         for k in range(nb):
-            rhoz=detect.rhoz(bond=k)
-            UB=rhoz.max(axis=1)
-            LB=rhoz.min(axis=1)
-            r=detect.r(bond=k)
-            
-            if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
-                R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
-            else:
-                R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
-            r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
+            r,R,UB,LB=fit_prep(k,data,detect,subS2)
             X=(r,R,LB,UB,conf,nmc)
             Y.append(para_fit(X))
-            print(k)
     else:
         "Here, we buildup up X with all the information required for each fit"
         "required: normalized data, normalized r, upper and lower bounds"
         X0=list()
         for k in range(0,nb):
-            rhoz=detect.rhoz(bond=k)
-            UB=rhoz.max(axis=1)
-            LB=rhoz.min(axis=1)
-            r=detect.r(bond=k)
-            
-            if data.S2 is not None and not('subS2' in kwargs and kwargs.get('subS2').lower()[0]=='n'):
-                R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/data.R_std[k,:]
-            else:
-                R=(data.R[k,:]-detect.R0in(k))/data.R_std[k,:]
-            r=r/np.repeat(np.transpose([data.R_std[k,:]]),r.shape[1],axis=1)
-            
+            r,R,UB,LB=fit_prep(k,data,detect,subS2)
             X0.append((r,R,LB,UB,conf,nmc))
         
         "Parallel processing (default)"
@@ -169,7 +147,12 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
         out.R_std[k,:]=Y[k][1]
         out.R_l[k,:]=Y[k][2]
         out.R_u[k,:]=Y[k][3]
-        Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])+detect.R0in(k)
+        if detect.detect_par['inclS2'] and data.S2 is not None:
+            R0in=np.concatenate((detect.R0in(k),[0]))
+            Rc0=np.dot(detect.r(bond=k),out.R[k,:])+R0in
+            Rc[k,:]=Rc0[:-1]
+        else:
+            Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])+detect.R0in(k)
 
     if save_input:
         out.Rc=Rc
@@ -190,6 +173,32 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     out.chi=np.sum((data.R-Rc)**2/(data.R_std**2),axis=1)
     
     return out
+
+def fit_prep(k,data,detect,subS2):
+    """
+    Function that prepares data for fitting (builds the R matrix), re-normalizes
+    the detector matrix, r, establishes bounds
+    """
+    rhoz=detect.rhoz(bond=k)
+    UB=rhoz.max(axis=1)
+    LB=rhoz.min(axis=1)
+    r=detect.r(bond=k)
+    
+    if data.S2 is not None and detect.detect_par['inclS2']:
+        R0=np.concatenate((data.R[k,:]-detect.R0in(k),[1-data.S2[k]]))
+        Rstd=np.concatenate((data.R_std[k,:],[1-data.S2_std[k]]))
+        R=R0/Rstd
+    elif data.S2 is not None and subS2:
+        Rstd=data.R_std[k,:]
+        R=(data.R[k,:]-data.S2[k]-detect.R0in(k))/Rstd
+    else:
+        Rstd=data.R_std[k,:]
+        R=(data.R[k,:]-detect.R0in(k))/Rstd
+        
+    r=r/np.repeat(np.transpose([Rstd]),r.shape[1],axis=1)
+    
+    return r,R,UB,LB
+    
 
 
 def para_fit(X):
@@ -306,3 +315,62 @@ def dist_opt(X):
     Ropt=np.dot(rhoz[:-1],dist)*R_std
     
     return Ropt,dist
+
+#%% Function to fit a set of detector responses to a single correlation time
+def fit2tc(data,df=2,sens=None):
+    """
+    Takes a data object, and corresponding sensitivity (optional if included in
+    data), and fits each set of detector responses to a single correlation time
+    (mono-exponential fit). Returns the log-correlation time for each data entry,
+    corresponding amplitudes, error, and back-calculated values
+    
+    One may change the fitting function:
+        df=1:   exp(-t/tc)
+        df=2:   A*exp(-t/tc)
+        df=3:   A*exp(-t/tc)+C
+    
+    Note- in the case of df=3, C is *not* calculated. Instead, any detector that
+    reaches its max (test:>.95*max(rhoz)) at the last correlation time is omitted 
+    from the fit. Its predicted value is still included in Rc
+        
+    z,A,err,Rc=fit2tc(data,df=2,sens=None)
+    """
+    
+    if sens is None:
+        sens=data.sens
+        
+    err=list()
+    z=list()
+    A=list()
+    rho_c=list()
+    for k,(rho,rho_std) in enumerate(zip(data.R,data.R_std)):
+        rhoz=sens.rhoz(k)
+
+        
+        y=rho/rho_std
+        x=(rhoz.T/rho_std).T
+        if df==3:
+            i=rhoz[:,-1]/rhoz.max(axis=1)<.95
+            y=y[i]
+            x=x[i]
+        
+        if df!=1:
+            beta=(((1/(x**2).sum(axis=0))*x).T*y).sum(axis=1)
+        else:
+            beta=1
+
+        err0=(((beta*x).T-y)**2).sum(axis=1)
+        
+        i=np.argmin(err0)
+        err.append(err0[i])
+        z.append(sens.z()[i])
+        if df!=1:
+            rho_c.append(rhoz[:,i]*beta[i])
+            A.append(beta[i])
+        else:
+            rho_c.append(rhoz[:,i])
+            A.append(1)
+    
+    return np.array(z),np.array(A),np.array(err),np.array(rho_c)
+        
+    

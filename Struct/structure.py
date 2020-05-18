@@ -87,6 +87,8 @@ class molecule(object):
         """
         if Type is None:
             print_frame_info()
+        elif len(kwargs)==0:
+            print_frame_info(Type)
         else:
             if self._vf is None: self._vf=list()
             
