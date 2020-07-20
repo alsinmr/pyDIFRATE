@@ -135,9 +135,8 @@ def load_NMR(filename):
         else:
             for k in range(data.sens.info.shape[1]):
                 if data.sens.info.loc['stdev'][k] is None:
-                    data.sens.info.loc['stdev'][k]=np.median(data.R[:,k])
-                    
-            
+                    data.sens.info.loc['stdev'][k]=np.median(data.R_std[:,k]/data.R[:,k])
+                           
     return data
 
 def load_NMR_info(filename):

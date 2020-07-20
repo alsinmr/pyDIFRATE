@@ -158,7 +158,7 @@ def avg_data(data_in,weighted=True,weight=None):
     return data
 
 #%% Appends data classes together
-def append_data(data_in,labels=None):
+def append_data(data_in,labels=None,index=None):
     """
     Appends a list of data objects. A second argument, labels, may contain a list,
     the same length as data_in, which will be appended to the existing labels 
@@ -167,6 +167,8 @@ def append_data(data_in,labels=None):
     One may also input a dictionary, containing data objects. In this case, the
     keys will be used as labels, unless the user inputs their own labels (or sets
     labels='' to override this functionality)
+    
+    One may  re-sort the result by providing an index to re-order all data. 
     """
     
     if isinstance(data_in,dict):
@@ -180,36 +182,74 @@ def append_data(data_in,labels=None):
     
     sign=sens_sign_check(data,data_in)
     
-    R=list()
-    R_std=list()
-    R_u=list()
-    R_l=list()
-    Rc=list()
+    
+    flds=['R','R_std','R_u','R_l','Rc','Rin','Rin_std','S2']
+    R=dict()
     label=list()
+    for f in flds:R[f]=list()
     
     for k,(d,s) in enumerate(zip(data_in,sign)):
-        R.append(s*d.R)
-        R_std.append(d.R_std)
-        if d.Rc is not None:
-            Rc.append(d.Rc)
-        if d.R_u is not None:
-            R_u.append(d.R_u)
-        if d.R_l is not None:
-            R_l.append(d.R_l)
+        for f in flds:
+            x=getattr(d,f)
+            if x is not None: R[f].append(x)
         if labels is None:
             label.append(d.label)
         else:
             label.append([str(labels[k])+str(l) for l in d.label])
-            
-    data.R=np.concatenate(R,axis=0)
-    data.R_std=np.concatenate(R_std,axis=0)
-    if len(Rc)>0:
-        data.Rc=np.concatenate(Rc,axis=0)
-    if len(R_u)>0:
-        data.R_u=np.concatenate(R_u,axis=0)
-    if len(R_l)>0:
-        data.R_l=np.concatenate(R_l,axis=0)
+    
+    
+    for f in flds:
+        if len(R[f])!=0:
+            setattr(data,f,np.concatenate(R[f],axis=0))
     data.label=np.concatenate(label,axis=0)
+    
+    if index is not None:
+        for f in flds:
+            x=getattr(data,f)            
+            if x is not None:
+                x0=np.zeros(x.shape)
+                x0[index]=x
+                setattr(data,f,x0)
+        if data.label is not None:
+            lbl=np.empty(data.label.shape,dtype=data.label.dtype)
+            lbl[index]=data.label
+            data.label=lbl
+#    R=list()
+#    R_std=list()
+#    R_u=list()
+#    R_l=list()
+#    Rc=list()
+#    Rin=list()
+#    Rin_std=list()
+#    label=list()
+    
+#    for k,(d,s) in enumerate(zip(data_in,sign)):
+#        R.append(s*d.R)
+#        R_std.append(d.R_std)
+#        if d.Rc is not None:
+#            Rc.append(d.Rc)
+#        if d.R_u is not None:
+#            R_u.append(d.R_u)
+#        if d.R_l is not None:
+#            R_l.append(d.R_l)
+#        if d.Rin is not None:
+#            Rin.append(d.Rin)
+#        if d.Rin_std is not None:
+#            
+#        if labels is None:
+#            label.append(d.label)
+#        else:
+#            label.append([str(labels[k])+str(l) for l in d.label])
+            
+#    data.R=np.concatenate(R,axis=0)
+#    data.R_std=np.concatenate(R_std,axis=0)
+#    if len(Rc)>0:
+#        data.Rc=np.concatenate(Rc,axis=0)
+#    if len(R_u)>0:
+#        data.R_u=np.concatenate(R_u,axis=0)
+#    if len(R_l)>0:
+#        data.R_l=np.concatenate(R_l,axis=0)
+#    data.label=np.concatenate(label,axis=0)
     
     return data
     

@@ -16,6 +16,8 @@ import DynamicModels as dm
 import os
 os.chdir('../Struct')
 import structure
+os.chdir('../plotting')
+from plotting_funs import plot_rhoz
 os.chdir('../r_class')
 #import detectors
 from scipy.interpolate import interp1d as interp
@@ -419,59 +421,69 @@ class model(object):
         else:
             return np.log10(t)+np.log10(tau)-np.log10(t+tau)
         
-    def plot_eff(self,exp_num=None,mdl_num=0,bond=None,ax=None,**kwargs):
-        
+#    def plot_eff(self,exp_num=None,mdl_num=0,bond=None,ax=None,**kwargs):
+#        
+#        if bond==-1:
+#            bond=None
+#        
+#        a,b=self._rho_eff(exp_num,mdl_num,bond)
+#        
+#        if bond is None and np.size(a.shape)==3:
+#            maxi=np.max(a,axis=0)
+#            mini=np.min(a,axis=0)
+#            a=np.mean(a,axis=0)
+#            pltrange=True
+#            maxi=maxi.T
+#            mini=mini.T
+#        else:
+#            pltrange=False
+#        
+#        a=a.T
+#
+#        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
+#            norm=np.max(np.abs(a),axis=0)
+#            a=a/np.tile(norm,[np.size(self.tc()),1])      
+#            
+#            if pltrange:
+#                maxi=maxi/np.tile(norm,[np.size(self.tc()),1])
+#                mini=mini/np.tile(norm,[np.size(self.tc()),1])
+#        
+#        if ax==None:
+#            fig=plt.figure()
+#            ax=fig.add_subplot(111)
+#            hdl=ax.plot(self.z(),a)
+##            hdl=plt.plot(self.z(),a)
+##            ax=hdl[0].axes
+#        else:
+#            hdl=ax.plot(self.z(),a)
+#            
+#        if pltrange:
+#            x=np.concatenate([self.z(),self.z()[-1::-1]],axis=0)
+#            for k in range(0,a.shape[1]):
+#                y=np.concatenate([mini[:,k],maxi[-1::-1,k]],axis=0)
+#                xy=np.concatenate(([x],[y]),axis=0).T
+#                patch=Polygon(xy,facecolor=hdl[k].get_color(),edgecolor=None,alpha=0.5)
+#                ax.add_patch(patch)
+#            
+#            
+#        ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
+#        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
+#            ax.set_ylabel(r'$R$ (normalized)')
+#        else:
+#            ax.set_ylabel(r'$R$ / s$^{-1}$')
+#        ax.set_xlim(self.z()[[0,-1]])
+#        ax.set_title('Sensitivity for Model #{0}'.format(mdl_num))
+#        
+#        return hdl
+            
+    def plot_eff(self,exp_num=None,mdl_num=0,bond=None,ax=None,norm=False,**kwargs):
         if bond==-1:
             bond=None
-        
-        a,b=self._rho_eff(exp_num,mdl_num,bond)
-        
-        if bond is None and np.size(a.shape)==3:
-            maxi=np.max(a,axis=0)
-            mini=np.min(a,axis=0)
-            a=np.mean(a,axis=0)
-            pltrange=True
-            maxi=maxi.T
-            mini=mini.T
-        else:
-            pltrange=False
-        
-        a=a.T
-
-        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
-            norm=np.max(np.abs(a),axis=0)
-            a=a/np.tile(norm,[np.size(self.tc()),1])      
             
-            if pltrange:
-                maxi=maxi/np.tile(norm,[np.size(self.tc()),1])
-                mini=mini/np.tile(norm,[np.size(self.tc()),1])
-        
-        if ax==None:
-            fig=plt.figure()
-            ax=fig.add_subplot(111)
-            hdl=ax.plot(self.z(),a)
-#            hdl=plt.plot(self.z(),a)
-#            ax=hdl[0].axes
-        else:
-            hdl=ax.plot(self.z(),a)
-            
-        if pltrange:
-            x=np.concatenate([self.z(),self.z()[-1::-1]],axis=0)
-            for k in range(0,a.shape[1]):
-                y=np.concatenate([mini[:,k],maxi[-1::-1,k]],axis=0)
-                xy=np.concatenate(([x],[y]),axis=0).T
-                patch=Polygon(xy,facecolor=hdl[k].get_color(),edgecolor=None,alpha=0.5)
-                ax.add_patch(patch)
-            
-            
-        ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
-        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
-            ax.set_ylabel(r'$R$ (normalized)')
-        else:
-            ax.set_ylabel(r'$R$ / s$^{-1}$')
-        ax.set_xlim(self.z()[[0,-1]])
+        hdl=plot_rhoz(self,index=exp_num,mdl_num=mdl_num,norm=norm,ax=ax,**kwargs)
+        ax=hdl[0].axes
         ax.set_title('Sensitivity for Model #{0}'.format(mdl_num))
-        
+           
         return hdl
     
     def _set_plot_attr(self,hdl,**kwargs):

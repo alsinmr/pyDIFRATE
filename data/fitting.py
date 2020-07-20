@@ -23,7 +23,6 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     automatic mechanism to discard these in later fits.
     """
     
-    
     if detect is None:
         if data.detect is None:
             print('A detect object must be provided in the input or as part of the data object')
@@ -44,7 +43,7 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     out.sens._disable()    #Clear the input sensitivities (restricts ability to further edit sens)
     
     "Delete the estimation of R2 due to exchange if included in the data here"
-    if hasattr(data.sens,'detect_par') and data.sens.detect_par['R2_ex_corr'][0].lower()=='y':
+    if hasattr(data.sens,'detect_par') and data.sens.detect_par['R2_ex_corr']:
         R=data.R.copy()[:,:-1]
         R_std=data.R_std.copy()[:,:-1]
         data=data.copy('shallow')    #We don't want to edit the original data object by deleting some of the R data
@@ -186,7 +185,7 @@ def fit_prep(k,data,detect,subS2):
     
     if data.S2 is not None and detect.detect_par['inclS2']:
         R0=np.concatenate((data.R[k,:]-detect.R0in(k),[1-data.S2[k]]))
-        Rstd=np.concatenate((data.R_std[k,:],[1-data.S2_std[k]]))
+        Rstd=np.concatenate((data.R_std[k,:],[data.S2_std[k]]))
         R=R0/Rstd
     elif data.S2 is not None and subS2:
         Rstd=data.R_std[k,:]
@@ -202,7 +201,13 @@ def fit_prep(k,data,detect,subS2):
 
 
 def para_fit(X):
-    "Function to calculate results in parallel"
+    """Function to calculate results in parallel
+    Input is the r matrix, after normalization by the standard deviations, R/R_std,
+    such that the data is normalized to a standard deviation of 1, upper and
+    lower bounds, the desired confidence interval (.95, for example), and finally
+    the number of Monte-Carlo repetitions to perform (if set to 0, performs
+    linear propagation-of-erro) 
+    """
     Y=lsq(X[0],X[1],bounds=(X[2],X[3]))
     rho=Y['x']
     Rc=Y['fun']+X[1]
@@ -229,7 +234,7 @@ def para_fit(X):
     return rho,std,l,u
 
 #%% Function to force a data object to be fully consistent with a positive dynamics distribution
-def opt2dist(data,sens=None,parallel=True,return_dist=False,in_place=False,**kwargs):
+def opt2dist(data,sens=None,parallel=True,return_dist=False,in_place=False,detect=None,**kwargs):
     """
     Takes a distribution and sensitivity object (usually contained in the data
     object, but can be provided separately), and for each bond/residue, optimizes
@@ -240,7 +245,9 @@ def opt2dist(data,sens=None,parallel=True,return_dist=False,in_place=False,**kwa
     description of dynamics. However, its use makes the detector responses more
     physically consistent
     
-    opt_data=opt2dist(data,sens=None,para=True,return_dist=False,in_place=False)
+    If the original detector object is provided, the original data fit will be recalculated
+    
+    opt_data=opt2dist(data,sens=None,para=True,return_dist=False,in_place=False,detect=None)
     
     returns 0, 1, or 2 values, depending on the setting of return_dist and in_place
     
@@ -275,7 +282,21 @@ def opt2dist(data,sens=None,parallel=True,return_dist=False,in_place=False,**kwa
     for k,y in enumerate(Y):
         out.R[k]=y[0]
         dist.append(y[1])
-        
+
+    "If these are detector responses, we'll recalculate the data fit if detector object provided"  
+    if detect is not None:
+        Rc=list()
+        if detect.detect_par['inclS2']:
+            for k in range(out.R.shape[0]):
+                R0in=np.concatenate((detect.R0in(k),[0]))
+                Rc0=np.dot(detect.r(bond=k),out.R[k,:])+R0in
+                Rc.append(Rc0[:-1])
+        else:
+            for k in range(out.R.shape[0]):
+                Rc.append(np.dot(detect.r(bond=k),out.R[k,:])+detect.R0in(k))
+        out.Rc=np.array(Rc)
+    
+    
     "Output"
     if in_place and return_dist:
         return dist

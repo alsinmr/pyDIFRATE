@@ -5,7 +5,8 @@ Created on Thu Apr 11 20:32:25 2019
 
 @author: albertsmith
 """
-
+import os
+cwd=os.getcwd()
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -18,6 +19,9 @@ from scipy.optimize import linprog
 from scipy.optimize import lsq_linear as lsqlin
 import multiprocessing as mp
 import warnings
+os.chdir('../plotting')
+import plotting_funs as pf
+os.chdir(cwd)
 
 warnings.filterwarnings("ignore",r"Ill-conditioned matrix*")
 warnings.filterwarnings("ignore",r"Solving system with option*")
@@ -27,8 +31,12 @@ class detect(mdl.model):
         """ We initiate the detectors class by giving it a sens/Ctsens class, from
         which it extracts the specified experiments and models for each 
         experiment.
-        """
         
+        I've replaced the normalization here with 1/max of the sensitivity, and
+        then using a relative standard deviation, as opposed to the absolute 
+        standard deviation. The question is- do we want to minimize the 
+        """
+
         self.n=None;
         self._class='detector'
         self._origin=sens._origin
@@ -186,15 +194,22 @@ class detect(mdl.model):
                          'NegAllow':0.5,
                          'R2_ex_corr':False} 
         
-        
+
+
+        ####################Critical edits################        
         "Pass the normalization"
         a=self.info_in.loc['stdev'].to_numpy()   
-        "Replace None with max of abs of sensitivity"
+        b=np.max(np.abs(np.mean(self.__R,axis=0)),axis=-1)  #Mean over bonds, absolute value, max of abs val.
+        b[b==0]=1 #Doesn't really help- zeros in sensitivity doesn't work in SVD
+        """
+        IMPORTANT EDITS HERE. Make Sure to document
+        """
+        "Replace None with 1"
         index=a==None
-        b=np.max(np.abs(np.mean(self.__R,axis=0)),axis=-1)
-        a[index]=b[index]
-        self.norm=np.divide(1,a).astype('float64')
-
+        a[index]=1
+        self.norm=np.divide(1,a*b).astype('float64')
+#        self.norm=np.divide(1,a).astype('float64')
+        ##################################################
         "Storage for the detection vectors"
         self.__r=[None]*nb   #Store the detection vectors
         self.__rho=[None]*nb   #Store the detector sensitivities
@@ -281,6 +296,9 @@ class detect(mdl.model):
 #%% Generate r matrix for fitting tests (detector sensitivies are not optimized- and not well-separated)
     def r_no_opt(self,n,bond=None,**kwargs):
         
+        self.detect_par['inclS2']=False
+        self.detect_par['R2_ex_corr']=False
+        
         self.n=n
         nb=self._nb()
 
@@ -308,6 +326,13 @@ class detect(mdl.model):
 
             for k in bond:
                 U,S,Vt,VCSA=self.getSVD(k,n)
+                 #Here, we try to control the sign returned for Vt 
+                 #(it would be nice if repeated runs of r_no_opt returned the same results)
+                sgn=np.sign(Vt.sum(axis=1))
+                sgn[sgn==0]=Vt[sgn==0,:].max(axis=1)
+                Vt=(sgn*Vt.T).T
+                VCSA=(sgn*VCSA.T).T
+                U=sgn*U
                 self.__r[k]=np.multiply(np.repeat(np.transpose([1/self.norm]),n,axis=1),np.dot(U,np.diag(S)))
                 self.__rho[k]=Vt
                 self.__rhoCSA[k]=VCSA
@@ -321,7 +346,7 @@ class detect(mdl.model):
             self.__r_info(None,**kwargs)
 
 #%% Automatic generation of detectors from a set of sensitivities                 
-    def r_auto(self,n,bond=None,parallel=True,**kwargs):
+    def r_auto(self,n,bond=None,parallel=True,NegAllow=None,**kwargs):
         self.n=n
         "Get input or defaults"
         if 'inclS2' in kwargs:
@@ -329,12 +354,12 @@ class detect(mdl.model):
             self.detect_par['inclS2']=inclS2
         else:
             inclS2=self.detect_par['inclS2']
-        if 'Neg' in kwargs:
-            Neg=kwargs['Neg']
-            self.detect_par['NegAllow']=Neg
-        else:
+
+        if NegAllow is None:
             Neg=self.detect_par['NegAllow']
-          
+        else:
+            Neg=NegAllow
+            self.detect_par['NegAllow']=Neg
             
         nb=self._nb()
         "If bond set to -1, run through all orientations."
@@ -621,10 +646,8 @@ class detect(mdl.model):
                 Y.append((Vt,target))
                 
             "Default is parallel processing"
-            if not(parallel):
-                T=list()
-                for k in Y:
-                    T.append(lsqlin_par(k))
+            if not(parallel) or len(Y)==1:
+                T=[lsqlin_par(k) for k in Y]
             else:
                 with mp.Pool() as pool:
                     T=pool.map(lsqlin_par,Y)
@@ -813,7 +836,7 @@ class detect(mdl.model):
         passing the detector object as a sensitivity object resulting from a fit.
         The reasoning is that the sensitivity stored in a fit should not be changed
         for any reason, since the fit has already been performed and therefore
-        the detector sensitivities should not be changes (hidden, only intended
+        the detector sensitivities should not be changed (hidden, only intended
         for internal use)
         
         Note, there is an added benefit that detectors generated for direct 
@@ -835,9 +858,10 @@ class detect(mdl.model):
         self.SVD=None #Stores SVD results
         self.SVDavg=None
             
-        self.MdlPar_in=None
-        self.info_in=None
-        
+#        self.MdlPar_in=None
+        if self.info_in.shape[1]>10000: #We cleared because the info_in is huge for MD data
+            self.info_in=None #Commenting this. Why did we clear these? 
+
         self.norm=None
         
     def __r_norm(self,bond=None,**kwargs):
@@ -1295,65 +1319,17 @@ class detect(mdl.model):
         
         return rhoz
     
-    def plot_rhoz(self,bond=None,rho_index=None,ax=None,**kwargs):
-        "Create an axis if not given"
-        if ax is None:
-            fig=plt.figure()
-            ax=fig.add_subplot(111)
-            
-        nb=self._nb()
-        if nb==1:
-            bond=0
-            
-        if rho_index is None:
-            "Get all rho"
-            if np.size(bond)==1:
-                nd=self.rhoz(bond).shape[-2]
-            else:
-                nd=self.rhoz(bond[0]).shape[-2]
-            if hasattr(self,'detect_par') and self.detect_par['R2_ex_corr']:
-                nd=nd-1
-            rho_index=np.arange(0,nd)
-            
-#            print(nd)
-        else: 
-            rho_index=np.array(rho_index)
-            nd=np.size(rho_index)
-#            print(nd)
-            
-        if bond==-1:
-            a=self.rhoz(bond=None).T
-        else:                    
-            a=self.rhoz(bond).T
-        a=a[:,rho_index]
-
-        hdl=ax.plot(self.z(),a)
-        
-        if bond is not None and np.size(bond)==1 and np.atleast_1d(bond)[0]==-1:
-            bond=None
-            ntc=self.tc().size
-            maxi=np.zeros([nd,ntc])
-            mini=1e12*np.ones([nd,ntc])
-            for k in range(0,nb):
-                maxi=np.max(np.concatenate(([maxi],[self.rhoz(k)[rho_index]]),axis=0),axis=0)
-                mini=np.min(np.concatenate(([mini],[self.rhoz(k)[rho_index]]),axis=0),axis=0)
-
-            x=np.concatenate((self.z(),self.z()[-1::-1]),axis=0)              
-            for k in rho_index:
-                y=np.concatenate((mini[k,:],maxi[k,-1::-1]),axis=0)
-                xy=np.concatenate(([x],[y]),axis=0).T
-                patch=Polygon(xy,facecolor=hdl[k].get_color(),alpha=0.5)
-                
-                ax.add_patch(patch)
-        
-        self._set_plot_attr(hdl,**kwargs)
-        
-        ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
+    def plot_rhoz(self,bond=None,rho_index=None,ax=None,norm=False,**kwargs):
+        """
+        Plots the sensitivities. Options are to specify the bond, the rho_index,
+        the 
+        """
+        hdl=pf.plot_rhoz(self,bond=bond,index=rho_index,ax=ax,norm=norm,**kwargs)
+        ax=hdl[0].axes
         ax.set_ylabel(r'$\rho_n(z)$')
-        ax.set_xlim(self.z()[[0,-1]])
-        
-        
+        ax.set_title('Detector Sensitivities')
         return hdl
+        
     
     def plot_r_opt(self,fig=None):
         if fig is None:
@@ -1391,44 +1367,16 @@ class detect(mdl.model):
         
         
         
-    def plot_Rc(self,bond=None,exp_num=None,ax=None,**kwargs):
-        nb=self._nb()
-        if nb==1:
-            bond=0
-                    
-        a=self.Rin(bond).T
-        b=self.Rc(bond).T
+    def plot_Rc(self,exp_num=None,norm=True,bond=None,ax=None):
+        """
+        Plots the input sensitivities compared to their reproduction by fitting to
+        detectors. Options are to specifiy experiments (exp_num), to normalize (norm),
+        to specify a specific bond (bond), and a specific axis to plot onto (ax). 
         
+        plot_Rc(exp_num=None,norm=True,bond=None,ax=None)
+        """
         
-        
-        if np.size(exp_num)>1 or exp_num!=None:
-            a=a[:,exp_num]
-            b=b[:,exp_num]
-        
-        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
-            norm=np.max(np.abs(a),axis=0)
-            a=a/np.tile(norm,[np.size(self.tc()),1]) 
-            b=b/np.tile(norm,[np.size(self.tc()),1])
-        
-        
-        if ax is None:
-            fig=plt.figure()
-            ax=fig.add_subplot(111)
-            hdl1=ax.plot(self.z(),a,'k')
-            hdl2=ax.plot(self.z(),b,'r--')
-#            hdl1=plt.plot(self.z(),a,'k')
-#            hdl2=plt.plot(self.z(),b,'r--')
-#            ax=hdl1[0].axes
-        else:
-            hdl1=ax.plot(self.z(),a,'k')
-            hdl2=ax.plot(self.z(),b,'r--')
-            
-        ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
-        ax.set_ylabel(r'$R(z) / $s$^{-1}$')
-        ax.set_xlim(self.z()[[0,-1]])
-        ax.set_title('Rate Constant Reproduction')
-        
-        hdl=hdl1+hdl2
+        hdl=pf.plot_Rc(sens=self,exp_num=exp_num,norm=norm,bond=bond,ax=ax)
         
         return hdl
 
@@ -1453,7 +1401,9 @@ def svd0(X,n):
     else:
         U,S,Vt=svd(X)       #But, typically better results from full calculation
         U=U[:,0:np.size(S)] #Drop all the empty vectors
+        Vt=Vt[0:np.size(S),:]
     
+   
     return U,S,Vt
 
 

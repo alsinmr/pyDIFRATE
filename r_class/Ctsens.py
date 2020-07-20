@@ -115,8 +115,16 @@ class Ct(mdl.model):
             vec=1/np.sqrt(np.arange(nt,0,-1))
             stdev=vec/vec[-1]
             stdev[0]=1e-6
-        
         a.update({'stdev' : stdev})
+        
+        if 'median_val' in kwargs:
+            median_val=kwargs.get('median_val')
+            if np.size(median_val)==1:
+                median_val=np.ones(nt)*median_val
+        else:
+            median_val=np.ones(nt)
+        a.update({'median_val' : median_val})
+        
         self.info=pd.DataFrame.from_dict(a).T        
         
         if 'S2' in kwargs:

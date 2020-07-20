@@ -174,6 +174,10 @@ class data(object):
                 self.R=np.delete(self.R,exp_num,axis=1)
                 if self.R_std is not None:
                     self.R_std=np.delete(self.R_std,exp_num,axis=1)
+                if self.R_u is not None:
+                    self.R_u=np.delete(self.R_u,exp_num,axis=1)
+                if self.R_l is not None:
+                    self.R_l=np.delete(self.R_l,exp_num,axis=1)
 
                 if self.sens is not None:
                     self.sens.del_exp(exp_num)
@@ -182,9 +186,31 @@ class data(object):
                 print('Warning: exp_num {0} was not found'.format(exp_num))
                 
         
-
+#%% Option for deleting a data point or points
+    def del_data_pt(self,index):
+        """
+        Deletes a particular residue number (or list of number), given their 
+        index (or indices). Deletes values out of R, R_std, R_l, R_u, Rc, Rin, 
+        and Rin_std.
         
+        obj.del_data_pt(index)
         
+        Warning: This will not edit the selections in the sensitivity's molecule
+        object, or delete bond-specific sensitivities
+        """
+        
+        if np.size(index)>1:
+            index=np.atleast_1d(index)
+            index[::-1].sort()
+            for m in index:
+                self.del_data_pt(m)
+        else:
+            attr=['R','R_l','R_u','R_std','Rc','Rin','Rin_std','label']
+            for at in attr:
+                x=getattr(self,at)
+                if x is not None:
+                    setattr(self,at,np.delete(x,index,axis=0))
+                
 #%% Run fit_data from the object     
     def fit(self,detect=None,**kwargs):
         if detect is None:
@@ -292,7 +318,7 @@ class data(object):
 
         return out
     
-    def plot_rho(self,fig=None,plot_sens=True,index=None,rho_index=None,errorbars=False,**kwargs):
+    def plot_rho(self,fig=None,plot_sens=True,index=None,rho_index=None,errorbars=False,style='plot',**kwargs):
         """
         Plots the full series of detector responses
         Arguments:
@@ -301,9 +327,10 @@ class data(object):
             index: Specify which residues to plot
             rho_index: Specify which detectors to plot
             errobars (True/False): Display error bars
+            style ('p'/'s'/'b'): Plot style (line plot, scatter plot, bar plot)
             **kwargs: Plotting arguments (passed to plotting functions)
         """
-        return pf.plot_rho_series(self,fig,plot_sens,index,rho_index,errorbars,**kwargs)
+        return pf.plot_rho_series(self,fig,plot_sens,index,rho_index,errorbars,style,**kwargs)
             
     def plot_cc(self,det_num,cutoff=None,ax=None,norm=True,index=None,**kwargs):
         if np.size(self.Rcc)==0:
@@ -327,7 +354,36 @@ class data(object):
             ax.set_title(r'Cross correlation for $\rho_{' + '{}'.format(det_num) + '}$')   
         
         return ax
-           
+      
+    def plot_fit(self,errorbars=True,index=None,exp_index=None,fig=None,ax=None):
+        """
+        Plots the fit quality of the input data. This produces bar plots with 
+        errorbars for the input data and scatter points for the fit, in the case
+        of experimental data. If correlation functions are being fit, then
+        line plots (without errorbars) are used
+        
+        One may specify the residue index and also the index of experiments to
+        be plotted
+        
+        plot_fit(errorbars=True,index=None,exp_index=None,fig=None,ax=None)
+        """
+        
+        "Return if data missing"
+        if self.Rc is None:
+            print('data object is not a fit or calculated values are not stored')
+            return
+        
+        info=self.sens.info_in
+        
+        if 't' in info.index.values:
+            ax=pf.plot_Ct_fit(info.loc['t'].to_numpy(),self.Rin,self.Rc)
+        else:
+            if errorbars:
+                ax=pf.plot_fit(self.label,self.Rin,self.Rc,self.Rin_std,info,index,exp_index,fig,ax)
+            else:
+                ax=pf.plot_fit(self.label,self.Rin,self.Rc,None,info,index,exp_index,fig,ax)
+        
+        return ax
                 
     def draw_cc3D(self,bond,det_num=None,chain=None,fileout=None,scaling=None,norm='y',**kwargs):
         "bond is the user-defined label! Not the absolute index..."

@@ -15,6 +15,8 @@ import sens
 import os
 os.chdir('../tools')
 from DRtools import dipole_coupling
+os.chdir('../plotting')
+from plotting_funs import plot_rhoz
 os.chdir('../r_class')
 
 class rates(mdl.model):  
@@ -48,7 +50,8 @@ class rates(mdl.model):
                     self.__tc=np.power(10,kwargs.get('z'))
                 "Allow users to input z instead of tc"
             else:
-                self.__tc=np.logspace(-14,-3,200)
+                self.__tc=np.logspace(-14,-2,200)
+                
         elif np.size(tc)==3:
             self.__tc=np.logspace(np.log10(tc[0]),np.log10(tc[1]),tc[2])
         else:
@@ -83,56 +86,67 @@ class rates(mdl.model):
         "Here we feed in all the information on the experiments"
         self.new_exp(**kwargs)
     
-    def new_exp(self,**kwargs):
-        "Count how many experiments are given"
-        ne=0
-        for k in self.__exper:
-            if k in kwargs:
-                ne=np.max([ne,np.size(kwargs.get(k))])
+    def new_exp(self,info=None,**kwargs):
+        """Adds new experiments to a sensitivity object. Options are to input 
+        info as a pandas array, with the appropriate values (usually from another)
+        sensitivity object), or list the variables directly. 
         
-        "Add a None type element in self.__R for each new experiment"
-        for k in range(0,ne):
-            self.__R.append(None)   
-            self.__RCSA.append(None)
+        Experiment: Type, v0, v1, vr, offset, stdev. These may be lists of values,
+        in which case multiple experiments will be created.
         
-        "Move all input variables to __sys and __exp"
-        "Defaults that don't depend on the observed nucleus can be set here"
-        self.__exp=dict()
-        for k in self.__exper:
-            if k in kwargs:
-                self.__exp.update({k : kwargs.get(k)})
-            else:
-                self.__exp.update({k : None})
+        Spin system: Nuc, Nuc1, dXY, CSA, QC, eta, theta. These must be the same
+        for all simultaneously entered experiments. Nuc1 and dXY may have multiple
+        values if the Nuc is coupled to multiple other nuclei.
         
-        self.__sys=dict()
-        for k in self.__spinsys:
-            if k in kwargs:
-                self.__sys.update({k : kwargs.get(k)})
-            elif k=='Nuc':
-                self.__sys.update({k : '15N'})
-            else:
-                self.__sys.update({k : None})
+        """
+        
 
         
-        self.__cleanup(ne)
-        self.__set_defaults(ne)
-          
-        "Copy all experiments from a previous rates variable, input as info"
-        if 'info' in kwargs and isinstance(kwargs.get('info'),sens.rates):
-            info0=kwargs.get('info').info
-        else:
-            info0=kwargs.get('info')
+        if info is None:      
+            "Count how many experiments are given"
+            ne=0
+            for k in self.__exper:
+                if k in kwargs:
+                    ne=np.max([ne,np.size(kwargs.get(k))])
             
-
-        
-
-        "Create the new pandas array"
-        info=pd.concat([pd.DataFrame.from_dict(self.__exp),pd.DataFrame.from_dict(self.__sys)],axis=1)
-        
-        try: #I don't like using try....but not sure what to do here
-            info=pd.concat([info0,info.T],axis=1,ignore_index=True)
-        except:
-            info=info.T
+            "Add a None type element in self.__R for each new experiment"
+            for k in range(0,ne):
+                self.__R.append(None)   
+                self.__RCSA.append(None)
+            
+            "Move all input variables to __sys and __exp"
+            "Defaults that don't depend on the observed nucleus can be set here"
+            self.__exp=dict()
+            for k in self.__exper:
+                if k in kwargs:
+                    self.__exp.update({k : kwargs.get(k)})
+                else:
+                    self.__exp.update({k : None})
+            
+            self.__sys=dict()
+            for k in self.__spinsys:
+                if k in kwargs:
+                    self.__sys.update({k : kwargs.get(k)})
+                elif k=='Nuc':
+                    self.__sys.update({k : '15N'})
+                else:
+                    self.__sys.update({k : None})
+    
+            
+            self.__cleanup(ne)
+            self.__set_defaults(ne)
+            
+            "Create the new pandas array"
+            info=pd.concat([pd.DataFrame.from_dict(self.__exp),pd.DataFrame.from_dict(self.__sys)],axis=1).T
+        else:  
+            ne=info.shape[1]
+            for k in range(0,ne):
+                self.__R.append(None)   
+                self.__RCSA.append(None)       
+#        try: #I don't like using try....but not sure what to do here
+#            info=pd.concat([info0,info.T],axis=1,ignore_index=True)
+#        except:
+#            info=info.T
         
         if not isinstance(self.info,pd.DataFrame):
             self.info=info
@@ -299,14 +313,14 @@ class rates(mdl.model):
     def del_exp(self,exp_num):
         
         if np.size(exp_num)>1:
-            exp_num=np.atleast_1d(exp_num)
+            exp_num=np.array(np.atleast_1d(exp_num))
             exp_num[::-1].sort()    #Crazy, but this sorts exp_num in descending order
             "delete largest index first, because otherwise the indices will be wrong for later deletions"
             for m in exp_num:
                 self.del_exp(m)
         else:
             if np.ndim(exp_num)>0:
-                exp_num=exp_num[0]
+                exp_num=np.array(exp_num[0])
             self.info=self.info.drop(exp_num,axis=1)
             del self.__R[exp_num]
             del self.__RCSA[exp_num]
@@ -416,37 +430,53 @@ class rates(mdl.model):
         return R.copy()
     
     
-#%% Plot the rate constant sensitivites
-    def plot_R(self,exp_num=None,ax=None,**kwargs):
+##%% Plot the rate constant sensitivites
+#    def plot_R(self,exp_num=None,ax=None,**kwargs):
+#        
+#        if exp_num is None:
+#            exp_num=self.info.columns.values
+#            
+#        a=self.R(exp_num).T
+#        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
+#            norm=np.max(a,axis=0)
+#            a=a/np.tile(norm,[np.size(self.tc()),1])      
+#        
+#        if ax is None:
+#            fig=plt.figure()
+#            ax=fig.add_subplot(111)
+#            hdl=ax.plot(self.z(),a)
+##            ax=hdl[0].axes
+#        else:
+#            hdl=ax.plot(self.z(),a)
+#        
+#        self._set_plot_attr(hdl,**kwargs)
+#        
+#            
+#        ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
+#        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
+#            ax.set_ylabel(r'$R$ (normalized)')
+#        else:
+#            ax.set_ylabel(r'$R$ / s$^{-1}$')
+#        ax.set_xlim(self.z()[[0,-1]])
+#        ax.set_title('Rate Constant Sensitivity (no model)')
+#        
+#        return hdl
         
-        if exp_num is None:
-            exp_num=self.info.columns.values
-            
-        a=self.R(exp_num).T
-        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
-            norm=np.max(a,axis=0)
-            a=a/np.tile(norm,[np.size(self.tc()),1])      
+    def plot_R(self,exp_num=None,norm=False,ax=None,**kwargs):
+        """
+        Plots the sensitivites of the experiments. Default plots all experiments 
+        without normalization. Set norm=True to normalize all experiments to 1. 
+        Specify exp_num to only plot selected experiments. Set ax to specify the
+        axis on which to plot
         
-        if ax is None:
-            fig=plt.figure()
-            ax=fig.add_subplot(111)
-            hdl=ax.plot(self.z(),a)
-#            ax=hdl[0].axes
-        else:
-            hdl=ax.plot(self.z(),a)
-        
-        self._set_plot_attr(hdl,**kwargs)
-        
-            
-        ax.set_xlabel(r'$\log_{10}(\tau$ / s)')
-        if 'norm' in kwargs and kwargs.get('norm')[0].lower()=='y':
-            ax.set_ylabel(r'$R$ (normalized)')
-        else:
-            ax.set_ylabel(r'$R$ / s$^{-1}$')
-        ax.set_xlim(self.z()[[0,-1]])
-        ax.set_title('Rate Constant Sensitivity (no model)')
-        
+        plot_R(exp_num=None,norm=False,ax=None,**kwargs)
+        """
+        hdl=plot_rhoz(self,index=exp_num,norm=norm,ax=ax,**kwargs)
+        ax=hdl[0].axes
+        ax.set_ylabel(r'$R / s^{-1}$')
+        ax.set_title('Experimental Sensitivities')
         return hdl
+        
 
 #%% Return the names of the experiment and sys variables
     def retSpinSys(self):
