@@ -10,11 +10,16 @@ import os
 import numpy as np
 import MDAnalysis as md
 from shutil import copyfile
-os.chdir('../Struct')
-os.chdir('../chimera') 
 
 def chimera_path():
      return '/Applications/Chimera.app/Contents/MacOS/chimera'
+#    return '/Applications/ChimeraX-1.0.app/Contents/MacOS/ChimeraX'
+
+def run_command():
+    if len(chimera_path())>=8 and chimera_path()[-8:]=='ChimeraX':
+        return 'from chimerax.core.commands import run as rc\n'
+    else:
+        return 'from chimera import runCommand as rc\n'
 
 def get_path(filename):
     """This function opens a file for writing, putting it in the same folder as 
@@ -45,7 +50,7 @@ def open_chimera(mol,**kwargs):
         protein=False    
     
     with open(full_path,'w+') as f:
-        f.write('from chimera import runCommand as rc\n') #imports runCommand into python
+        f.write(run_command()) #imports runCommand into python
         f.write('try:\n')
         if 'model_id' in kwargs:
             WrCC(f,'open {0},{1}'.format(kwargs.get('model_id'),filename))
@@ -334,7 +339,7 @@ def chimera_setup(locs,value,fileout=None,style='pp',color_scheme=None,chain=Non
     
     with open(full_path,'w+') as f:
         f.write('import os\n')
-        f.write('from chimera import runCommand as rc\n')
+        f.write(run_command())
         f.write('try:\n')
         "Load scene if given"
         

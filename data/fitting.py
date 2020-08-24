@@ -368,12 +368,20 @@ def fit2tc(data,df=2,sens=None):
         rhoz=sens.rhoz(k)
 
         
-        y=rho/rho_std
-        x=(rhoz.T/rho_std).T
         if df==3:
-            i=rhoz[:,-1]/rhoz.max(axis=1)<.95
-            y=y[i]
-            x=x[i]
+            y=(rho-rhoz[:,-1])/rho_std
+            x=((rhoz.T-rhoz[:,-1])/rho_std).T
+            x=x[:,:-1]
+        else:
+            y=rho/rho_std
+            x=(rhoz.T/rho_std).T
+#        if df==3:
+#            j=rhoz[:,-1]/rhoz.max(axis=1)<.95
+#            jj=np.logical_not(j)
+#            y=y[j]
+#            x=x[j]
+
+
         
         if df!=1:
             beta=(((1/(x**2).sum(axis=0))*x).T*y).sum(axis=1)
@@ -385,8 +393,12 @@ def fit2tc(data,df=2,sens=None):
         i=np.argmin(err0)
         err.append(err0[i])
         z.append(sens.z()[i])
-        if df!=1:
+        if df==2:
             rho_c.append(rhoz[:,i]*beta[i])
+            A.append(beta[i])
+        elif df==3:
+            rho_c.append((rhoz[:,i]-rhoz[:,-1])*beta[i]+rhoz[:,-1])
+            
             A.append(beta[i])
         else:
             rho_c.append(rhoz[:,i])

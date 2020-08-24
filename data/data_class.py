@@ -26,6 +26,7 @@ class data(object):
 #%% Basic container for experimental and MD data
     def __init__(self,**kwargs):
         
+        self.vars=dict()    #Location for extra variables by name
         
         self.label=None
         self.chi=None
@@ -147,11 +148,25 @@ class data(object):
                     self.sens.molecule.set_selection()
             self.label=mol.label
     
-    def new_detect(self,**kwargs):
-        if 'sens' in kwargs:
-            self.detect=detect(kwargs.get('sens'),**kwargs)
+    def new_detect(self,mdl_num=None,sens=None,exp_num=None):
+        """
+        Creates a new detector object. Usually for updating the detectors after
+        a new model has been created (Typically, we create the data object
+        with the correct sensitivity object already in place, such that it 
+        doesn't make sens to update the detectors unless some model of motion
+        is changed. However, if this is not the case, then the detector object
+        may also need to be updated)
+        
+        data.detect(mdl_num=None,sens=None,exp_num=None)
+        
+        mdl_num and exp_num should either be the same length or mdl_num should
+        just have one element
+        """
+        
+        if sens is not None:
+            self.detect=detect(sens,exp_num=exp_num,mdl_num=mdl_num)
         else:
-            self.detect=detect(self.sens,**kwargs)
+            self.detect=detect(self.sens,exp_num=exp_num,mdl_num=mdl_num)
     
 #%% Option for deleting experiments
     def del_exp(self,exp_num):
@@ -584,53 +599,75 @@ class data(object):
             
         return out
         
-    def print2text(self,filename,conf='n',precision=4):
+    def print2text(self,filename,variables=['label','R','R_std'],precision=4):
         """
-        Prints R and R_std to a text file, specified by filename
-        data.print2text(filename)
-        Optionally can also retrun R_u and R_l, the confidence interval, by 
-        including a second argument, conf='y'
-        One may specify the precision of the output, precision=4 is default
+        Prints data to a text file, specified by filename. The user may specify
+        which variables to print (default: label, R, and R_std)
         """
         form='{0:.{1}f}'
-        with open(filename,'w+') as f:
+        
+        with open(filename,'w') as f:
             f.write('data')
-            f.write('\nlabel')
-            sz0=np.size(self.label)
-            for k in range(sz0):
-                f.write('\n{0}'.format(self.label[k]))
-            f.write('\nR')
-            sz0,sz1=self.R.shape
-            for k in range(sz0):
-                for m in range(sz1):
-                    if m==0:
-                        f.write('\n')
+            for v in variables:
+                f.write('\n'+v)
+                X=np.array(getattr(self,v))
+                if X.ndim==1:
+                    sz0=np.size(X)
+                    if isinstance(X[0],str):
+                        for k in range(sz0):
+                            f.write('\n'+X[k])
                     else:
-                        f.write('\t')   
-                    f.write(form.format(self.R[k,m],precision))
-            f.write('\nRstd')
-            for k in range(sz0):
-                for m in range(sz1):
-                    if m==0:
-                        f.write('\n')
-                    else:
-                        f.write('\t')   
-                    f.write(form.format(self.R_std[k,m],precision))
-            if conf[0].lower()=='y' and self.R_l is not None:
-                f.write('\nR_l, conf={0}'.format(self.conf))
-                for k in range(sz0):
-                    for m in range(sz1):
-                        if m==0:
-                            f.write('\n')
-                        else:
-                            f.write('\t')   
-                        f.write(form.format(self.R_l[k,m],precision))
-                f.write('\nR_u, conf={0}'.format(self.conf))
-                for k in range(sz0):
-                    for m in range(sz1):
-                        if m==0:
-                            f.write('\n')
-                        else:
-                            f.write('\t')   
-                        f.write(form.format(self.R[k,m],precision))
+                        for k in range(sz0):
+                            f.write('\n'+form.format(X[k],precision))
+                elif X.ndim==2:
+                    sz0,sz1=np.shape(X)
+                    for k in range(sz0):
+                        for m in range(sz1):
+                            if m==0:
+                                f.write('\n')
+                            else:
+                                f.write('\t')
+                            f.write(form.format(X[k,m],precision))
+                f.write('\n')
+                
             
+            
+#            f.write('\nlabel')
+#            sz0=np.size(self.label)
+#            for k in range(sz0):
+#                f.write('\n{0}'.format(self.label[k]))
+#            f.write('\nR')
+#            sz0,sz1=self.R.shape
+#            for k in range(sz0):
+#                for m in range(sz1):
+#                    if m==0:
+#                        f.write('\n')
+#                    else:
+#                        f.write('\t')   
+#                    f.write(form.format(self.R[k,m],precision))
+#            f.write('\nRstd')
+#            for k in range(sz0):
+#                for m in range(sz1):
+#                    if m==0:
+#                        f.write('\n')
+#                    else:
+#                        f.write('\t')   
+#                    f.write(form.format(self.R_std[k,m],precision))
+#            if conf[0].lower()=='y' and self.R_l is not None:
+#                f.write('\nR_l, conf={0}'.format(self.conf))
+#                for k in range(sz0):
+#                    for m in range(sz1):
+#                        if m==0:
+#                            f.write('\n')
+#                        else:
+#                            f.write('\t')   
+#                        f.write(form.format(self.R_l[k,m],precision))
+#                f.write('\nR_u, conf={0}'.format(self.conf))
+#                for k in range(sz0):
+#                    for m in range(sz1):
+#                        if m==0:
+#                            f.write('\n')
+#                        else:
+#                            f.write('\t')   
+#                        f.write(form.format(self.R[k,m],precision))
+#            

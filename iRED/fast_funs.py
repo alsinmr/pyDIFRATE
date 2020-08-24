@@ -23,9 +23,16 @@ def S2calc(vec):
     
     S2=S2calc(vec)
     """
-    v=np.array([vec.get('X'),vec.get('Y'),vec.get('Z')])
+    if 'Y' in vec.keys():
+        v=np.array([vec.get('X'),vec.get('Y'),vec.get('Z')])
+        SZ=vec['X'].shape[1]
+
+    else:
+        v=np.array([vec['Z']['X'],vec['Z']['Y'],vec['Z']['Z']])
+        SZ=vec['Z']['X'].shape[1]
     v=v/np.sqrt((v**2).sum(axis=0))
-    S2=np.zeros(np.shape(vec.get('X'))[1])
+    
+    S2=np.zeros(SZ)    
     for k in v:
         for m in v:
             S2+=np.mean(k*m,axis=0)**2
@@ -60,16 +67,25 @@ def Ct(vec,**kwargs):
         print('Warning: n_cores argument will be removed in a later version. set parallel=n_cores')
         "Optional second argument. Not documented- possibly will be removed"
         
-    nb=vec['X'].shape[1]
-    
-    
+        
+    if 'Y' not in vec.keys():
+        nc=1
+        print('Only series processing if eta is non-zero')
+        nb=vec['X']['X'].shape[1]
+    else:
+        nb=vec['X'].shape[1]
+
     if nc==1:
         "Might later replace this with the code in place"
         "But, should keep some variant- parallel version isn't necessarily stable"
         v0=list()   #Store date required for each core
-        for k in range(nc):
+        k=0
+        if 'Y' in vec.keys():
             v0.append((vec['X'][:,range(k,nb,nc)],vec['Y'][:,range(k,nb,nc)],vec['Z'][:,range(k,nb,nc)],vec['index']))
-    
+        else:
+            v0.append((vec['X']['X'][:,range(k,nb,nc)],vec['X']['Y'][:,range(k,nb,nc)],vec['X']['Z'][:,range(k,nb,nc)],\
+                       vec['Z']['X'][:,range(k,nb,nc)],vec['Z']['Y'][:,range(k,nb,nc)],vec['Z']['Z'][:,range(k,nb,nc)],\
+                       vec['eta'],vec['index']))
     if nc==1:   #Series processing
         ct0=list()
         for v in v0:
@@ -113,20 +129,40 @@ def Ct(vec,**kwargs):
 
 #%% Parallel function to calculate correlation functions
 def Ct_par(v):
-    index=v[3]
-    X=v[0]
-    Y=v[1]
-    Z=v[2]
+    if len(v)==8:
+        X_X=v[0]
+        Y_X=v[1]
+        Z_X=v[2]
+        X_Z=v[3]
+        Y_Z=v[4]
+        Z_Z=v[5]
+        eta=v[6]
+        index=v[7]
+        
+        n=np.size(index)
+        c=np.zeros([np.max(index)+1,np.shape(X_X)[1]])
+        
+        for k in range(n):
+            Cb2=(np.multiply(X_Z[k:],X_Z[k])+np.multiply(Y_Z[k:],Y_Z[k])+np.multiply(Z_Z[k:],Z_Z[k]))**2
+            Ca2Sb2=(np.multiply(X_Z[k:],X_X[k])+np.multiply(Y_Z[k:],Y_X[k])+np.multiply(Z_Z[k:],Z_X[k]))**2
+#            c[index[k:]-index[k]]+=Cb2*(3-eta)/2-eta*Ca2Sb2+(eta-1)/2
+            c[index[k:]-index[k]]+=(3-eta)/2*Cb2-eta*Ca2Sb2+(eta-1)/2
+        return c
+    else:
+        index=v[3]
+        X=v[0]
+        Y=v[1]
+        Z=v[2]
     
-    n=np.size(index)
-    c=np.zeros([np.max(index)+1,np.shape(X)[1]])
-    
-    for k in range(n):
-        c[index[k:]-index[k]]+=(3*(np.multiply(X[k:],X[k])+np.multiply(Y[k:],Y[k])\
-             +np.multiply(Z[k:],Z[k]))**2-1)/2
-#        if k%int(n/100)==0 or k+1==n:
-#            printProgressBar(k+1, n, prefix = 'C(t) calc:', suffix = 'Complete', length = 50) 
-    return c
+        n=np.size(index)
+        c=np.zeros([np.max(index)+1,np.shape(X)[1]])
+        
+        for k in range(n):
+            c[index[k:]-index[k]]+=(3*(np.multiply(X[k:],X[k])+np.multiply(Y[k:],Y[k])\
+                 +np.multiply(Z[k:],Z[k]))**2-1)/2
+    #        if k%int(n/100)==0 or k+1==n:
+    #            printProgressBar(k+1, n, prefix = 'C(t) calc:', suffix = 'Complete', length = 50) 
+        return c
 
 #%% Load in the truncated vectors from the trajectory
 def get_trunc_vec(molecule,index,**kwargs):
@@ -243,7 +279,7 @@ def get_trunc_vec(molecule,index,**kwargs):
         Z[k,:]=np.divide(Z0,length)
         "Keep track of the time axis"
         t[k]=dt*t0
-        if k%int(nt/100)==0 or k+1==nt:
+        if k%np.ceil(nt/100).astype(int)==0 or k+1==nt:
             printProgressBar(k+1, nt, prefix = 'Loading:', suffix = 'Complete', length = 50) 
 
     vec={'X':X,'Y':Y,'Z':Z,'t':t,'index':index}

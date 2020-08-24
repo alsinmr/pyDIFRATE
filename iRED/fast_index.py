@@ -22,6 +22,9 @@ def trunc_t_axis(nt,n=100,nr=10,**kwargs):
     
     """
     
+    n=np.array(n).astype('int')
+    nr=np.array(nr).astype('int')
+    
     if n==-1:
         index=np.arange(nt)
         return index
@@ -36,7 +39,7 @@ def trunc_t_axis(nt,n=100,nr=10,**kwargs):
         index.append(index[-1]+np.round(10**dt))
         dt+=logdt0
         
-    index=np.array(index)
+    index=np.array(index).astype(int)
 
     "Repeat this indexing nr times throughout the trajectory"
     index=np.repeat(index,nr,axis=0)+np.repeat([np.arange(0,nt,nt/nr)],index.size,axis=0).reshape([index.size*nr])
@@ -61,3 +64,24 @@ def get_count(index):
         N[index[k:]-index[k]]+=1
         
     return N
+
+#%% Progress bar for loading/aligning
+def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    # Print New Line on Complete
+    if iteration == total: 
+        print()

@@ -104,7 +104,7 @@ the three dimensions. Then, the stored vectors in 'X','Y','Z' each have size
 """
 
 #%% Load data from a set of frames into multiple data objects
-def frames2data(mol,frame_funs=None,frame_index=None,ffavg='direction',n=100,nr=10,label=None,**kwargs):
+def frames2data(mol,frame_funs=None,frame_index=None,ffavg='direction',n=100,nr=10,label=None,avg_tensors=True,**kwargs):
     """
     Loads a set of frame functions into several data objects (the number of data
     objects produced is equal to the number of frames)
@@ -113,14 +113,49 @@ def frames2data(mol,frame_funs=None,frame_index=None,ffavg='direction',n=100,nr=
     alternatively can be loaded into the molecule object itself (mol.new_frame)
     """
     
-    vecs=get_vecs(mol,frame_funs,frame_index,ffavg,n,nr,**kwargs)
+    
+    
+    vecs,avgs,tensors=get_vecs(mol,frame_funs,frame_index,ffavg,n,nr,**kwargs)
     if label is None and frame_funs is None:
         label=mol._frame_info['label']
     
     data=list()
     
-    for v in vecs:
+    for q,(v,a,t) in enumerate(zip(vecs,avgs,tensors)):
         data.append(vec2data(v,molecule=mol,**kwargs))
+        if avg_tensors:
+            if frame_funs is None:frame_funs=mol._vf
+            if frame_index is None:frame_index=mol._frame_info['frame_index']
+            
+            if q>0:
+                "Extract the frame for the first point in the trajectory (index=np.array([0]))"
+                v0=ini_vec_load(mol.mda_object.trajectory,[frame_funs[q-1]],[frame_index[q-1]],np.array([0]))['v'][0]
+                if len(v0)==2:
+                    v1,v2=v0
+                else:
+                    v1,v2=v0,None
+                v1,inan=apply_index(v1,frame_index[q-1])
+                v2,_=apply_index(v2,frame_index[q-1])
+                
+                sc=vft.getFrame(v1,v2)  #Angles to rotate first frame
+                sc=[sc0.squeeze() for sc0 in sc]    
+
+                "Apply to D2 evaluated at t=infty (D2inf)"                
+                rho1=vft.pars2Spher(a['delta'],a['eta'],*a['euler'])
+                rho=vft.Rspher(rho1,*sc)
+                
+                out=vft.Spher2pars(rho,return_angles=True)
+                data[-1].vars['D2inf']={'delta':out[0],'eta':out[1],'euler':out[2:],'rho':a['rho']}
+                
+                "Apply to the averaged tensors"
+                rho1=vft.pars2Spher(t['delta'],t['eta'],*t['euler'])
+                rho=vft.Rspher(rho1,*sc)
+
+                out=vft.Spher2pars(rho,return_angles=True)
+                data[-1].vars['avg_tensors']={'delta':out[0],'eta':out[1],'euler':out[2:],'A0':t['rho']}
+            else:
+                data[-1].vars['D2inf']=a
+                data[-1].vars['avg_tensors']=t
         if label is not None:
             data[-1].label=label
         
@@ -191,9 +226,12 @@ def get_vecs(mol,frame_funs=None,frame_index=None,ffavg='direction',n=100,nr=10,
     dt=[kwargs['dt'] if 'dt' in kwargs else traj.dt/1e3]
     
     vec0=ini_vec_load(traj,frame_funs,frame_index,index,dt)
-    vecs=applyFrame(vec0,ffavg)
+    if ffavg=='eta':
+        vecs,avgs,tensors=applyFrame2(vec0,return_avgs=True,tensor_avgs=True)
+    else:
+        vecs,avgs,tensors=applyFrame(vec0,ffavg,return_avgs=True,tensor_avgs=True)
     
-    return vecs
+    return vecs,avgs,tensors
     
 #%% Load in vectors for each frame
 def ini_vec_load(traj,frame_funs,frame_index=None,index=None,dt=None):
@@ -230,8 +268,12 @@ def ini_vec_load(traj,frame_funs,frame_index=None,index=None,dt=None):
         for k,f in enumerate(frame_funs):
             v[k].append(f())
         "Print the progress"
-        if c%int(len(index)/100)==0 or c+1==len(index):
-            printProgressBar(c+1, len(index), prefix = 'Loading Ref. Frames:', suffix = 'Complete', length = 50) 
+        try:
+            if c%int(len(index)/100)==0 or c+1==len(index):
+                printProgressBar(c+1, len(index), prefix = 'Loading Ref. Frames:', suffix = 'Complete', length = 50) 
+        except:
+            pass
+                    
     
     SZ=list()        
     
@@ -260,7 +302,7 @@ def ini_vec_load(traj,frame_funs,frame_index=None,index=None,dt=None):
     return {'n_frames':nf,'v':v,'t':t,'index':index,'frame_index':frame_index} 
 
 #%% Apply the frames
-def applyFrame(vecs,ffavg='direction',return_avgs=False):
+def applyFrame(vecs,ffavg='direction',return_avgs=False,tensor_avgs=True):
     """
     Calculates vectors, which may then be used to determine the influence of
     each frame on the overall correlation function (via detector analysis)
@@ -295,22 +337,56 @@ def applyFrame(vecs,ffavg='direction',return_avgs=False):
     v0=[v if len(v)==2 else [v,None] for v in v0]
     
     "Start by updating vectors with the frame index"
-    v0=[[apply_index(v0[k][0],fi[k]),apply_index(v0[k][1],fi[k])] for k in range(nf)]
+#    v0=[[apply_index(v0[k][0],fi[k]),apply_index(v0[k][1],fi[k])] for k in range(nf)]
+    inan=list()
+    v1=list()
+    for k in range(nf):
+        a,b=apply_index(v0[k][0],fi[k])
+        c,_=apply_index(v0[k][1],fi[k])
+        inan.append(b)
+        v1.append([a,c])
+    v0=v1
+
 
     
     vec_out=list()
     avgs=list()
+    tensors=list()
 
-    if return_avgs:
+    if tensor_avgs:
+        "This is simply the averaged tensors"
         v1,v2=v0[-1]
         sc0=vft.getFrame(v1,v2)
         Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame 0
         out=vft.Spher2pars(Davg)    #Convert into delta,eta,euler angles
-        avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]}) #Returns in a dict
-    
+        tensors.append({'delta':out[0],'eta':out[1],'euler':out[2:]}) #Returns in a dict
+        tensors[-1].update({'A0':Davg[2]})
+    if return_avgs:
+        """These are the expectation values for the correlation functions 
+        of the individual components (m=-2->2) evaluated at infinite time
+        """
+        v1,_=v0[-1]
+        Davg=vft.getD2inf(v1)
+        sc0=[sc0.squeeze() for sc0 in vft.getFrame(v1[:,:,:1])]
+        sc0[0]=1    #Set alpha to zero (not -gamma)
+        sc0[1]=0
+        A0=Davg[2]
+        Davg=vft.Rspher(Davg,*sc0)
+        out=vft.Spher2pars(Davg)
+        avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]})
+        avgs[-1].update({'A0':A0})
+        
     "Next sweep from outer frame in"
     for k in range(nf-1):
         v1,v2=v0.pop(0) #Should have two vectors (or v1 and None)
+        i=inan.pop(0)   #Here we remove motion from positions in this frame for NaN
+        v1[0][i]=0
+        v1[1][i]=0
+        v1[2][i]=1
+        if v2 is not None:
+            v2[0][i]=1
+            v2[1][i]=0
+            v2[2][i]=0
         
         "Get the euler angles"
         sc=vft.getFrame(v1,v2) #Cosines and sines of alpha,beta,gamma (6 values ca,sa,cb,sb,cg,sg)
@@ -327,12 +403,26 @@ def applyFrame(vecs,ffavg='direction',return_avgs=False):
         
         "Apply the rotation matrix to some vector"
         if ffavg[0].lower()=='d' or ffavg[0].lower()=='f': #Direction or full (full not implemented yet)
-            "Averaged tensor from last frame"
-            v1,v2=v0[-1]
-            sc0=vft.getFrame(v1,v2)
-            Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame -1
-            out=vft.Spher2pars(Davg)    #Convert into delta,eta,euler angles
-            avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]}) #Returns in a dict
+            
+            "Averaged tensors from last frame"
+            if tensor_avgs:
+                v1,v2=v0[-1]
+                sc0=vft.getFrame(v1,v2)
+                Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame 0
+                out=vft.Spher2pars(Davg)    #Convert into delta,eta,euler angles
+                tensors.append({'delta':out[0],'eta':out[1],'euler':out[2:]}) #Returns in a dict
+                tensors[-1].update({'A0':Davg[2]})
+
+            v1,_=v0[-1]
+            Davg=vft.getD2inf(v1)
+            A0=Davg[2]
+            sc0=[sc0.squeeze() for sc0 in vft.getFrame(v1[:,:,:1])]
+            sc0[0]=1    #Set alpha to 0 (as opposed to -gamma)
+            sc0[1]=0
+            Davg=vft.Rspher(Davg,*sc0)
+            out=vft.Spher2pars(Davg)
+            avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]})
+            avgs[-1].update({'A0':A0})
             
             v=vft.R(np.array([0,0,1]),*avgs[-1]['euler'])   #Average of outer frame (usually bond)
         elif ffavg[0].lower()=='z':
@@ -362,7 +452,24 @@ def applyFrame(vecs,ffavg='direction',return_avgs=False):
             
     vec_out.append({'X':v[0].T,'Y':v[1].T,'Z':v[2].T,'t':vecs['t'],'index':vecs['index']})
     
-    if return_avgs:
+    
+    if return_avgs and tensor_avgs:
+        for a in avgs:  #Convert to angles
+            e=a['euler']
+            alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
+            a['euler']=np.concatenate(([alpha],[beta],[gamma]),axis=0)
+        for a in tensors:  #Convert to angles
+            e=a['euler']
+            alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
+            a['euler']=np.concatenate(([alpha],[beta],[gamma]),axis=0)
+        return vec_out,avgs,tensors
+    elif tensor_avgs:
+        for a in tensors:  #Convert to angles
+            e=a['euler']
+            alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
+            a['euler']=np.concatenate(([alpha],[beta],[gamma]),axis=0)
+        return vec_out,tensors
+    elif return_avgs:
         for a in avgs:  #Convert to angles
             e=a['euler']
             alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
@@ -371,107 +478,169 @@ def applyFrame(vecs,ffavg='direction',return_avgs=False):
     else:
         return vec_out
 
-##%% Apply the frames
-#def applyFrame(vecs,ffavg='direction',return_avgs=False):
-#    """
-#    Calculates vectors, which may then be used to determine the influence of
-#    each frame on the overall correlation function (via detector analysis)
-#    
-#    For each frame, we will calculate its trajectory with respect to the previous
-#    frame (for example, usually the first frame should be some overall motion
-#    and the last frame should be the bonds themselves. The overall motion is 
-#    calculated w.r.t. the lab frame)
-#    
-#    ffavg is "Faster-frame averaging", which determines how we take into account
-#    the influence of outer frames on the inner frames. 
-#     ffavg='off' :      Neglect influence of outer frames, only calculate behavior
-#                        of frames with respect to the previous frame
-#     ffavg='direction': Apply motion of a given frame onto a vector pointing
-#                        in the same direction as the tensor obtained by averaging
-#                        the tensor in the outer frame
-#     ffavg='full' :     Apply motion using direction, and also scale
-#                        (currently unavailable...)
-#    
-#    """
-#
-#    v0=vecs['v']
-#    nf=len(v0)
-#    
-#    sincos=list()
-#    avgs=list()
-#    
-#    fi=vecs['frame_index']
-#    
-#    for k,v in enumerate(v0):
-#        "Extract vector or vectors of the current frame"
-#        if len(v)==2:
-#            v1,v2=v
-#        else:
-#            v1,v2=v,None
-#            
-#        "Apply previous frame(s)"
-#        if k!=0: #Lab frame for first set of vectors
-#            """Unpack results from previous frame, reverse results for application
-#            to the next frame, and unpack those  results into the R function
-#            """
-#            
-#            "Is this correct? Next 8 lines..."
-#            "Performs as expected....so probably ok..."
-#            v1=apply_index(v1,fi[k])
-#            if v2 is not None:
-#                v2=apply_index(v2,fi[k])
-#            for sc in sincos:
-#                sc=vft.pass2act(*sc)
-#                v1=vft.R(v1,*sc)
-#                if v2 is not None:
-#                    v2=vft.R(v2,*sc)
-##            sc=vft.pass2act(*sincos[-1])    
-##            v1=vft.R(apply_index(v1,fi[k]),*sc)
-##            if v2 is not None:
-##                v2=vft.R(apply_index(v2,fi[k]),*sc)
-#            
-#        else:
-#            v1=apply_index(v1,fi[k])
-#            if v2 is not None:
-#                v2=apply_index(v2,fi[k])
-#            
-#        sincos.append(vft.getFrame(v1,v2)) #Store the result
-#        
-#        D=vft.D2(*sincos[-1])   #Calculate Tensor components
-#        Davg=D.mean(axis=-1)     #Take average of tensor components (over the time axis)
-#        out=vft.Spher2pars(Davg) #Convert these back into delta,eta,euler angles
-#        avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]})
-#    
-#    vec_out=[None for _ in range(nf)]
-#    nt=vecs['t'].size
-#
-#    for k in range(nf):
-#        if k==nf-1:
-#            v=vft.R([0,0,1],*sincos[k])
-#        else:
-#            if ffavg.lower()[0]=='d':
-#                vm1=np.array([0,0,1])
-#                for a in avgs[k+1:]:    #Am I sure about this line and the next?
-#                    vm1=vft.R(vm1,*a['euler'])
-##                vm1=vft.R([0,0,1],*avgs[k+1]['euler'])
-#                vm1=np.atleast_3d(vm1).repeat(nt,axis=2)
-#            elif ffavg.lower()[0]=='o':
-#                vm1=[0,0,1]
-#            elif ffavg.lower()[0]=='f':
-#                print('Full averaging not implemented yet')
-#                return
-#            
-#            
-#            v=vft.R(vm1,*sincos[k])
-#        vec_out[k]={'X':v[0].T,'Y':v[1].T,'Z':v[2].T,'t':vecs['t'],'index':vecs['index'],'frame_index':fi[k]}
-#            
-#        
-#    if return_avgs:
-#        return vec_out,avgs
-#    else:
-#        return vec_out
-#            
+def applyFrame2(vecs,return_avgs=True,tensor_avgs=True):
+    """
+    Calculates vectors, which may then be used to determine the influence of
+    each frame on the overall correlation function (via detector analysis)
     
+    For each frame, we will calculate its trajectory with respect to the previous
+    frame (for example, usually the first frame should be some overall motion
+    and the last frame should be the bonds themselves. The overall motion is 
+    calculated w.r.t. the lab frame)
+    
+    ffavg is "Faster-frame averaging", which determines how we take into account
+    the influence of outer frames on the inner frames. 
+     ffavg='off' :      Neglect influence of outer frames, only calculate behavior
+                        of frames with respect to the previous frame
+     ffavg='direction': Apply motion of a given frame onto a vector pointing
+                        in the same direction as the tensor obtained by averaging
+                        the tensor in the outer frame
+     ffavg='full' :     Apply motion using direction, and also scale
+                        (currently unavailable...)
+    
+    """
+
+    v0=vecs['v']
+    nf=len(v0)
+    nt=vecs['t'].size
+    
+    avgs=list()
+    
+    fi=vecs['frame_index']
+    nb=fi[0].size
+    
+    "Make sure all vectors in v0 have two elements"
+    v0=[v if len(v)==2 else [v,None] for v in v0]
+    
+    "Start by updating vectors with the frame index"
+#    v0=[[apply_index(v0[k][0],fi[k]),apply_index(v0[k][1],fi[k])] for k in range(nf)]
+    inan=list()
+    v1=list()
+    for k in range(nf):
+        a,b=apply_index(v0[k][0],fi[k])
+        c,_=apply_index(v0[k][1],fi[k])
+        inan.append(b)
+        v1.append([a,c])
+    v0=v1
+
+
+    
+    vec_out=list()
+    avgs=list()
+    tensors=list()
+
+    if tensor_avgs:
+        "This is simply the averaged tensors"
+        v1,v2=v0[-1]
+        sc0=vft.getFrame(v1,v2)
+        Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame 0
+        out=vft.Spher2pars(Davg)    #Convert into delta,eta,euler angles
+        tensors.append({'delta':out[0],'eta':out[1],'euler':out[2:]}) #Returns in a dict
+        tensors[-1].update({'rho':Davg})
+    if return_avgs:
+        """These are the expectation values for the correlation functions 
+        of the individual components (m=-2->2) evaluated at infinite time
+        """
+        v1,_=v0[-1]
+        D2inf=vft.getD2inf(v1)
+        sc0=[sc0.squeeze() for sc0 in vft.getFrame(v1[:,:,:1])]
+        sc0[0]=1    #Set alpha to zero (not -gamma)
+        sc0[1]=0
+        A0=D2inf[2]
+        D2inf=vft.Rspher(D2inf,*sc0)
+        out=vft.Spher2pars(D2inf)
+        avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]})
+        avgs[-1].update({'rho':D2inf})
+    
+    "Next sweep from outer frame in"
+    for k in range(nf-1):
+        v1,v2=v0.pop(0) #Should have two vectors (or v1 and None)
+        i=inan.pop(0)   #Here we remove motion from positions in this frame for NaN
+        v1[0][i]=0
+        v1[1][i]=0
+        v1[2][i]=1
+        if v2 is not None:
+            v2[0][i]=1
+            v2[1][i]=0
+            v2[2][i]=0
+        
+        "Get the euler angles"
+        sc=vft.getFrame(v1,v2) #Cosines and sines of alpha,beta,gamma (6 values ca,sa,cb,sb,cg,sg)
+        
+        "Apply rotations to all inner frames"
+        vnew=list()
+        for v in v0:
+            v1,v2=v
+            "Switch active to passive, apply rotation to all inner vectors"
+            sci=vft.pass2act(*sc)
+            vnew.append([vft.R(v1,*sci),vft.R(v2,*sci)])
+        
+        v0=vnew #Replace v0 for the next step
+        
+
+
+        "Averaged tensor from LAST frame"
+
+        
+        if tensor_avgs:
+            v1,v2=v0[-1]
+            sc0=vft.getFrame(v1,v2)
+            Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame 0
+            out=vft.Spher2pars(Davg)    #Convert into delta,eta,euler angles
+            tensors.append({'delta':out[0],'eta':out[1],'euler':out[2:]}) #Returns in a dict
+            tensors[-1].update({'rho':D2inf})
+
+        v1,_=v0[-1]
+        D2inf=vft.getD2inf(v1)
+        sc0=[sc0.squeeze() for sc0 in vft.getFrame(v1[:,:,:1])]
+        sc0[0]=1    #Set alpha to 0 (as opposed to -gamma)
+        sc0[1]=0
+        A0=D2inf[2]
+        D2inf=vft.Rspher(D2inf,*sc0)
+        out=vft.Spher2pars(D2inf)
+        avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]})
+        avgs[-1].update({'rho':D2inf})
+        
+        vZ=vft.R(np.array([0,0,1]),*avgs[-1]['euler'])   #Average of outer frame (usually bond)
+        vZ=vft.R(np.atleast_3d(vZ).repeat(nt,axis=2),*sc)    #Apply rotation of current frame to outer frame
+        vX=vft.R(np.array([1,0,0]),*avgs[-1]['euler'])   #Average of outer frame (usually bond)
+        vX=vft.R(np.atleast_3d(vX).repeat(nt,axis=2),*sc)    #Apply rotation of current frame to outer frame
+        vec_out.append({'X':{'X':vX[0].T,'Y':vX[1].T,'Z':vX[2].T},\
+                        'Z':{'X':vZ[0].T,'Y':vZ[1].T,'Z':vZ[2].T},\
+                             't':vecs['t'],'index':vecs['index'],'eta':avgs[-1]['eta']})
+    
+    "Apply to last frame"
+    v,_=v0.pop(0)
+    l=np.sqrt(v[0]**2+v[1]**2+v[2]**2)
+    v=v/l
+            
+    vec_out.append({'X':v[0].T,'Y':v[1].T,'Z':v[2].T,'t':vecs['t'],'index':vecs['index']})
+    
+    if return_avgs and tensor_avgs:
+        for a in avgs:  #Convert to angles
+            e=a['euler']
+            alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
+            a['euler']=np.concatenate(([alpha],[beta],[gamma]),axis=0)
+        for a in tensors:  #Convert to angles
+            e=a['euler']
+            alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
+            a['euler']=np.concatenate(([alpha],[beta],[gamma]),axis=0)
+        return vec_out,avgs,tensors
+    elif tensor_avgs:
+        for a in tensors:  #Convert to angles
+            e=a['euler']
+            alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
+            a['euler']=np.concatenate(([alpha],[beta],[gamma]),axis=0)
+        return vec_out,tensors
+    elif return_avgs:
+        for a in avgs:  #Convert to angles
+            e=a['euler']
+            alpha,beta,gamma=np.arctan2(e[1],e[0]),np.arctan2(e[3],e[2]),np.arctan2(e[5],e[4])
+            a['euler']=np.concatenate(([alpha],[beta],[gamma]),axis=0)
+        return vec_out,avgs
+    else:
+        return vec_out
+
     
 def apply_index(v0,index):
     """
@@ -480,26 +649,25 @@ def apply_index(v0,index):
     """
     
     if v0 is None:
-        return None
+        return None,None
     
     "SZ : [# of dimesions (=3), # of bonds, # of time points]"
     SZ=[np.shape(v0)[0],np.size(index),np.shape(v0)[2]]
     vout=np.zeros(SZ)
     
-    if np.any(np.isnan(index)):
-        inan=np.isnan(index)    #Keep track of where nan are
-        i=index.copy()  #Don't edit the original!
-        i[inan]=0   #Just set to the first frame in the index
-    else:
-        i=index
-        inan=None
+#    if np.any(np.isnan(index)):
+    inan=np.isnan(index)    #Keep track of where nan are
+    i=index.copy()  #Don't edit the original!
+    i[inan]=0   #Just set to the first frame in the index
+#    else:
+#        i=index
+#        inan=None
     
-    for k,v in enumerate(v0):
+    for k,v in enumerate(v0):       #Looping over the dimensions
         vout[k]=v[np.array(i).astype(int)]
-        if inan is not None:
-            vout[k][inan]=1 if k==2 else 0
-    return vout
-    
+#        if inan is not None:
+#            vout[k][inan]=1 if k==2 else 0
+    return vout,inan
 
 #%% Progress bar for loading/aligning
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):

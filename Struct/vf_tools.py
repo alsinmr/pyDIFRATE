@@ -99,6 +99,23 @@ def pass2act(cA,sA,cB,sB=None,cG=None,sG=None):
         return -cB,-sA,-cA
     else:
         return cG,-sG,cB,-sB,cA,-sA
+
+#%% Change sines and cosines to angles
+def sc2angles(cA,sA=None,cB=None,sB=None,cG=None,sG=None):
+    """
+    Converts cosines and sines of angles to the actual angles. Takes one or three
+    cosine/sine pairs. Note, if an odd number of arguments is given (1 or 3),
+    we assume that this function has been called using angles instead of cosines
+    and sines, and simply return the input.
+    """
+    if sA is None:
+        return cA
+    elif cB is None:
+        return np.arctan2(sA,cA)
+    elif sB is None:
+        return np.array([cA,sA])
+    else:
+        return np.array([np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(cG,sG)])
     
 #%% Frame calculations
 def getFrame(v1,v2=None,return_angles=False):
@@ -157,7 +174,8 @@ def getFrame(v1,v2=None,return_angles=False):
     
     "Alpha"
     if v2 is None:
-        cA,sA=cG,-sG #If only one vector, alpha=-gamma
+#        cA,sA=cG,-sG #If only one vector, alpha=-gamma
+        cA,sA=np.ones(cG.shape),np.zeros(sG.shape)
     else:
         v2=Rz(v2,cG,-sG)
         X,Y,_=Ry(v2,cB,-sB)
@@ -250,6 +268,35 @@ def R(v0,cA,sA,cB,sB=None,cG=None,sG=None):
     
     return v
 
+
+def Rspher(rho,cA,sA,cB,sB=None,cG=None,sG=None):
+    """
+    Rotates a spherical tensor, using angles alpha, beta, and
+    gamma. The cosines and sines may be provided, or the angles directly.
+    
+    One may provide multiple rho and/or multiple angles. If a single rho vector
+    is given (5,), then any shape of angles may be used, and similarly, if a single
+    set of euler angles is used, then any shape of rho may be used (the first 
+    dimension must always be 5). Otherwise, standard broadcasting rules apply
+    (the last dimensions must match in size)
+    
+    rho_out = Rspher(rho,alpha,beta,gamma)
+    
+    or
+    
+    rho_out = Rspher(rho,cA,sA,cB,sB,cG,sG)- cosines and sines of the angles
+    """
+    
+
+    for k,r in enumerate(rho):
+        M=D2(cA,sA,cB,sB,cG,sG,mp=k-2,m=None)   #Rotate from mp=k-2 to all new components
+        if k==0:
+            rho_out=M*r
+        else:
+            rho_out+=M*r
+    return rho_out    
+    
+    
 
 def R2euler(R,return_angles=False):
     """
@@ -351,50 +398,75 @@ def d2(c=0,s=None,m=None,mp=0):
     an array, and then call them out with the m and mp indices
     """
     "First, for m=-2"
-    if mp==-2:
-        def d2m2(c,s):return 0.25*(1+c)**2
-        def d2m1(c,s):return 0.5*(1+c)*s
-        def d20(c,s):return np.sqrt(3/8)*s**2
-        def d21(c,s):return 0.5*(1-c)*s
-        def d22(c,s):return 0.25*(1-c)**2
-    elif mp==-1:
-        def d2m2(c,s):return -0.5*(1+c)*s
-        def d2m1(c,s):return c**2-0.5*(1-c)
-        def d20(c,s):return np.sqrt(3/8)*2*c*s
-        def d21(c,s):return 0.5*(1+c)-c**2
-        def d22(c,s):return 0.5*(1-c)*s
-    elif mp==0:
-        def d2m2(c,s):return np.sqrt(3/8)*s**2
-        def d2m1(c,s):return -np.sqrt(3/8)*2*s*c
-        def d20(c,s):return 0.5*(3*c**2-1)
-        def d21(c,s):return np.sqrt(3/8)*2*s*c
-        def d22(c,s):return np.sqrt(3/8)*s**2
-    elif mp==1:
-        def d2m2(c,s):return -0.5*(1-c)*s
-        def d2m1(c,s):return 0.5*(1+c)-c**2
-        def d20(c,s):return -np.sqrt(3/8)*2*s*c
-        def d21(c,s):return c**2-0.5*(1-c)
-        def d22(c,s):return 0.5*(1+c)*s
-    elif mp==2:
-        def d2m2(c,s):return 0.25*(1-c)**2
-        def d2m1(c,s):return -0.5*(1-c)*s
-        def d20(c,s):return np.sqrt(3/8)*s**2
-        def d21(c,s):return -0.5*(1+c)*s
-        def d22(c,s):return 0.25*(1+c)**2
-        
-    if m is None:
-        return np.array([d2m2(c,s),d2m1(c,s),d20(c,s),d21(c,s),d22(c,s)])
-    elif m==-2:
-        return d2m2(c,s)
-    elif m==-1:
-        return d2m1(c,s)
-    elif m==0:
-        return d20(c,s)
-    elif m==1:
-        return d21(c,s)
-    elif m==2:
-        return d22(c,s)
     
+    if m is None or mp is None:
+        if m is None and mp is None:
+            print('m or mp must be specified')
+            return
+        elif m is None:
+            if mp==-2:
+                index=range(0,5)
+            elif mp==-1:
+                index=range(5,10)
+            elif mp==0:
+                index=range(10,15)
+            elif mp==1:
+                index=range(15,20)
+            elif mp==2:
+                index=range(20,25)
+        elif mp is None:
+            if m==-2:
+                index=range(0,25,5)
+            elif m==-1:
+                index=range(1,25,5)
+            elif m==0:
+                index=range(2,25,5)
+            elif m==1:
+                index=range(3,25,5)
+            elif m==2:
+                index=range(4,25,5)
+    else:
+        index=[(mp+2)*5+(m+2)]
+    
+    out=list()    
+    for i in index:
+        #mp=-2
+        if i==0:x=0.25*(1+c)**2
+        if i==1:x=0.5*(1+c)*s
+        if i==2:x=np.sqrt(3/8)*s**2
+        if i==3:x=0.5*(1-c)*s
+        if i==4:x=0.25*(1-c)**2
+        #mp=-1
+        if i==5:x=-0.5*(1+c)*s
+        if i==6:x=c**2-0.5*(1-c)
+        if i==7:x=np.sqrt(3/8)*2*c*s
+        if i==8:x=0.5*(1+c)-c**2
+        if i==9:x=0.5*(1-c)*s
+        #mp=0
+        if i==10:x=np.sqrt(3/8)*s**2
+        if i==11:x=-np.sqrt(3/8)*2*s*c
+        if i==12:x=0.5*(3*c**2-1)
+        if i==13:x=np.sqrt(3/8)*2*s*c
+        if i==14:x=np.sqrt(3/8)*s**2
+        #mp=1
+        if i==15:x=-0.5*(1-c)*s
+        if i==16:x=0.5*(1+c)-c**2
+        if i==17:x=-np.sqrt(3/8)*2*s*c
+        if i==18:x=c**2-0.5*(1-c)
+        if i==19:x=0.5*(1+c)*s
+        #mp=2
+        if i==20:x=0.25*(1-c)**2
+        if i==21:x=-0.5*(1-c)*s
+        if i==22:x=np.sqrt(3/8)*s**2
+        if i==23:x=-0.5*(1+c)*s
+        if i==24:x=0.25*(1+c)**2
+        out.append(x)
+        
+    if m is None or mp is None:
+        return np.array(out)
+    else:
+        return out[0]
+
 def D2(cA=0,sA=0,cB=0,sB=None,cG=None,sG=None,m=None,mp=0):
     """
     Calculates components of the Wigner rotation matrix from Euler angles or
@@ -412,19 +484,26 @@ def D2(cA=0,sA=0,cB=0,sB=None,cG=None,sG=None,m=None,mp=0):
     
     (Note that m is the final index)
     """
-    
     if sB is None:
         cA,sA,cB,sB,cG,sG=np.cos(cA),np.sin(cA),np.cos(sA),np.sin(sA),np.cos(cB),np.sin(cB)
         
     d2c=d2(cB,sB,m,mp)
     
     "Rotation around z with alpha (mp)"
-    if mp!=0:
-        ea=cA-1j*np.sign(mp)*sA
-        if np.abs(mp)==2:
-            ea=ea**2
+    if mp is None:
+        ea1=cA-1j*sA
+        eam1=cA+1j*sA
+        ea2=ea1**2
+        eam2=eam1**2
+        ea0=np.ones(ea1.shape)
+        ea=np.array([eam2,eam1,ea0,ea1,ea2])
     else:
-        ea=1
+        if mp!=0:
+            ea=cA-1j*np.sign(mp)*sA
+            if np.abs(mp)==2:
+                ea=ea**2
+        else:
+            ea=1
 
     "Rotation around z with gamma (m)"
     if m is None:
@@ -434,7 +513,14 @@ def D2(cA=0,sA=0,cB=0,sB=None,cG=None,sG=None,m=None,mp=0):
         egm2=egm1**2
         eg0=np.ones(eg1.shape)
         eg=np.array([egm2,egm1,eg0,eg1,eg2])
-     
+    else:
+        if m!=0:
+            eg=cG-1j*np.sign(m)*sG
+            if np.abs(m)==2:
+                eg=eg**2
+        else:
+            eg=1
+            
     return ea*d2c*eg
     
 
@@ -449,6 +535,75 @@ def D2vec(v1,v2=None,m=None,mp=0):
     "I think these are already the passive angles above"
     
     return D2(cA,sA,cB,sB,cG,sG,m,mp)
+
+def getD2inf(v,n=500):
+    """
+    Calculates the expectation value of the Spherical components of the D2 rotation
+    elements, that is
+    lim t->oo <D2_0p(Omega_{t+tau,t})>_tau
+    
+    These are estimated given a vector v. Note, we are always performing averaging
+    from the PAS of a vector into a given frame. Then, there should never be 
+    a contribution from asymmetry (arguably, we could correct for eta in case
+    of CSA or quadrupolar relaxation, but we won't do that here)
+    
+    n specifies the maximum number of time points to take from a vector. Default
+    is 500, although setting to None will set N=v.shape[-1]
+    """ 
+    
+    if n is None or v.shape[-1]<n:
+        n=v.shape[-1]
+        
+    index=np.round(np.linspace(0,v.shape[-1]-1,n)).astype(int)
+    
+    x0,y0,z0=norm(v[:,:,index])
+    
+    D2avg=list()
+    
+    for m in range(-2,3):
+        D2avg.append([D2inf(x,y,z,m) for x,y,z in zip(x0,y0,z0)])
+        
+    return np.array(D2avg)
+
+def D2inf(x,y,z,m=0):
+    """
+    Calculates spherical component expectation value for D2 rotation matrix 
+    elements (for a single bond)
+    lim t->oo <D2_0p(Omega_{t+tau,t})>_tau
+    
+    Provide normalized x,y,z and the desired component
+    """
+
+    if m==0:
+        D2avg=-1/2
+        for alpha in [x,y,z]:
+            for beta in [x,y,z]:
+                D2avg+=3/2*((alpha*beta).mean())**2
+        return D2avg
+    
+    "Beta"
+    cb,sb=z,1-z**2
+    "Gamma"
+    lenXY=np.sqrt(x**2+y**2)
+    i=lenXY==0
+    lenXY[i]=1  #cG and sG will be 0
+    cG,sG=-x/lenXY,x/lenXY
+    cG[i]=1. #Set cG to 1 where cG/sG is undefined (gamma=0)
+    cg,sg=[x,y]/np.sqrt(x**2+y**2)
+    
+    
+    x1,y1,z1=np.dot(np.array([x]).T,np.array([cg]))+np.dot(np.array([y]).T,np.array([sg])),\
+                -np.dot(np.array([x]).T,np.array([sg]))+np.dot(np.array([y]).T,np.array([cg])),np.repeat(np.array([z]).T,z.size,axis=1)
+    x2,y2,z2=x1*cb-z1*sb,y1,x1*sb+z1*cb
+    
+    if m==-2:
+        return np.sqrt(3/8)*((x2+1j*y2)**2).mean()
+    elif m==-1:
+        return -np.sqrt(3/2)*((x2+1j*y2)*z2).mean()
+    elif m==1:
+        return np.sqrt(3/2)*((x2-1j*y2)*z2).mean()
+    elif m==2:
+        return np.sqrt(3/8)*((x2-1j*y2)**2).mean()
 
 def Spher2Cart(rho):
     """
@@ -482,10 +637,11 @@ def Spher2pars(rho,return_angles=False):
     
     
     Input may be a list (or 2D array), with each new column a new tensor
-    
     """
 
-    A0=np.atleast_2d(Spher2Cart(rho)) #Get the cartesian tensor
+    A0=Spher2Cart(rho)  #Get the Cartesian tensor
+    if A0.ndim==1:
+        A0=np.atleast_2d(A0).T
 
     R=list()
     delta=list()
@@ -510,11 +666,31 @@ def Spher2pars(rho,return_angles=False):
     
     if return_angles:
         cA,sA,cB,sB,cG,sG=euler
-        euler=np.array([np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)])
+        euler=np.mod(np.array([np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)]),2*np.pi)
        
     return np.concatenate(([delta],[eta],euler),axis=0)
         
 
+def pars2Spher(delta,eta=None,cA=None,sA=None,cB=None,sB=None,cG=None,sG=None):
+    """
+    Converts parameters describing a spherical tensor (delta, eta, alpha, beta,
+    gamma) into the tensor itself. All arguments except delta are optional. Angles
+    may be provided, or their cosines and sines may be provided. The size of the
+    elements should follow the rules required for Rspher.
+    """
+
+    if cA is None:
+        cA,sA,cB,sB,cG,sG=1,0,1,0,1,0
+    
+    if eta is None:
+        eta=np.zeros(np.shape(delta))
+    
+    rho0=np.array([-0.5*eta*delta,0,np.sqrt(3/2)*delta,0,-0.5*eta*delta])
+    
+    return Rspher(rho0,cA,sA,cB,sB,cG,sG)
+
+        
+        
 #%% RMS alignment
 def RMSalign(v0,vref):
     """

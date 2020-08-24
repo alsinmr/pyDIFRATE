@@ -294,7 +294,7 @@ class detect(mdl.model):
     
         return U,S,Vt,VtCSA
 #%% Generate r matrix for fitting tests (detector sensitivies are not optimized- and not well-separated)
-    def r_no_opt(self,n,bond=None,**kwargs):
+    def r_no_opt(self,n,bond=None,R2_ex_corr=False,**kwargs):
         
         self.detect_par['inclS2']=False
         self.detect_par['R2_ex_corr']=False
@@ -339,27 +339,30 @@ class detect(mdl.model):
                 norm=np.repeat(np.transpose([self.norm]),np.size(self.__tc),axis=1)
                 self.__Rc[k]=np.divide(np.dot(U,np.dot(np.diag(S),Vt)),norm)
                 self.SVD[k]['T']=np.eye(n)
+                
+                if R2_ex_corr:
+                    self.R2_ex_corr(bond=k,**kwargs)
+                
                 self.__r_info(k,**kwargs)
+                
                 
             if 'sort_rho' not in kwargs:
                 kwargs['sort_rho']='n'
             self.__r_info(None,**kwargs)
 
 #%% Automatic generation of detectors from a set of sensitivities                 
-    def r_auto(self,n,bond=None,parallel=True,NegAllow=None,**kwargs):
+    def r_auto(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,**kwargs):
         self.n=n
-        "Get input or defaults"
-        if 'inclS2' in kwargs:
-            inclS2=kwargs['inclS2']
-            self.detect_par['inclS2']=inclS2
-        else:
-            inclS2=self.detect_par['inclS2']
+        
+        self.detect_par['inclS2']=inclS2
 
-        if NegAllow is None:
-            Neg=self.detect_par['NegAllow']
-        else:
-            Neg=NegAllow
-            self.detect_par['NegAllow']=Neg
+        "A little bit silly that the variable names changed...fix later"
+        Neg=NegAllow  
+        R2ex=R2_ex_corr
+        
+        "Store some of the inputs"
+        self.detect_par.update({'Normalization':Normalization,'inclS2':inclS2,'R2_ex_corr':R2_ex_corr,'NegAllow':NegAllow})
+
             
         nb=self._nb()
         "If bond set to -1, run through all orientations."
@@ -531,8 +534,7 @@ class detect(mdl.model):
                         rhoz[k,:]=np.dot(T[k,:],Vt)
             except:
                 pass
-        R2ex=('R2_ex_corr' in kwargs and kwargs['R2_ex_corr']) or\
-            ('R2_ex_corr' not in kwargs and self.detect_par['R2_ex_corr'])
+
    
         "Save the results into the detect object"
 #        self.r0=self.__r
@@ -553,7 +555,7 @@ class detect(mdl.model):
                     kwargs.pop('NT')
                 if 'Normalization' in kwargs:
                     kwargs.pop('Normalization')
-                self.r_target(n,bond=bonds,**kwargs)
+                self.r_target(n,bond=bonds,Normalization=None,**kwargs)
         else:
 
             """This isn't correct yet- if more than one bond, we want to 
@@ -578,10 +580,13 @@ class detect(mdl.model):
                     kwargs.pop('NT')
                 if 'Normalization' in kwargs:
                     kwargs.pop('Normalization')
-                self.r_target(n,self.__rho[bond],bonds,**kwargs)
+                self.r_target(n,self.__rho[bond],bonds,Normalization=None,**kwargs)
 
-    def r_target(self,target=None,n=None,bond=None,parallel=True,**kwargs):
+    def r_target(self,target=None,n=None,bond=None,Normalization='Max',inclS2=False,R2_ex_corr=False,parallel=True,**kwargs):
         "Set sensitivities as close to some target function as possible"
+        
+        "Store some of the inputs"
+        self.detect_par.update({'Normalization':Normalization,'inclS2':inclS2,'R2_ex_corr':R2_ex_corr})
         
         if target is None:
             try:
@@ -629,7 +634,7 @@ class detect(mdl.model):
                         np.dot(U,np.linalg.solve(T.T,np.diag(S)).T))
             self.__rhoAvg=rhoz
             self.SVDavg['T']=T
-            if 'NT' in kwargs:
+            if Normalization is not None:
                 self.__r_norm(None,**kwargs)  
             if ('inclS2' in kwargs and kwargs['inclS2']) or\
                 self.detect_par['inclS2']:
@@ -660,7 +665,7 @@ class detect(mdl.model):
                 self.__rho[k]=np.dot(T[index],Vt)
                 self.__rhoCSA[k]=np.dot(T[index],VCSA)
                 self.SVD[k]['T']=T[index]
-                if 'NT' in kwargs:
+                if Normalization is not  None:
                     self.__r_norm(None,**kwargs)
                 if ('R2_ex_corr' in kwargs and kwargs['R2_ex_corr']) or\
                     self.detect_par['R2_ex_corr']:
@@ -796,9 +801,11 @@ class detect(mdl.model):
                 self.__rhoAvg=self.__rhoAvg[:-1]
 #            nb=np.shape(self.__r)[0]
             nb=self._nb()
+            
             for k in range(nb):
-                if self.__r[k] is not None:
+                if self.__r is not None and self.__r[k] is not None:
                     self.__r[k]=self.__r[k][:,:-1]
+                if self.__rho[k] is not None:
                     self.__rho[k]=self.__rho[k][:-1]
                     self.__rhoCSA[k]=self.__rhoCSA[k][:-1]
                     
@@ -809,24 +816,27 @@ class detect(mdl.model):
             self._disable()
             print('Detectors now disabled')
 
-        if np.size(exp_num)>1:
+        if np.size(exp_num)>1:  #Multiple experiments: Just run this function for each experiment
             exp_num=np.atleast_1d(exp_num)
             exp_num[::-1].sort()    #Sorts exp_num in descending order
             for m in exp_num:
                 self.del_exp(m)
         else:
-            if np.ndim(exp_num)>0:
-                exp_num=exp_num[0]
-            self.info=self.info.drop(exp_num,axis=1)
-            self.info.columns=range(len(self.info.columns))
-            if self.__rhoAvg is not None:
-                self.__rhoAvg=np.delete(self.__rhoAvg,exp_num,axis=0)
-            nb=self._nb()
-            for k in range(nb):
-                self.__rho[k]=np.delete(self.__rho[k],exp_num,axis=0)
-                self.__rhoCSA[k]=np.delete(self.__rhoCSA[k],exp_num,axis=0)
-                
-            self.n+=-1
+            if exp_num==self.n and self.detect_par['R2_ex_corr']:
+                self._remove_R2_ex()    #In case we try to delete the last experient, which is R2 exchange, we remove this way
+            else:
+                if np.ndim(exp_num)>0:
+                    exp_num=exp_num[0]
+                self.info=self.info.drop(exp_num,axis=1)
+                self.info.columns=range(len(self.info.columns))
+                if self.__rhoAvg is not None:
+                    self.__rhoAvg=np.delete(self.__rhoAvg,exp_num,axis=0)
+                nb=self._nb()
+                for k in range(nb):
+                    self.__rho[k]=np.delete(self.__rho[k],exp_num,axis=0)
+                    self.__rhoCSA[k]=np.delete(self.__rhoCSA[k],exp_num,axis=0)
+                    
+                self.n+=-1
             
                     
     def _disable(self):
