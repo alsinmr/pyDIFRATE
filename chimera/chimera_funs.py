@@ -11,24 +11,28 @@ import numpy as np
 import MDAnalysis as md
 from shutil import copyfile
 
-def chimera_path():
-     return '/Applications/Chimera.app/Contents/MacOS/chimera'
-#    return '/Applications/ChimeraX-1.0.app/Contents/MacOS/ChimeraX'
+def chimera_path(version=None):
+    if version is not None and version[-1].lower()=='x':
+        return '/Applications/ChimeraX-1.0.app/Contents/MacOS/ChimeraX'
+    else:
+        return '/Applications/Chimera.app/Contents/MacOS/chimera'
 
-def run_command():
-    if len(chimera_path())>=8 and chimera_path()[-8:]=='ChimeraX':
+def run_command(version=None):
+    if version is not None and version[-1].lower()=='x':
         return 'from chimerax.core.commands import run as rc\n'
     else:
         return 'from chimera import runCommand as rc\n'
 
-def get_path(filename):
+def get_path(filename=None):
     """This function opens a file for writing, putting it in the same folder as 
     the chimera_funs.py script"""
     dir_path = os.path.dirname(os.path.realpath(__file__))
     
-    full_path=os.path.join(dir_path,filename)
-    
-    return full_path
+    if filename is None:
+        return dir_path
+    else:
+        full_path=os.path.join(dir_path,filename)
+        return full_path
 
 def open_chimera(mol,**kwargs):
     """

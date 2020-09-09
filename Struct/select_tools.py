@@ -226,7 +226,7 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
           
     return sel1,sel2
 
-def find_bonded(sel,sel0=None,n=3,sort='dist',d=1.65):
+def find_bonded(sel,sel0=None,exclude=None,n=3,sort='dist',d=1.65):
     """
     Finds bonded atoms for each input atom in a given selection. Search is based
     on distance. Default is to define every atom under 1.65 A as bonded. It is 
@@ -238,6 +238,11 @@ def find_bonded(sel,sel0=None,n=3,sort='dist',d=1.65):
     atoms (sort='dist'), or optionally the largest atoms (sort='mass'), or
     finally carbon chain (sort='cchain'), which preferentially yields C atoms in
     the bonded list (and second yields the largest atoms)
+    
+    One may also exclude a set of atoms (exclude), which then will not be returned
+    in the list of bonded atoms. Note that exclude should be a list the same
+    size as sel (either a selection the same size as sel, or a list of selections
+    with a list length equal to the number of atoms in sel)
     """
     
     out=[sel[0:0] for _ in range(n)]
@@ -245,9 +250,11 @@ def find_bonded(sel,sel0=None,n=3,sort='dist',d=1.65):
     if sel0 is None:
         sel0=sel.universe
     
-    for s in sel:
+    for k,s in enumerate(sel):
         sel01=sel0.select_atoms('point {0} {1} {2} {3}'.format(*s.position,d))
         sel01=sel01-s
+        if exclude is not None:
+            sel01=sel01-exclude[k]
         if sort[0].lower()=='d':
             i=np.argsort(((sel01.positions-s.position)**2).sum(axis=1))
         elif sort[0].lower()=='c':

@@ -332,7 +332,11 @@ class rates(mdl.model):
     "We can adjust all parameters of a given type, or just one with the experiment index"
     def set_par(self,type,value,exp_num=None):
         if exp_num is None:
-            self.info.at[type,:]=value
+            if hasattr(value,'__len__') and len(value)!=1:
+                for k in range(self.info.shape[1]):
+                    self.info.at[type,k]=value
+            else:
+                self.info.at[type,:]=value
             self.__R[:]=[None]*len(self.__R)
         else:
             self.info.at[type,exp_num]=value
@@ -340,7 +344,9 @@ class rates(mdl.model):
             self.__RCSA[exp_num]=None
          
         self._clear_stored()
-
+        
+        self._reset_exp(exp_num)
+        
 #%% Correlation time axes   
     "Return correlation times or log of correlation times"        
     def tc(self):
@@ -376,6 +382,19 @@ class rates(mdl.model):
         
         return R.copy()
     
+    def _reset_exp(self,exp_num=None):
+        """
+        Deletes sensitivity data for a given experiment, or for all experiments.
+        Should be run in case a parameter for an experiment is updated.
+        """
+        if exp_num is None:
+            for m in self.__R:
+                m=None
+        else:
+            for k,m in enumerate(self.__R):
+                if m is not  None:
+                    self.__R[k]=np.delete(m,exp_num,axis=1)
+        
     def Reff(self,exp_num=None,mdl_num=0,bond=None,**kwargs):
         R,_=self._rho_eff(exp_num,mdl_num,bond,**kwargs)
         return R

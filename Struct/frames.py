@@ -126,6 +126,51 @@ def LabZ(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_st
         return v
     return sub
 
+def bond_rotate(molecule,sel1=None,sel2=None,sel3=None,Nuc=None,resids=None,segids=None,filter_str=None):
+    """
+    Rotation around a given bond, defined by sel1 and sel2. Has a very similar
+    effect to simply using bond with the same sel1 and sel2. However, an addition
+    selection is created to a third atom. Then, the vector between sel1 and
+    sel2 defines the rotation axis. However, rotation around this axis caused
+    by more distant motions is removed, because a third selection (sel3) is
+    used with sel2 to create a second vector, which then remains in the xz plane
+    
+    (if only sel1 and sel2 are specified for rotation, then some rotation further
+    up a carbon chain, for example, may not move the vector between sel1 and sel2,
+    but does cause rotation of the inner bonds- in most cases it is not clear if
+    this is happening, but becomes particularly apparent when rotation appears
+    on double bonds, where rotation should be highly restricted)
+    
+    sel3 may be defined, but is not required. If it is not provided, a third 
+    atom will be found that is bound to sel2 (this frame won't work if sel2 is
+    not bound to any other atom). 
+    """
+    
+    if Nuc is not None:
+        sel1,sel2=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+    else:
+        sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
+        sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)
+        
+    if sel3 is not None:
+        sel3=selt.sel_simple(molecule,sel3,resids,segids,filter_str)
+    else:
+        resids=np.unique(sel1.resids)
+        i=np.isin(sel1.universe.residues.resids,resids)    #Filter for atoms in the same residues
+        sel0=sel1.universe.residues[i].atoms
+        sel3=selt.find_bonded(sel2,sel0,sel1,n=1,sort='cchain')[0]
+        
+    uni=molecule.mda_object
+
+    def sub():
+        box=uni.dimensions[0:3]
+        v1=sel1.positions-sel2.positions
+        v2=sel2.positions-sel3.positions
+        v1=vft.pbc_corr(v1.T,box)
+        v2=vft.pbc_corr(v2.T,box)
+        return v1,v2
+    return sub
+
 def superimpose(molecule,sel=None,resids=None,segids=None,filter_str=None):
     """
     Superimposes a selection of atoms to a reference frame (the first frame)

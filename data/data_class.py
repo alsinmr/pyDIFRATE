@@ -370,12 +370,13 @@ class data(object):
         
         return ax
       
-    def plot_fit(self,errorbars=True,index=None,exp_index=None,fig=None,ax=None):
+    def plot_fit(self,errorbars=True,index=None,exp_index=None,fig=None,style='log',**kwargs):
         """
         Plots the fit quality of the input data. This produces bar plots with 
         errorbars for the input data and scatter points for the fit, in the case
         of experimental data. If correlation functions are being fit, then
-        line plots (without errorbars) are used
+        line plots (without errorbars) are used (specify style as log or linear,
+        log is default)
         
         One may specify the residue index and also the index of experiments to
         be plotted
@@ -391,12 +392,13 @@ class data(object):
         info=self.sens.info_in
         
         if 't' in info.index.values:
-            ax=pf.plot_Ct_fit(info.loc['t'].to_numpy(),self.Rin,self.Rc)
+            t=info.loc['t'].to_numpy()
+            ax=pf.plot_all_Ct(t,Ct=self.Rin,Ct_fit=self.Rc,lbl=self.label,index=index,fig=fig,style=style,**kwargs)
         else:
             if errorbars:
-                ax=pf.plot_fit(self.label,self.Rin,self.Rc,self.Rin_std,info,index,exp_index,fig,ax)
+                ax=pf.plot_fit(self.label,self.Rin,self.Rc,self.Rin_std,info,index,exp_index,fig)
             else:
-                ax=pf.plot_fit(self.label,self.Rin,self.Rc,None,info,index,exp_index,fig,ax)
+                ax=pf.plot_fit(self.label,self.Rin,self.Rc,None,info,index,exp_index,fig)
         
         return ax
                 

@@ -338,7 +338,7 @@ def dist_opt(X):
     return Ropt,dist
 
 #%% Function to fit a set of detector responses to a single correlation time
-def fit2tc(data,df=2,sens=None):
+def fit2tc(data,df=2,sens=None,Abounds=False):
     """
     Takes a data object, and corresponding sensitivity (optional if included in
     data), and fits each set of detector responses to a single correlation time
@@ -389,7 +389,9 @@ def fit2tc(data,df=2,sens=None):
             beta=1
 
         err0=(((beta*x).T-y)**2).sum(axis=1)
-        
+        if Abounds:
+            err0[beta>1]=1e10
+
         i=np.argmin(err0)
         err.append(err0[i])
         z.append(sens.z()[i])

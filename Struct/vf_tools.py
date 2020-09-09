@@ -88,11 +88,11 @@ def pass2act(cA,sA,cB,sB=None,cG=None,sG=None):
     into the reference frame corresponding to those angles. This requires
     reversing the rotation, performed by this function
     
-    -gamma,-beta,-alph=pass2act(alpha,beta,gamma)
+    -gamma,-beta,-alpha=pass2act(alpha,beta,gamma)
     
     or 
     
-    cG,-sG,cG,-sB,cA,-sA=pass2act(cA,sA,cB,sB,cG,sG)
+    cG,-sG,cB,-sB,cA,-sA=pass2act(cA,sA,cB,sB,cG,sG)
     """
     
     if sB is None:
@@ -156,9 +156,14 @@ def getFrame(v1,v2=None,return_angles=False):
     alpha,beta,gamma = getFrame(v1,v2,return_angles=True)
     """
     
-    "Set nan values along z (these indicate an unused frame)"
-    ii=np.isnan(v1[0,:,0])
+#    "Set nan values along z (these indicate an unused frame)"
+#    ii=np.isnan(v1[0,:,0])
         
+    if np.ndim(v1)==1:
+        v1=np.atleast_2d(v1).T
+        if v2 is not None:
+            v2=np.atleast_2d(v2).T
+    
     "Normalize"
     X,Y,Z=norm(v1)
     
@@ -218,6 +223,7 @@ def Rz(v0,c,s=None):
     X,Y,Z=v0.copy()
     
     X,Y=c*X+s*Y,-s*X+c*Y
+    Z=np.ones(c.shape)*Z
     
     return np.array([X,Y,Z])
 
@@ -240,6 +246,7 @@ def Ry(v0,c,s=None):
     X,Y,Z=v0.copy()
     
     X,Z=c*X-s*Z,s*X+c*Z
+    Y=np.ones(c.shape)*Y
     
     return np.array([X,Y,Z])
 
@@ -268,6 +275,28 @@ def R(v0,cA,sA,cB,sB=None,cG=None,sG=None):
     
     return v
 
+def euler_prod(*euler,return_angles=False):
+    """
+    Calculates the product of a series of euler angles. Input is a list, where
+    each list element is a set of euler angles. The euler angles may be given
+    as a list of 3 elements (alpha,beta,gamma) or six elements (ca,sa,cb,sb,cg,sg).
+    
+    The individual elements (alpha,beta,gamma, ca, sa, etc.) may have any sizes,
+    although all sizes used should be the same or consistent for broadcasting
+    """
+    
+    if len(euler)==1:
+        euler=euler[0]
+    
+    vZ=[0,0,1]  #Reference vectors
+    vX=[1,0,0]
+    
+    for sc in euler:
+        vZ=R(vZ,*sc)
+        vX=R(vX,*sc)
+    
+    return getFrame(vZ,vX,return_angles)
+        
 
 def Rspher(rho,cA,sA,cB,sB=None,cG=None,sG=None):
     """
@@ -582,19 +611,22 @@ def D2inf(x,y,z,m=0):
         return D2avg
     
     "Beta"
-    cb,sb=z,1-z**2
+    cb,sb=z,np.sqrt(1-z**2)
     "Gamma"
     lenXY=np.sqrt(x**2+y**2)
     i=lenXY==0
-    lenXY[i]=1  #cG and sG will be 0
-    cG,sG=-x/lenXY,x/lenXY
-    cG[i]=1. #Set cG to 1 where cG/sG is undefined (gamma=0)
-    cg,sg=[x,y]/np.sqrt(x**2+y**2)
+    lenXY[i]=1  #cG and sG will be 0 since x and y are both zero
+    cg,sg=x/lenXY,y/lenXY
+    cg[i]=1. #Set cG to 1 where cG/sG is undefined (set gamma=0)
+
+    _,_,cb,sb,cg,sg=getFrame(np.array([x,y,z]))
     
     
-    x1,y1,z1=np.dot(np.array([x]).T,np.array([cg]))+np.dot(np.array([y]).T,np.array([sg])),\
-                -np.dot(np.array([x]).T,np.array([sg]))+np.dot(np.array([y]).T,np.array([cg])),np.repeat(np.array([z]).T,z.size,axis=1)
-    x2,y2,z2=x1*cb-z1*sb,y1,x1*sb+z1*cb
+    x1,y1,z1=np.dot(np.array([x]).T,np.array([cg]))-np.dot(np.array([y]).T,np.array([sg])),\
+                np.dot(np.array([x]).T,np.array([sg]))+np.dot(np.array([y]).T,np.array([cg])),np.repeat(np.array([z]).T,z.size,axis=1)
+    x2,y2,z2=x1*cb+z1*sb,y1,-x1*sb+z1*cb
+    
+    
     
     if m==-2:
         return np.sqrt(3/8)*((x2+1j*y2)**2).mean()
@@ -620,7 +652,10 @@ def Spher2Cart(rho):
                  [0,0.5,0,-0.5,0],
                  [-0.5,0,-np.sqrt(1/6),0,-.5],
                  [0,.5*1j,0,.5*1j,0]])
-    return np.dot(M,rho).real
+    SZ0=rho.shape
+    SZ=[5,np.prod(SZ0[1:])]
+    out=np.dot(M,rho.reshape(SZ)).real
+    return out.reshape(SZ0)
     
     
 def Spher2pars(rho,return_angles=False):

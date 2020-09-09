@@ -120,68 +120,79 @@ def frames2data(mol,frame_funs=None,frame_index=None,mode='full',n=100,nr=10,lab
     """
     
     
-    
-    vecs,avgs,tensors=get_vecs(mol,frame_funs=frame_funs,frame_index=frame_index,mode=mode,n=n,nr=nr,dt=dt)
+    if mode.lower()=='both':
+        vecs,vecs_z,avgs,tensors=get_vecs(mol,frame_funs=frame_funs,frame_index=frame_index,mode=mode,n=n,nr=nr,dt=dt)
+    else:
+        vecs,avgs,tensors=get_vecs(mol,frame_funs=frame_funs,frame_index=frame_index,mode=mode,n=n,nr=nr,dt=dt)
     if label is None and frame_funs is None:
         label=mol._frame_info['label']
     
     data=list()
     
-    for q,(v,a,t) in enumerate(zip(vecs,avgs,tensors)):
-        data.append(vec2data(v,a,mode=mode,molecule=mol))
+    "Here, we get the orientation of all frames at t=0"
+    if frame_funs is None:frame_funs=mol._vf
+    if frame_index is None:frame_index=mol._frame_info['frame_index']
+    out=ini_vec_load(mol.mda_object.trajectory,frame_funs,frame_index,index=np.array([0]))
 
-        if frame_funs is None:frame_funs=mol._vf
-        if frame_index is None:frame_index=mol._frame_info['frame_index']
+    for q,(v,a,t) in enumerate(zip(vecs,avgs,tensors)):
+        if mode.lower()=='both':
+            data.append([vec2data(v,a,mode='full',molecule=mol),\
+                         vec2data(vecs_z[q],mode='z',molecule=mol)])
+        else:
+            data.append(vec2data(v,a,mode=mode,molecule=mol))
+
         
         if q>0:
-            "Extract the frame for the first point in the trajectory (index=np.array([0]))"
-            out=ini_vec_load(mol.mda_object.trajectory,[frame_funs[q-1],frame_funs[-1]],[frame_index[q-1],frame_funs[-1]],np.array([0]))['v']
-            v0=out[0]
-            if len(v0)==2:
-                v1,v2=v0
-            else:
-                v1,v2=v0,None
+            v0=out['v'][q-1]
+            v1,v2=v0 if len(v0)==2 else (v0,None)
+            
             v1,inan=apply_index(v1,frame_index[q-1])
             v2,_=apply_index(v2,frame_index[q-1])
             
-            sc=vft.getFrame(v1,v2)  #Angles to rotate first frame
-            sc=[sc0.squeeze() for sc0 in sc]    
-            
-            v0=out[1]
-            if len(v0)==2:
-                v1,_=v0
-            else:
-                v1=v0
-                
-            sc1=vft.getFrame(v1)
+            sc1=vft.getFrame(v1,v2)
             sc1=[sc0.squeeze() for sc0 in sc1]
-
-            "Apply to D2 evaluated at t=infty (D2inf)"                
-            rho1=vft.pars2Spher(a['delta'],a['eta'],*a['euler'])
-            print(sc[0].shape)
-            print(sc1[0].shape)
-            print(rho1.shape)
-            rho=vft.Rspher(vft.Rspher(rho1,*sc),*sc1)
             
-            out=vft.Spher2pars(rho,return_angles=True)
-            data[-1].vars['D2inf']={'delta':out[0],'eta':out[1],'euler':out[2:],'rho':a['rho']}
-            
-            "Apply to the averaged tensors"
-            rho1=vft.pars2Spher(t['delta'],t['eta'],*t['euler'])
-            rho=vft.Rspher(rho1,*sc)
-            
-
-            out=vft.Spher2pars(rho,return_angles=True)
-            data[-1].vars['avg_tensors']={'delta':out[0],'eta':out[1],'euler':out[2:],'rho':t['rho']}
+            rho=vft.Rspher(t['rho'],*sc1)
+            new=vft.Spher2pars(rho,return_angles=True)
+            avg_tensors={'delta':new[0],'eta':new[1],'euler':new[2:],'rho':t['rho']}          
         else:
-            a['euler']=vft.sc2angles(*a['euler'])
-            data[-1].vars['D2inf']=a
-            data[-1].vars['avg_tensors']=t
-            
-        if label is not None:
-            data[-1].label=label
+            avg_tensors=t
+
+        out1=out.copy()
+        i=np.concatenate((np.arange(q),[len(vecs)-1]))
+        out1['v']=[out1['v'][k] for k in i]
+        out1['frame_index']=[out1['frame_index'][k] for k in i]
+        vecs1,_,_=applyFrame(out1)
+#        sc=[vft.getFrame(v['vZ'],v['vX']) for v in vecs1[:-1]]
+        sc=[vft.pass2act(*v['sc']) for v in vecs1[:-1]]
+        sc.append(vft.getFrame(vecs1[-1]['vZ']))
         
+        rho=a['rho']
+        for sc0 in sc[::-1]:
+            rho=vft.Rspher(rho,*sc0)
+
+        new=vft.Spher2pars(rho.squeeze(),return_angles=True)
+        
+        D2inf={'delta':new[0],'eta':new[1],'euler':new[2:],'rho':a['rho']}
+        
+        if mode.lower()=='both':
+            if label is not None:
+                data[-1][0].label=label
+                data[-1][1].label=label
+            data[-1][0].vars['D2inf']=D2inf
+            data[-1][1].vars['D2inf']=D2inf
+            data[-1][0].vars['avg_tensors']=avg_tensors
+            data[-1][1].vars['avg_tensors']=avg_tensors
+        else:
+            if label is not None:
+                data[-1].label=label
+            data[-1].vars['D2inf']=D2inf
+            data[-1].vars['avg_tensors']=avg_tensors
+        
+    if mode.lower()=='both':
+        data=[[d[0] for d in data],[d[1] for d in data]]
     return data
+
 
 def frames2Ct(mol,mode='separate',n=10,nr=10,dt=None):
     """
@@ -303,9 +314,15 @@ def get_vecs(mol,frame_funs=None,frame_index=None,mode='full',n=100,nr=10,dt=Non
     
     vec0=ini_vec_load(traj,frame_funs,frame_index,index,dt)
 
-    vecs,avgs,tensors=applyFrame(vec0)
-    
-    return vecs,avgs,tensors
+    if mode.lower()=='both':
+        vecs,avgs,tensors=applyFrame(vec0,mode='full')
+        vecs_z,_,_=applyFrame(vec0,mode='z')
+        
+        return vecs,vecs_z,avgs,tensors
+    else:
+        vecs,avgs,tensors=applyFrame(vec0)
+        
+        return vecs,avgs,tensors
 
 def vec2data(vec,avgs=None,mode='full',**kwargs):
     """
@@ -315,9 +332,10 @@ def vec2data(vec,avgs=None,mode='full',**kwargs):
     """
     
     dt=(vec['t'][1]-vec['t'][0])/(vec['index'][1]-vec['index'][0])
-    
-    if 'vX' in vec.keys():
-        ct=Ct(vZ=vec['vZ'],index=vec['index'],dt=dt,vX=vec['vX'],vY=vec['vY'],avgs=avgs,mode=mode)
+    if 'sc' in vec.keys():
+        ct=Ct(vZ=vec['vZ'],index=vec['index'],dt=dt,vX=vec['vZ'],vY=vec['vY'],sc=vec['sc'],avgs=avgs,mode=mode)
+    elif 'vX' in vec.keys():
+        ct=Ct(vZ=vec['vZ'],index=vec['index'],dt=dt,vX=vec['vX'],vY=vec['vY'],sci=vec['sci'],avgs=avgs,mode=mode)
     else:
         ct=Ct(vZ=vec['vZ'],index=vec['index'],dt=dt)
     Ctdata=data(Ct=ct,**kwargs)
@@ -325,7 +343,7 @@ def vec2data(vec,avgs=None,mode='full',**kwargs):
     return Ctdata
 
 #%% Apply the frames
-def applyFrame(vecs):
+def applyFrame(vecs,mode='full'):
     """
     Calculates vectors, which may then be used to determine the influence of
     each frame on the overall correlation function (via detector analysis)
@@ -406,7 +424,7 @@ def applyFrame(vecs):
             v2[0][i]=1
             v2[1][i]=0
             v2[2][i]=0
-        
+
         "Get the euler angles of the outermost frame"
         sc=vft.getFrame(v1,v2) #Cosines and sines of alpha,beta,gamma (6 values ca,sa,cb,sb,cg,sg)
         
@@ -423,9 +441,8 @@ def applyFrame(vecs):
         
         v0=vnew #Replace v0 for the next step
         
-        
-        "Averaged tensors from last frame- Not using this, just for record keeping"
         v1,_=v0[-1] #This is the bond direction in the current frame
+        "Averaged tensors from last frame- Not using this, just for record keeping"        
         sc0=vft.getFrame(v1)
         Davg=vft.D2(*sc0).mean(axis=-1) #Average of tensor components of frame 0
         out=vft.Spher2pars(Davg)    #Convert into delta,eta,euler angles
@@ -439,26 +456,33 @@ def applyFrame(vecs):
         avgs.append({'delta':out[0],'eta':out[1],'euler':out[2:]})
         avgs[-1].update({'rho':D2inf})
         
-#        vZ=vft.R(np.array([0,0,1]),*avgs[-1]['euler'])   #Average of outer frame (usually bond)
-#        vZ=vft.R(np.atleast_3d(vZ).repeat(nt,axis=2),0,0,0)    #Apply rotation of current frame to outer frame
-#        vX=vft.R(np.array([1,0,0]),*avgs[-1]['euler'])   #Average of outer frame (usually bond)
-#        vX=vft.R(np.atleast_3d(vX).repeat(nt,axis=2),0,0,0)    #Apply rotation of current frame to outer frame
-#        vY=vft.R(np.array([0,1,0]),*avgs[-1]['euler'])   #Average of outer frame (usually bond)
-#        vY=vft.R(np.atleast_3d(vY).repeat(nt,axis=2),0,0,0)    #Apply rotation of current frame to outer frame
-        
-        vX=vft.R(np.array([1,0,0]),*sc)
-        
-        vY=vft.R(np.array([0,1,0]),*sc)
-        vZ=vft.R(np.array([0,0,1]),*sc)
-        vX=vX.swapaxes(1,2)
-        vY=vY.swapaxes(1,2)
-        vZ=vZ.swapaxes(1,2)
-        
-        vec_out.append({'vZ':vZ,'vX':vX,'vY':vY,'t':vecs['t'],'index':vecs['index']})
+        if mode[0].lower()=='z':
+            vZ=vft.R(np.array([0,0,1]),*avgs[-1]['euler'])   #Average of outer frame (usually bond)
+            vZ=vft.R(np.atleast_3d(vZ).repeat(nt,axis=2),*sc)    #Apply rotation of current frame to outer frame
+            vZ=vZ.swapaxes(1,2)
+            vec_out.append({'vZ':vZ,'t':vecs['t'],'index':vecs['index']})
+        else:        
+#            vX=vft.R(np.array([1,0,0]),*sc)
+#            vY=vft.R(np.array([0,1,0]),*sc)
+#            vZ=vft.R(np.array([0,0,1]),*sc)
+#            vX=vX.swapaxes(1,2)
+#            vY=vY.swapaxes(1,2)
+#            vZ=vZ.swapaxes(1,2)
+#            
+#            sci=np.array(vft.euler_prod([sc,vft.pass2act(*sc0),vft.pass2act(*sc)])).swapaxes(1,2)
+#            
+            
+#            vec_out.append({'vZ':vZ,'vX':vX,'vY':vY,'t':vecs['t'],'sci':sci,'index':vecs['index']})
+            
+            sc=np.array(vft.pass2act(*sc)).swapaxes(1,2)
+            sc0=np.array(sc0).swapaxes(1,2)
+            vZ=vft.R([0,0,1],*sc0)
+            vX=vft.R([1,0,0],*sc0)
+            vY=vft.R([0,1,0],*sc0)
+            vec_out.append({'sc':sc,'vZ':vZ,'vX':vX,'vY':vY,'t':vecs['t'],'index':vecs['index']})
 
     v,_=v0.pop(0)   #Operations on all but bond frame result in normalization, but here we have to enforce length
-    l=np.sqrt(v[0]**2+v[1]**2+v[2]**2)
-    v=v/l
+    v=vft.norm(v)
     
     v=v.swapaxes(1,2)
             
@@ -466,7 +490,7 @@ def applyFrame(vecs):
     
     return vec_out,avgs,tensors
 
-def Ct(vZ,index,dt,vX=None,vY=None,avgs=None,mode='full'):
+def Ct(vZ,dt,index=None,vX=None,vY=None,sci=None,sc=None,avgs=None,mode='full'):
     """
     Calculates the correlation function of a motion given the vX and vZ 
     vectors, in addition to the "avgs" dict, which contains components of the
@@ -488,7 +512,7 @@ def Ct(vZ,index,dt,vX=None,vY=None,avgs=None,mode='full'):
     dictionary)
     
     <D^2_00>, to be multiplied by A_0 
-    Re(<D^2_10>+<D^2_-10>), to be multiplied by Re(A_1)
+    Re(<D^2_10>-<D^2_-10>), to be multiplied by Re(A_1)
     -Im(<D^2_10>+<D^2_-10>), to be multiplied by Im(A_1)
     Re(<D^2_20>+<D^2_-20>), to be multiplied by Re(A_2)
     Re(<D^2_20>+<D^2_-20>), to be multiplied by Im(A_2)
@@ -507,8 +531,9 @@ def Ct(vZ,index,dt,vX=None,vY=None,avgs=None,mode='full'):
     out contains keys 't', 'Ct', 'index', and 'N'
     """
     
+    if index is None:
+        index=np.arange(vZ.shape[1],dtype=int)
     n=np.size(index)
-
     
     if mode[0].lower()=='s':
         if avgs is None:
@@ -517,9 +542,30 @@ def Ct(vZ,index,dt,vX=None,vY=None,avgs=None,mode='full'):
             rho=avgs['rho']/avgs['rho'][2].real
         c=[np.zeros([np.max(index)+1,np.shape(vZ[0])[1]]) for k in range(5)]
         for k in range(n):
-            CaSb=vX[0,k]*vZ[0,k:]+vX[1,k]*vZ[1,k:]+vX[2,k]*vZ[2,k:]
-            SaSb=vY[0,k]*vZ[0,k:]+vY[1,k]*vZ[1,k:]+vY[2,k]*vZ[2,k:]
-            Cb=vZ[0,k]*vZ[0,k:]+vZ[1,k]*vZ[1,k:]+vZ[2,k]*vZ[2,k:]
+#            scik=sci[:,k]
+#            vXk=vft.R(vX[:,k],*scik)
+#            vYk=vft.R(vY[:,k],*scik)
+#            vZk=vft.R(vZ[:,k],*scik)
+#            vZk_=vft.R(vZ[:,k:],*scik)
+#            CaSb=vXk[0]*vZk_[0]+vXk[1]*vZk_[1]+vXk[2]*vZk_[2]
+#            SaSb=vYk[0]*vZk_[0]+vYk[1]*vZk_[1]+vYk[2]*vZk_[2]
+#            Cb=vZk[0]*vZk_[0]+vZk[1]*vZk_[1]+vZk[2]*vZk_[2]
+            
+            if sc is not None:
+                vXk=vft.R(vX[:,k],*sc[:,k])
+                vYk=vft.R(vY[:,k],*sc[:,k])
+                vZk_=vft.R(vZ[:,k],*sc[:,k:])  
+                vZk=vZk_[:,0]
+                
+                CaSb=vXk[0]*vZk_[0]+vXk[1]*vZk_[1]+vXk[2]*vZk_[2]
+                SaSb=vYk[0]*vZk_[0]+vYk[1]*vZk_[1]+vYk[2]*vZk_[2]
+                Cb=vZk[0]*vZk_[0]+vZk[1]*vZk_[1]+vZk[2]*vZk_[2]
+            else:                
+            
+                CaSb=vX[0,k]*vZ[0,k:]+vX[1,k]*vZ[1,k:]+vX[2,k]*vZ[2,k:]
+                SaSb=vY[0,k]*vZ[0,k:]+vY[1,k]*vZ[1,k:]+vY[2,k]*vZ[2,k:]
+                Cb=vZ[0,k]*vZ[0,k:]+vZ[1,k]*vZ[1,k:]+vZ[2,k]*vZ[2,k:]
+            
             
             c[0][index[k:]-index[k]]+=(-1/2+3/2*Cb**2)*rho[2].real
             c[1][index[k:]-index[k]]+=np.sqrt(3/2)*(CaSb*Cb)*rho[3].real
@@ -551,10 +597,29 @@ def Ct(vZ,index,dt,vX=None,vY=None,avgs=None,mode='full'):
                 return
             rho=avgs['rho']/avgs['rho'][2].real
             
-            for k in range(n):            
-                CaSb=vX[0,k]*vZ[0,k:]+vX[1,k]*vZ[1,k:]+vX[2,k]*vZ[2,k:]
-                SaSb=vY[0,k]*vZ[0,k:]+vY[1,k]*vZ[1,k:]+vY[2,k]*vZ[2,k:]
-                Cb=vZ[0,k]*vZ[0,k:]+vZ[1,k]*vZ[1,k:]+vZ[2,k]*vZ[2,k:]
+            for k in range(n):
+#                scik=sci[:,k]
+#                vXk=vft.R(vX[:,k],*scik)
+#                vYk=vft.R(vY[:,k],*scik)
+#                vZk=vft.R(vZ[:,k],*scik)
+#                vZk_=vft.R(vZ[:,k:],*scik)
+#                CaSb=vXk[0]*vZk_[0]+vXk[1]*vZk_[1]+vXk[2]*vZk_[2]
+#                SaSb=vYk[0]*vZk_[0]+vYk[1]*vZk_[1]+vYk[2]*vZk_[2]
+#                Cb=vZk[0]*vZk_[0]+vZk[1]*vZk_[1]+vZk[2]*vZk_[2]
+                
+                if sc is not None:
+                    vXk=vft.R(vX[:,k],*sc[:,k])
+                    vYk=vft.R(vY[:,k],*sc[:,k])
+                    vZk_=vft.R(vZ[:,k],*sc[:,k:])  
+                    vZk=vZk_[:,0]
+                    
+                    CaSb=vXk[0]*vZk_[0]+vXk[1]*vZk_[1]+vXk[2]*vZk_[2]
+                    SaSb=vYk[0]*vZk_[0]+vYk[1]*vZk_[1]+vYk[2]*vZk_[2]
+                    Cb=vZk[0]*vZk_[0]+vZk[1]*vZk_[1]+vZk[2]*vZk_[2]
+                else:                
+                    CaSb=vX[0,k]*vZ[0,k:]+vX[1,k]*vZ[1,k:]+vX[2,k]*vZ[2,k:]
+                    SaSb=vY[0,k]*vZ[0,k:]+vY[1,k]*vZ[1,k:]+vY[2,k]*vZ[2,k:]
+                    Cb=vZ[0,k]*vZ[0,k:]+vZ[1,k]*vZ[1,k:]+vZ[2,k]*vZ[2,k:]
                 
                 c[index[k:]-index[k]]+=(-1/2+3/2*Cb**2)*rho[2].real+\
                                         np.sqrt(3/2)*(CaSb*Cb)*rho[3].real+\
@@ -583,6 +648,113 @@ def Ct(vZ,index,dt,vX=None,vY=None,avgs=None,mode='full'):
         
     
     return Ct
+
+def Ct_ft(vZ,vX=None,vY=None,D2='D20'):
+    """
+    Calculates a correlation function (or functions) using the Fourier Transform.
+    One may select which correlation function to return, with the options being
+    
+    D2=
+    
+    D20:    <D^2_00>, to be multiplied by A_0 
+    ReD21:  Re(<D^2_10>+<D^2_-10>), to be multiplied by Re(A_1)
+    ImD21:  -Im(<D^2_10>+<D^2_-10>), to be multiplied by Im(A_1)
+    ReD22:  Re(<D^2_20>-<D^2_-20>), to be multiplied by Re(A_2)
+    ImD22:  Re(<D^2_20>+<D^2_-20>), to be multiplied by Im(A_2)
+    all:    Returns all 5 functions in the order listed above
+    
+    Ct_ft(vZ,vX=None,vY=None,D2='D20'):
+        
+    vX and vY are required for calculating all but D20
+    
+    out = Ct_ft(vZ,vX=None,vY=None,D2='D20'):
+    """
+
+
+    
+    
+    if (vX is None or vY is None) and D2.lower()!='d20':
+        print('vX and vY must be provided to calculate for D2={0}'.format(D2))
+        return
+    
+
+    ZZ=list()
+    for k in range(3):  #Loop over x,y,z for first vector
+        for j in range(3):  #Loop over x,y,z for second vector
+            ZZ.append(fft_sym(vZ[k]*vZ[j]))
+                
+    if D2.lower()=='all' or D2.lower()=='red21':
+        XZ=list()
+        YZ=list()
+        for k in range(3):
+            for j in range(3):
+                XZ.append(fft_sym(vX[k]*vZ[j]))
+    
+    if D2.lower()=='all' or D2.lower()=='imd21':
+        YZ=list()
+        for k in range(3):
+            for j in range(3):
+                YZ.append(fft_sym(vY[k]*vZ[j]))
+        
+            
+    if D2.lower()=='all' or D2.lower()=='red22':
+        XX=list()
+        YY=list()
+        for k in range(3):
+            for j in range(3):
+                XX.append(fft_sym(vX[k]*vX[j]))
+                YY.append(fft_sym(vY[k]*vY[j]))
+                
+    if D2.lower()=='all' or D2.lower()=='imd22':
+        XY=list()
+        for k in range(3):
+            for j in range(3):
+                XY.append(fft_sym(vX[k]*vY[j]))
+   
+    if D2.lower()=='all':
+        D2=['D20','ReD21','ImD21','ReD22','ImD22']
+    else:
+        D2=[D2]
+    
+    Ct=list()
+
+    for d2 in D2:
+        if d2.lower()=='d20':
+            Ct.append(-1/2+3/2*fft_sym(np.sum([zz*zz.conj() for zz in ZZ],axis=0),inv=True))
+        elif d2.lower()=='red21':
+#            Ct.append(np.sqrt(3/2)*fft_sym(np.sum([0.5*(xz*zz.conj()+xz.conj()*zz) for xz,zz in zip(XZ,ZZ)],axis=0),inv=True))
+            Ct.append(np.sqrt(3/2)*fft_sym(np.sum([xz*zz.conj() for xz,zz in zip(XZ,ZZ)],axis=0),inv=True))
+        elif d2.lower()=='imd21':
+#            Ct.append(np.sqrt(3/2)*fft_sym(np.sum([0.5*(yz*zz.conj()+yz.conj()*zz) for yz,zz in zip(YZ,ZZ)],axis=0),inv=True))
+            Ct.append(np.sqrt(3/2)*fft_sym(np.sum([yz*zz.conj() for yz,zz in zip(YZ,ZZ)],axis=0),inv=True))
+        elif d2.lower()=='red22':
+#            Ct.append(np.sqrt(3/8)*fft_sym(np.sum([0.5*(xx*zz.conj()+xx.conj()*zz-yy*zz.conj()-yy.conj()*zz) for xx,yy,zz in zip(XX,YY,ZZ)],axis=0),inv=True))
+            Ct.append(np.sqrt(3/8)*fft_sym(np.sum([xx*zz.conj()-yy*zz.conj() for xx,yy,zz in zip(XX,YY,ZZ)],axis=0),inv=True))
+        elif d2.lower()=='imd22':
+#            Ct.append(np.sqrt(3/2)*fft_sym(np.sum([0.5*(xy*zz.conj()+xy.conj()+zz) for xy,zz in zip(XY,ZZ)],axis=0),inv=True))
+            Ct.append(np.sqrt(3/2)*fft_sym(np.sum([xy*zz.conj() for xy,zz in zip(XY,ZZ)],axis=0),inv=True))
+        
+    if len(Ct)==1:Ct=Ct[0]
+    
+    return Ct
+
+def fft_sym(x,inv=False):
+    """
+    Performs an fft after symmetrizing the input. Also makes sure data is 2D. Set
+    inv=True in order to take the inverse Fourier transform, and truncate 
+    """
+    
+    if inv:
+        X=np.atleast_2d(x)
+        x=np.fft.ifft(X,axis=1)
+        x=x[:,:int(X.shape[1]/2)]
+        return x.real/X.shape[1]
+    else:
+        x=np.atleast_2d(x)
+        x=np.concatenate([x,x[:,::-1]],axis=1)
+        X=np.fft.fft(x,axis=1)
+        return X
+    
 
 def apply_index(v0,index):
     """

@@ -414,6 +414,7 @@ class model(object):
             for k,m in enumerate(self.__R0CSA):
                 if m is not None:
                     self.__R0CSA[k]=np.delete(m,exp_num,axis=1)
+
                 
     def zeff(self,t,tau=None):
         if tau==None:

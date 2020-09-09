@@ -274,7 +274,7 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
     return ax    
  
 #%% Plot the data fit
-def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=None,ax=None):
+def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=None):
     """
     Plots the fit of experimental data (small data sizes- not MD correlation functions)
     Required inputs are the data label, experimental rates, fitted rates. One may
@@ -312,33 +312,8 @@ def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=Non
     
     nexp=Rin.shape[1]    #Number of experiments
     
-    
-    #Make sure ax is a list
-    if ax is not None and not(isinstance(ax,list)):ax=[ax]
-    
-    #Make sure there are the correct number of elements in ax
-    if ax is not None and length(ax)!=nexp:
-        print('Warning: Number of axes provided does not match number of experiments')
-        ax=None
-    
-    #Generate a set of axes if they aren't provided
-    if ax is None:  
-        if fig is None: #Generate a figure if not provided
-            fig=plt.figure()    
-        SZ=np.sqrt(nexp)
-        SZ=[np.ceil(SZ).astype(int),np.floor(SZ).astype(int)]
-        if np.prod(SZ)<nexp: SZ[1]+=1
-        
-        ntop=np.mod(nexp,SZ[1]) #Number of plots to put in the top row
-        if ntop==0:
-            ntop=SZ[1]
-            skip=0
-        else:
-            skip=np.floor((SZ[1]-ntop)/2).astype(int)   #Number of plots to skip at beginning
-        ax=[fig.add_subplot(SZ[0],SZ[1],k+skip+1) for k in range(ntop)]  #Top row plots
-        ax.extend([fig.add_subplot(SZ[0],SZ[1],k+1+SZ[1]) for k in range(nexp-ntop)]) #Other plots
-        
-
+    ax,xax,yax=subplot_setup(nexp,fig)
+    SZ=np.array([np.sum(xax),np.sum(yax)])
     #Make sure the labels are set up
     """Make lbl a numpy array. If label is already numeric, then we use it as is.
     If it is text, then we replace lbl with a numeric array, and store the 
@@ -354,6 +329,14 @@ def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=Non
     else:
         lbl0=None
     
+    "Use truncated labels if too many residues"
+    if lbl0 is not None and len(lbl0)>50/SZ[0]:  #Let's say we can fit 50 labels in one figure
+        nlbl=np.floor(50/SZ[0])
+        space=np.floor(len(lbl0)/nlbl).astype(int)
+        ii=range(0,len(lbl0),space)
+    else:
+        ii=range(0,len(lbl))
+
     #Sweep through each experiment
     clr=[k for k in colors.TABLEAU_COLORS.values()]     #Color table
     for k,a in enumerate(ax):
@@ -362,21 +345,14 @@ def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=Non
             a.errorbar(lbl,Rin[:,k],Rin_std[:,k],color='black',linestyle='',\
                        capsize=3) #Errorbar
         a.plot(lbl,Rc[:,k],linestyle='',marker='o',color='black',markersize=3)
-        if k>=nexp-SZ[1]:   #Are we in the last row?
+        if xax[k]:
             if lbl0 is not None:
-                "Shorten lbl0 if necessary"
-                if len(lbl0)>50/SZ[0]:  #Let's say we can fit 50 labels in one figure
-                    nlbl=np.floor(50/SZ[0])
-                    space=np.floor(len(lbl0)/nlbl).astype(int)
-                    i=range(0,len(lbl0),space)
-                    a.set_xticks(i)
-                    a.set_xticklabels(lbl0[i],rotation=90)
-                else:
-                    a.set_xticks(range(len(lbl0)))
-                    a.set_xticklabels(lbl0,rotation=90)
+                a.set_xticks(ii)
+                a.set_xticklabels(lbl0[ii],rotation=90)
         else:
             plt.setp(a.get_xticklabels(),visible=False)
-        if k==0 or np.mod(k-ntop,SZ[1])==0:
+            a.set_xticks(ii)
+        if yax[k]:
             a.set_ylabel(r'R / s$^{-1}$')
         
         #Apply labels to each plot if we find experiment type in the info array
@@ -399,12 +375,110 @@ def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=Non
     return ax        
             
 
-def plot_Ct_fit(t,Ct_in,Ct_fit):
+def plot_Ct(t,Ct,Ct_fit=None,ax=None,color=None,style='log',**kwargs):
     """
-    Placeholder for plots of the correlation function fits
+    Plots correlation functions and fits of correlation functions
+    
+    ax=plot_Ct(t,Ct,Ct_ft=None,ax=None,color,**kwargs)
+    
+    Color specifies the color of the line color. One entry specifies only the 
+    color of Ct, but if Ct_fit is included, one may use a list of two colors.
+    
+    Keyword arguments are passed to the plotting functions.
     """
-    return
-   
+    if ax is None:
+        ax=plt.figure().add_subplot(111)
+        
+    if color is None:
+        color=[[.8,0,0],[0.3,0.3,0.3]]
+    elif len(color)!=2:
+        color=[color,[0.3,0.3,0.3]]
+        
+    if style[:2].lower()=='lo':
+        ax.semilogx(t,Ct,color=color[0],**kwargs)
+    else:
+        ax.plot(t,Ct,color=color[0],**kwargs)
+    if 'linewidth' not in kwargs:
+        kwargs['linewidth']=1
+    if Ct_fit is not None:
+        if style[:2].lower()=='lo':
+            ax.semilogx(t,Ct_fit,color=color[1],**kwargs)
+        else:
+            ax.plot(t,Ct_fit,color=color[1],**kwargs)
+    
+    return ax
+
+def plot_all_Ct(t,Ct,Ct_fit=None,lbl=None,index=None,color=None,fig=None,style='log',**kwargs):
+    """
+    Plots a series of correlation functions and their fits, using the plot_Ct
+    function
+    
+    plot_all_Ct(t,Ct,Ct_fit=None,lbl=None,linecolor=None,figure=None,**kwargs)
+    """
+    
+    if index is not None:
+        index=np.array(index).astype(int)
+        Ct=Ct[index]
+        if Ct_fit is not None:
+            Ct_fit=Ct_fit[index]
+    
+    nexp=Ct.shape[0]
+    ax,xax,yax=subplot_setup(nexp,fig)
+
+    if Ct_fit is None:
+        ylim=[np.min([0,Ct.min()]),Ct.max()]
+    else:
+        ylim=[np.min([Ct.min(),Ct_fit.min()]),np.max([Ct.max(),Ct_fit.max()])]
+    
+    if Ct_fit is None:Ct_fit=[None for k in range(nexp)]
+    
+
+    
+    for k,a in enumerate(ax):
+        plot_Ct(t,Ct[k],Ct_fit[k],ax=a,color=color,style=style,**kwargs)
+        if xax[k]:
+            plt.setp(a.get_xticklabels(),visible=False)
+            a.set_xlabel('t / ns')
+        else:
+            plt.setp(a.get_xticklabels(),visible=False)
+            
+        if yax[k]:
+            a.set_ylabel('C(t)')
+        a.set_xlim(t[0],t[-1])
+        a.set_ylim(*ylim)
+    return ax
+    
+def subplot_setup(nexp,fig=None):
+    """
+    Creates subplots neatly distributed on a figure for a given number of 
+    experments. Returns a list of axes, and two logical indices, xax and yax, 
+    which specify whether the figure sits on the bottom of the figure (xax) or
+    to the left side of the figure (yax)
+    
+    Also creates the figure if none provided.
+    
+    subplot_setup(nexp,fig=None)
+    """
+    if fig is None:fig=plt.figure()
+    
+    "How many subplots"
+    SZ=np.sqrt(nexp)
+    SZ=[np.ceil(SZ).astype(int),np.floor(SZ).astype(int)]
+    if np.prod(SZ)<nexp: SZ[1]+=1
+    ntop=np.mod(nexp,SZ[1]) #Number of plots to put in the top row    
+    if ntop==0:ntop=SZ[1]     
+    
+    ax=[fig.add_subplot(SZ[0],SZ[1],k+1) for k in range(ntop)]  #Top row plots
+    ax.extend([fig.add_subplot(SZ[0],SZ[1],k+1+SZ[1]) for k in range(nexp-ntop)]) #Other plots
+    
+    xax=np.zeros(nexp,dtype=bool)
+    xax[-SZ[1]:]=True
+    yax=np.zeros(nexp,dtype=bool)
+    yax[-SZ[1]::-SZ[1]]=True
+    yax[0]=True
+  
+    return ax,xax,yax
+    
 #%% Plot the rate constant sensitivites
 def plot_rhoz(sens,index=None,ax=None,bond=None,norm=False,mdl_num=None,**kwargs):
     """

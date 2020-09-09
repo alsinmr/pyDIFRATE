@@ -869,7 +869,7 @@ class detect(mdl.model):
         self.SVDavg=None
             
 #        self.MdlPar_in=None
-        if self.info_in.shape[1]>10000: #We cleared because the info_in is huge for MD data
+        if self.info_in.shape[1]>100000: #We cleared because the info_in is huge for MD data
             self.info_in=None #Commenting this. Why did we clear these? 
 
         self.norm=None
