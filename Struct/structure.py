@@ -31,6 +31,7 @@ class molecule(object):
         self.vCSA=np.array([])
         self.Ralign=list()
         self._vf=None
+        self._vft=None
         self._frame_info={'frame_index':list(),'label':None}
         
         self.pdb=None #Container for a pdb extracted from the mda_object
@@ -81,9 +82,20 @@ class molecule(object):
         
 #    def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,index1=None,index2=None,Nuc=None,resi=None,select=None,**kwargs):
     
-    def new_frame(self,Type=None,frame_index=None,label=None,**kwargs):
+    def new_frame(self,Type=None,frame_index=None,**kwargs):
         """
-        Create a new frame, where possible frame types are found in vec_funs
+        Create a new frame, where possible frame types are found in vec_funs.
+        Note that if the frame function produces a different number of reference
+        frames than there are bonds (that is, vectors produced by the tensor 
+        frame), then a frame_index is required, to map the frame to the appropriate
+        bond. The length of the frame_index should be equal to the number of 
+        vectors produced by the tensor frame, and those elements should have 
+        values ranging from 0 to one minus the number of frames defined by this
+        frame. 
+        
+        To get a list of all implemented frames and their arguments, call this
+        function without any arguments. To get arguments for a particular frame,
+        call this function with only Type defined.
         """
         if Type is None:
             print_frame_info()
@@ -99,11 +111,38 @@ class molecule(object):
                 self._frame_info['frame_index'].append(np.arange(nb))
             else:
                 self._frame_info['frame_index'].append(frame_index)
+    
+    def tensor_frame(self,Type='bond',label=None,**kwargs):
+        """
+        Creates a frame that defines the NMR tensor orientation. Usually, this
+        is the 'bond' frame (default Type). However, other frames may be used
+        in case a dipole coupling is not the relevant interaction. The chosen
+        frame should return vectors defining both a z-axis and the xz-plane. A
+        warning will be returned if this is not the case.
+        """
+        if Type is None:
+            print_frame_info()
+        elif len(kwargs)==0:
+            print_frame_info(Type)
+        else:
+            if Type=='bond' and 'sel3' not in kwargs:
+                kwargs['sel3']='auto'     #Define sel3 for the bond frame (define vXZ)
+            
+            self._vft=new_fun(Type,self,**kwargs) #New tensor function
+            if len(self._vft())!=2:
+                print('Warning: This frame only defines vZ, and not vXZ;')
+                print('In this case, correlation functions may not be properly defined')
             if label is not None:
                 self._frame_info['label']=label
+                
+            
+            
+        
     
     def clear_frames(self):
+        "Clears out all informatin about frames"
         self._vf=None
+        self._vft=None
         self._frame_info={'frame_index':list(),'label':None}
         
     def select_atoms(self,sel1=None,sel2=None,sel1in=None,sel2in=None,Nuc=None,resids=None,segids=None,filter_str=None):

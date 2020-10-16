@@ -481,7 +481,7 @@ class model(object):
         if bond==-1:
             bond=None
             
-        hdl=plot_rhoz(self,index=exp_num,mdl_num=mdl_num,norm=norm,ax=ax,**kwargs)
+        hdl=plot_rhoz(self,index=exp_num,mdl_num=mdl_num,norm=norm,ax=ax,bond=bond,**kwargs)
         ax=hdl[0].axes
         ax.set_title('Sensitivity for Model #{0}'.format(mdl_num))
            

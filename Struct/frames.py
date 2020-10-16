@@ -75,19 +75,51 @@ def peptide_plane(molecule,resids=None,segids=None,filter_str=None,full=True):
             return v1,v2
         return sub
     
-def bond(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None):
-    "Bond defines the frame"
+def bond(molecule,sel1=None,sel2=None,sel3=None,Nuc=None,resids=None,segids=None,filter_str=None):
+    """Bond defines the frame. 
+    sel1/sel2   :   Defines the z-axis of the frame (the bond itself). Follows 
+                    the argument rules of sel_simple (sel2 should usually be
+                    the heteroatom) 
+    Nuc         :   Automatically sets sel1 and sel2 for a given nucleus definition
+    sel3        :   sel2 and sel3 will define the xz-plane of the bond frame. 
+                    This is optional: however, if this frame is the PAS of the
+                    bond responsible for relaxation, then frames may not 
+                    function correctly if this is not provided. By default, sel3
+                    is set to None and is omitted. However, if called from within
+                    mol.
+    resids, segids, filter_str apply additional filters to sel1, sel2, and sel3
+    if defined.
+    """
     if Nuc is not None:
         sel1,sel2=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
     else:
         sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
         sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)
+        
+    if sel3=='auto':
+        uni=sel1.universe
+        resids=np.unique(sel2.resids)
+        sel0=uni.residues[np.isin(uni.residues.resids,resids)].atoms
+        sel3=selt.find_bonded(sel2,sel0,exclude=sel1,n=1,sort='cchain')[0]
+    elif sel3 is not None:
+        sel3=selt.sel_simple(molecule,sel3,resids,segids,filter_str)
+    
     uni=molecule.mda_object
-    def sub():
-        box=uni.dimensions[0:3]
-        v=sel1.positions-sel2.positions
-        v=vft.pbc_corr(v.T,box)
-        return v
+    
+    if sel3 is None:
+        def sub():
+            box=uni.dimensions[0:3]
+            v=sel1.positions-sel2.positions
+            v=vft.pbc_corr(v.T,box)
+            return v
+    else:
+        def sub():
+            box=uni.dimensions[0:3]
+            vZ=sel1.positions-sel2.positions
+            vXZ=sel3.positions-sel2.positions
+            vZ=vft.pbc_corr(vZ.T,box)
+            vXZ=vft.pbc_corr(vXZ.T,box)
+            return vZ,vXZ
     return sub
 
 def LabXY(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None):

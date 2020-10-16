@@ -582,15 +582,20 @@ class detect(mdl.model):
                     kwargs.pop('Normalization')
                 self.r_target(n,self.__rho[bond],bonds,Normalization=None,**kwargs)
 
-    def r_target(self,target=None,n=None,bond=None,Normalization='Max',inclS2=False,R2_ex_corr=False,parallel=True,**kwargs):
-        "Set sensitivities as close to some target function as possible"
+    def r_target(self,target=None,n=None,bond=None,Normalization=None,inclS2=None,R2_ex_corr=None,parallel=True,**kwargs):
+        """Set sensitivities as close to some target function as possible
         
-        "Store some of the inputs"
-        self.detect_par.update({'Normalization':Normalization,'inclS2':inclS2,'R2_ex_corr':R2_ex_corr})
+        Note, if no target given, this function updates bonds to match the r_auto
+        sensitivity results. Then, the settings R2_ex_corr, and inclS2 are taken
+        from the previous settings. Otherwise, these are set to False.
+        """
+        
+
         
         if target is None:
             try:
-                target=self.__r_auto.get('rho_z')
+#                target=self.__r_auto.get('rho_z')
+                target=self.rhoz()
             except:
                 print('No target provided, and no sensitivity from r_auto available')
                 return
@@ -602,9 +607,18 @@ class detect(mdl.model):
                 target=target[:-1]
             if inS2:
                 target=target[1:]
-                    
+            if R2_ex_corr is None:
+                R2_ex_corr=R2ex
+            if inclS2 is None:
+                inclS2=inS2
+    
         
-        target=np.atleast_2d(target)
+        target=np.atleast_2d(target)        
+
+        "Store some of the inputs"
+        self.detect_par.update({'Normalization':Normalization,'inclS2':inclS2,'R2_ex_corr':R2_ex_corr})
+
+
         
         
         if n is None:
@@ -665,8 +679,8 @@ class detect(mdl.model):
                 self.__rho[k]=np.dot(T[index],Vt)
                 self.__rhoCSA[k]=np.dot(T[index],VCSA)
                 self.SVD[k]['T']=T[index]
-                if Normalization is not  None:
-                    self.__r_norm(None,**kwargs)
+                if Normalization is not None:
+                    self.__r_norm(k,**kwargs)
                 if ('R2_ex_corr' in kwargs and kwargs['R2_ex_corr']) or\
                     self.detect_par['R2_ex_corr']:
                     self.R2_ex_corr(bond=k,**kwargs)
@@ -1168,11 +1182,13 @@ class detect(mdl.model):
         if bond is None:
             if self.__rAvg is None:
                 print('First generate the detectors for the average sensitivities')
+                return
             else:
                 return self.__rAvg
         else:
             if np.size(self.__r[bond])==1:
                 print('First generate the detectors for the selected bond')
+                return
             else:
                 return self.__r[bond]
     
@@ -1189,6 +1205,7 @@ class detect(mdl.model):
         else:
             if np.size(self.__rho[bond])==1:
                 print('First generate the detectors for the selected bond')
+                return
             else:
                 if bond==-1:
                     return np.array(self.__rho)
@@ -1208,6 +1225,7 @@ class detect(mdl.model):
         else:
             if np.size(self.__Rc[bond])==1:
                 print('First generate the detectors for the selected bond')
+                return
             else:
                 return self.__Rc[bond]
             

@@ -427,10 +427,19 @@ def draw_tensorsX(data,tensors='D2inf',index=None,sc=2.09,fileout=None,scene=Non
     pos=0.5*(mol.sel1.positions+mol.sel2.positions).T if pos is None else np.array(pos)
     
     "Apply index"
-    if index is None:index=np.ones(tensors['delta'].size,dtype=bool)
+    if index is None:
+        index=np.ones(tensors['delta'].size,dtype=bool)
+    else:
+        index=np.atleast_1d(index)
+        if index.size==tensors['delta'].size and index.max()==1:
+            index=index.astype(bool)
+        else:
+            index=index.astype(int)
+
     delta=tensors['delta'][index]
     eta=tensors['eta'][index]
     euler=tensors['euler'][:,index]
+    pos=pos[:,index]
         
     theta_steps=100
     phi_steps=50

@@ -59,7 +59,7 @@ def pbc_pos(v0,box):
     if the vector wraps around the box). In this case, we take differences 
     between positions, and make sure the differences don't yield a step around
     the box edges. The whole molecule, however, may jump around the box after
-    this correction. This should matter, since all calculations are orientational,
+    this correction. This shouldn't matter, since all calculations are orientational,
     so the center position is irrelevant.
     
     Input is a 3xN vector and a 3 element box
@@ -76,10 +76,15 @@ def norm(v0):
     """
     Normalizes a vector to a length of one. Input should be a 3xN vector.
     """
-    X,Y,Z=v0
-    length=np.sqrt(X**2+Y**2+Z**2)
+    if v0 is None:
+        return None
     
-    return v0/length
+#    X,Y,Z=v0
+#    length=np.sqrt(X**2+Y**2+Z**2)
+#    
+#    return v0/length
+    
+    return v0/np.sqrt((v0**2).sum(0))
 
 #%% Reverse rotation direction (passive/active)
 def pass2act(cA,sA,cB,sB=None,cG=None,sG=None):
@@ -103,19 +108,19 @@ def pass2act(cA,sA,cB,sB=None,cG=None,sG=None):
 #%% Change sines and cosines to angles
 def sc2angles(cA,sA=None,cB=None,sB=None,cG=None,sG=None):
     """
-    Converts cosines and sines of angles to the actual angles. Takes one or three
-    cosine/sine pairs. Note, if an odd number of arguments is given (1 or 3),
+    Converts cosines and sines of angles to the angles themselves. Takes one or
+    three cosine/sine pairs. Note, if an odd number of arguments is given (1 or 3),
     we assume that this function has been called using angles instead of cosines
     and sines, and simply return the input.
     """
     if sA is None:
         return cA
     elif cB is None:
-        return np.arctan2(sA,cA)
+        return np.mod(np.arctan2(sA,cA),2*np.pi)
     elif sB is None:
-        return np.array([cA,sA])
+        return np.array([cA,sA,cB])
     else:
-        return np.array([np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(cG,sG)])
+        return np.mod(np.array([np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)]),2*np.pi)
     
 #%% Frame calculations
 def getFrame(v1,v2=None,return_angles=False):
@@ -155,14 +160,14 @@ def getFrame(v1,v2=None,return_angles=False):
         
     alpha,beta,gamma = getFrame(v1,v2,return_angles=True)
     """
-    
-#    "Set nan values along z (these indicate an unused frame)"
-#    ii=np.isnan(v1[0,:,0])
         
     if np.ndim(v1)==1:
         v1=np.atleast_2d(v1).T
+        oneD=True
         if v2 is not None:
             v2=np.atleast_2d(v2).T
+    else:
+        oneD=False
     
     "Normalize"
     X,Y,Z=norm(v1)
@@ -170,8 +175,8 @@ def getFrame(v1,v2=None,return_angles=False):
     "Gamma"
     lenXY=np.sqrt(X**2+Y**2)
     i=lenXY==0
-    lenXY[i]=1  #cG and sG will be 0
-    cG,sG=-X/lenXY,Y/lenXY
+    lenXY[i]=1  #cG and sG will be 0 since X and Y are zero
+    cG,sG=X/lenXY,Y/lenXY
     cG[i]=1. #Set cG to 1 where cG/sG is undefined (gamma=0)
     
     "Beta"
@@ -179,26 +184,26 @@ def getFrame(v1,v2=None,return_angles=False):
     
     "Alpha"
     if v2 is None:
-#        cA,sA=cG,-sG #If only one vector, alpha=-gamma
-        cA,sA=np.ones(cG.shape),np.zeros(sG.shape)
+#        cA,sA=np.ones(cG.shape),np.zeros(sG.shape)
+        cA,sA=cG,-sG
     else:
         v2=Rz(v2,cG,-sG)
         X,Y,_=Ry(v2,cB,-sB)
         
         lenXY=np.sqrt(X**2+Y**2)
         i=lenXY==0
-        lenXY[i]=1  #cA and sA will still be 0
-        cA,sA=X/lenXY,-Y/lenXY
-        cA[i]=1.
-        
-#    cA[ii]=1
-#    sA[ii]=0
-#    cB[ii]=1
-#    sB[ii]=0
-#    cG[ii]=1
-#    sG[ii]=0
+        lenXY[i]=1  #cA and sA will be 0 since X and Y are zero
+        cA,sA=X/lenXY,Y/lenXY
+        cA[i]=1. #Now set cG to 1 where cG/sG undefined (alpha=0)
+        i=np.isnan(lenXY)
+        cA[i],sA[i]=cG[i],-sG[i]    #nan also gets set to -gamma
+    
+    if oneD:
+        cA,sA,cB,sB,cG,sG=cA[0],sA[0],cB[0],sB[0],cG[0],sG[0]
+        #Recently added. May need removed if errors occur 11.09.2020
+    
     if return_angles:
-        return np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)
+        return sc2angles(cA,sA,cB,sB,cG,sG)
     else:
         return cA,sA,cB,sB,cG,sG
     
@@ -222,7 +227,7 @@ def Rz(v0,c,s=None):
         
     X,Y,Z=v0.copy()
     
-    X,Y=c*X+s*Y,-s*X+c*Y
+    X,Y=c*X-s*Y,s*X+c*Y
     Z=np.ones(c.shape)*Z
     
     return np.array([X,Y,Z])
@@ -245,7 +250,7 @@ def Ry(v0,c,s=None):
         
     X,Y,Z=v0.copy()
     
-    X,Z=c*X-s*Z,s*X+c*Z
+    X,Z=c*X+s*Z,-s*X+c*Z
     Y=np.ones(c.shape)*Y
     
     return np.array([X,Y,Z])
@@ -269,24 +274,42 @@ def R(v0,cA,sA,cB,sB=None,cG=None,sG=None):
     if sB is None:
         cA,sA,cB,sB,cG,sG=np.cos(cA),np.sin(cA),np.cos(sA),np.sin(sA),np.cos(cB),np.sin(cB)
         
-    v=Rz(v0,cA,sA)
-    v=Ry(v,cB,sB)
-    v=Rz(v,cG,sG)
+    return Rz(Ry(Rz(v0,cA,sA),cB,sB),cG,sG)
+
+def Rfull(cA,sA,cB,sB=None,cG=None,sG=None):
+    """
+    Returns a ZYZ rotation matrix for one set of Euler angles
+    """
     
-    return v
+    if sB is None:
+        a=cA
+        b=sA
+        g=cB
+        cA,sA,cB,sB,cG,sG=np.cos(a),np.sin(a),np.cos(b),np.sin(b),np.cos(g),np.sin(g)
+    
+    return np.array([[cA*cB*cG-sA*sG,-cG*sA-cA*cB*sG,cA*sB],\
+                [cA*sG+cB*cG*sA,cA*cG-cB*sA*sG,sA*sB],\
+                [-cG*sB,sB*sG,cB]])
 
 def euler_prod(*euler,return_angles=False):
     """
     Calculates the product of a series of euler angles. Input is a list, where
-    each list element is a set of euler angles. The euler angles may be given
-    as a list of 3 elements (alpha,beta,gamma) or six elements (ca,sa,cb,sb,cg,sg).
+    each list element is a set of euler angles. Each set of euler angles may be
+    given as a list of 3 elements (alpha,beta,gamma) or six elements 
+    (ca,sa,cb,sb,cg,sg).
     
-    The individual elements (alpha,beta,gamma, ca, sa, etc.) may have any sizes,
+    The individual elements (alpha,beta,gamma, ca, sa, etc.) may have any size,
     although all sizes used should be the same or consistent for broadcasting
+    
+    ca,sa,cb,sb,cg,sg=euler_prod(euler1,euler2,...,return_angles=False)
+    
+        or
+    
+    alpha,beta,gamma=euler_prod(euler1,euler2,...,return_angles=True)
     """
     
-    if len(euler)==1:
-        euler=euler[0]
+    if len(euler)==1:   #I think this is here in case a list is provided instead of multiple inputs
+        euler=euler[0]  
     
     vZ=[0,0,1]  #Reference vectors
     vX=[1,0,0]
@@ -341,7 +364,7 @@ def R2euler(R,return_angles=False):
     R can be a list of matrices
     """
     
-    R = np.array([R]) if np.ndim(R)==2 else np.array(R)
+#    R = np.array([R]) if np.ndim(R)==2 else np.array(R)
     
     
     """
@@ -350,36 +373,54 @@ def R2euler(R,return_angles=False):
     on the determinant: if it is 1, it's a proper rotation, if it's -1, it's not
     Then, we just multiply each matrix by the result to have only proper
     rotations.
-    
-    Currently, this correction is being made elsewhere. Uncomment if it should
-    be applied here
+
     """
     sgn=np.sign(np.linalg.det(R))
+        
+    if np.ndim(R)>2:    #Bring the dimensions of the R matrix to the first two dimensions
+        for m in range(0,R.ndim-2):
+            for k in range(0,R.ndim-1):R=R.swapaxes(k,k+1)
+    R=R*sgn
     
-    R=(R.T*sgn).T
-    
-    cB=R[:,2,2]
-    cB[cB>1]=1.
-    cB[cB<-1]=-1.
-    sB=np.sqrt(1.-cB**2)
-    i=sB!=0
-    cA,sA,cG,sG=[np.ones(i.shape),np.zeros(i.shape),np.ones(i.shape),np.zeros(i.shape)]
-    cA[i]=R[i,2,0]/sB[i]
-    sA[i]=R[i,2,1]/sB[i]
-    cG[i]=-R[i,0,2]/sB[i]
-    sG[i]=R[i,1,2]/sB[i]
-    cG[np.logical_not(i)]=R[np.logical_not(i),0,0]
-    sG[np.logical_not(i)]=R[np.logical_not(i),0,1]
+    if R.ndim>2:
+        cB=R[2,2]
+        cB[cB>1]=1.
+        cB[cB<-1]=-1.
+        sB=np.sqrt(1.-cB**2)
+        i,ni=sB!=0,sB==0
+        cA,sA,cG,sG=np.ones(i.shape),np.zeros(i.shape),np.ones(i.shape),np.zeros(i.shape)
+        cA[i]=-R[2,0,i]/sB[i]
+        sA[i]=R[2,1,i]/sB[i]
+        cG[i]=R[0,2,i]/sB[i]
+        sG[i]=R[1,2,i]/sB[i]
+        
+        cG[ni]=R[0,0,ni]
+        sG[ni]=-R[0,1,ni]
+    else:
+        cB=R[2,2]
+        if cB>1:cB=1
+        if cB<-1:cB=-1
+        sB=np.sqrt(1-cB**2)
+        if sB>0:
+            cA=-R[2,0]/sB
+            sA=R[2,1]/sB
+            cG=R[0,2]/sB
+            sG=R[1,2]/sB
+        else:
+            cA,sA=1,0
+            cG=R[0,0]
+            sG=-R[0,1]
+
     
     if return_angles:
-        return np.array((np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)))
+        return sc2angles(cA,sA,cB,sB,cG,sG)
     else:
         return np.array((cA,sA,cB,sB,cG,sG))
     
 def R2vec(R):
     """
     Given a rotation matrix, R, this function returns two vectors, v1, and v2
-    that have been rotated from v10=[0,0,1] and v20=[0,1,0]
+    that have been rotated from v10=[0,0,1] and v20=[1,0,0]
     
     v1=np.dot(R,v10)
     v2=np.dot(R,v20)
@@ -565,7 +606,7 @@ def D2vec(v1,v2=None,m=None,mp=0):
     
     return D2(cA,sA,cB,sB,cG,sG,m,mp)
 
-def getD2inf(v,n=500):
+def getD2inf(v,n=2500):
     """
     Calculates the expectation value of the Spherical components of the D2 rotation
     elements, that is
@@ -583,18 +624,20 @@ def getD2inf(v,n=500):
     if n is None or v.shape[-1]<n:
         n=v.shape[-1]
         
-    index=np.round(np.linspace(0,v.shape[-1]-1,n)).astype(int)
+    step=np.array(v.shape[-1]/n,dtype=int)
+    index=np.arange(0,step*n,step,dtype=int)
     
     x0,y0,z0=norm(v[:,:,index])
     
-    D2avg=list()
+#    D2avg=list()
     
-    for m in range(-2,3):
-        D2avg.append([D2inf(x,y,z,m) for x,y,z in zip(x0,y0,z0)])
+#    for m in range(-2,3):
+#        D2avg.append([D2inf(x,y,z,m) for x,y,z in zip(x0,y0,z0)])
+    D2avg=[D2inf(x,y,z) for x,y,z in zip(x0,y0,z0)]
         
-    return np.array(D2avg)
+    return np.array(D2avg).T
 
-def D2inf(x,y,z,m=0):
+def D2inf(x,y,z,m=None):
     """
     Calculates spherical component expectation value for D2 rotation matrix 
     elements (for a single bond)
@@ -619,23 +662,122 @@ def D2inf(x,y,z,m=0):
     cg,sg=x/lenXY,y/lenXY
     cg[i]=1. #Set cG to 1 where cG/sG is undefined (set gamma=0)
 
-    _,_,cb,sb,cg,sg=getFrame(np.array([x,y,z]))
+    n=x.shape[0]
+    
+    D2avg=np.zeros(5,dtype=complex)
+    if m is None:   #Get all components
+        m1=[-2,-1,0,1,2]
+    else:
+        m1=[m]
+        
+    
+    for cb0,sb0,cg0,sg0 in zip(cb,sb,cg,sg):
+        x1,y1,z1=x*cg0+y*sg0,-x*sg0+y*cg0,z
+        x2,y2,z2=x1*cb0-z1*sb0,y1,x1*sb0+z1*cb0     #vectors in frame of current element
+        
+        for m0 in m1:
+            if m0==-2:
+                D2avg[0]+=np.sqrt(3/8)*((x2+1j*y2)**2).mean()
+            elif m0==-1:
+                D2avg[1]+=-np.sqrt(3/2)*((x2+1j*y2)*z2).mean()
+            elif m0==1:
+                if m is not None:   #Don't repeat this calculation if None
+                    D2avg[3]+=np.sqrt(3/2)*((x2-1j*y2)*z2).mean()
+            elif m0==2:
+                if m is not None:   #Same as above
+                    D2avg[4]+=np.sqrt(3/8)*((x2-1j*y2)**2).mean()
+                    
+
+    if m is not None:
+        D2avg=D2avg[m+2]/n
+    else:
+        for k in range(2):
+            D2avg[k]=D2avg[k]/n
+        D2avg[3]=-np.conjugate(D2avg[1])
+        D2avg[4]=np.conjugate(D2avg[0])
+
+        d2=-1/2
+        for alpha in [x,y,z]:
+            for beta in [x,y,z]:
+                d2+=3/2*((alpha*beta).mean())**2
+        D2avg[2]=d2
+       
+    return D2avg   
+    
+#    x1,y1,z1=np.dot(np.array([x]).T,np.array([cg]))+np.dot(np.array([y]).T,np.array([sg])),\
+#                -np.dot(np.array([x]).T,np.array([sg]))+np.dot(np.array([y]).T,np.array([cg])),np.repeat(np.array([z]).T,z.size,axis=1)
+#    x2,y2,z2=x1*cb-z1*sb,y1,+x1*sb+z1*cb
+#    
+
+    
+#    if m==-2:
+#        return np.sqrt(3/8)*((x2+1j*y2)**2).mean()
+#    elif m==-1:
+#        return -np.sqrt(3/2)*((x2+1j*y2)*z2).mean()
+#    elif m==1:
+#        return np.sqrt(3/2)*((x2-1j*y2)*z2).mean()
+#    elif m==2:
+#        return np.sqrt(3/8)*((x2-1j*y2)**2).mean()
+
+def D2inf_v2(vZ,m=None):
+    if m is None:
+        m1=[-2,-1,0]
+    else:
+        m1=[m]
+    
+    if m!=0:
+        sc=getFrame(vZ)
+        vX=R([1,0,0],*sc)
+        vY=R([0,1,0],*sc)
     
     
-    x1,y1,z1=np.dot(np.array([x]).T,np.array([cg]))-np.dot(np.array([y]).T,np.array([sg])),\
-                np.dot(np.array([x]).T,np.array([sg]))+np.dot(np.array([y]).T,np.array([cg])),np.repeat(np.array([z]).T,z.size,axis=1)
-    x2,y2,z2=x1*cb+z1*sb,y1,-x1*sb+z1*cb
+    if vZ.ndim==2:
+        N=0
+    else:
+        N=vZ.shape[1]
+
+    D2inf=list()
     
-    
-    
-    if m==-2:
-        return np.sqrt(3/8)*((x2+1j*y2)**2).mean()
-    elif m==-1:
-        return -np.sqrt(3/2)*((x2+1j*y2)*z2).mean()
-    elif m==1:
-        return np.sqrt(3/2)*((x2-1j*y2)*z2).mean()
-    elif m==2:
-        return np.sqrt(3/8)*((x2-1j*y2)**2).mean()
+    for m0 in m1:
+        if N==0:
+            d2=np.array(0,dtype=complex)
+        else:
+            d2=np.zeros(N,dtype=complex)
+            
+        if m0==-2:
+            for ax,ay,az in zip(vX,vY,vZ):
+                for bx,by,bz in zip(vX,vY,vZ):
+                    d2+=np.sqrt(3/8)*((ax*bx).mean(axis=-1)-(ay*by).mean(axis=-1))*(az*bz).mean(axis=-1)\
+                        +1j*np.sqrt(3/2)*(ax*by).mean(axis=-1)*(az*bz).mean(axis=-1)
+        elif m0==-1:
+            for ax,ay,az in zip(vX,vY,vZ):
+                for bz in vZ:
+                    d2+=-np.sqrt(3/2)*(ax*bz).mean(axis=-1)*(az*bz).mean(axis=-1)\
+                        +1j*np.sqrt(3/2)*(ay*bz).mean(axis=-1)*(az*bz).mean(axis=-1)
+        elif m0==0:
+            d2+=-1/2
+            for az in vZ:
+                for bz in vZ:
+                    d2+=3/2*(az*bz).mean(axis=-1)**2
+        elif m0==1:
+            for ax,ay,az in zip(vX,vY,vZ):
+                for bz in vZ:
+                    d2+=np.sqrt(3/2)*(ax*bz).mean(axis=-1)*(az*bz).mean(axis=-1)\
+                        +1j*np.sqrt(3/2)*(ay*bz).mean(axis=-1)*(az*bz).mean(axis=-1)
+        elif m0==2:
+            for ax,ay,az in zip(vX,vY,vZ):
+                for bx,by,bz in zip(vX,vY,vZ):
+                    d2+=np.sqrt(3/8)*((ax*bx).mean(axis=-1)-(ay*by).mean(axis=-1))*(az*bz).mean(axis=-1)\
+                        -1j*np.sqrt(3/2)*(ax*by).mean(axis=-1)*(az*bz).mean(axis=-1)
+        D2inf.append(d2)
+        
+    if m is None:
+        D2inf.append(-np.conjugate(D2inf[1]))
+        D2inf.append(np.conjugate(D2inf[0]))
+    else:
+        D2inf=D2inf[0]
+        
+    return np.array(D2inf)
 
 def Spher2Cart(rho):
     """
@@ -700,8 +842,7 @@ def Spher2pars(rho,return_angles=False):
     euler=R2euler(R)
     
     if return_angles:
-        cA,sA,cB,sB,cG,sG=euler
-        euler=np.mod(np.array([np.arctan2(sA,cA),np.arctan2(sB,cB),np.arctan2(sG,cG)]),2*np.pi)
+        euler=sc2angles(*euler)
        
     return np.concatenate(([delta],[eta],euler),axis=0)
         
