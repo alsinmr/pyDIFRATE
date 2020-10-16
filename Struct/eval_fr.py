@@ -69,7 +69,7 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
 
     
     nu=[(v0,None) if len(v0)!=2 else v0 for v0 in v['v']]     #Make sure all frames have 2 elements
-    vZ,vXZ=(v['vT'],None) if len(v['vT'])!=2 else (v['vT'][0],v['vT'][1])    
+    vZ,vXZ=(v['vT'],np.ones(v['vT'].shape)*np.nan) if len(v['vT'])!=2 else (v['vT'][0],v['vT'][1])    #Bond vector (and XZ vector) in the lab frame
     nf=len(v['v'])
     nr,nt=vZ.shape[1:]
     index=v['index']
@@ -89,8 +89,9 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
         if nu[k][1] is not None:
             nuXZ[-1][:,iT]=nu[k][1][:,fi[k][iT].astype(int)]
         
-        nuXZ[-1][:,iF]=vXZ[:,iF] if k==0 and vXZ is not None else nuXZ[k-1][:,iF]
+        nuXZ[-1][:,iF]=vXZ[:,iF] if k==0 else nuXZ[k-1][:,iF]
     
+    "Make sure vectors are normalized"
     vZ=vft.norm(vZ)
     nuZ=[vft.norm(nuz) for nuz in nuZ]
     
@@ -176,20 +177,29 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
         S2=S2.real
     
     out=dict()
-    if ri[0]:out['ct_finF':ct_finF]
-    if ri[1]:out['ct_m0_finF':ct_m0_finF]
-    if ri[2]:out['ct_0m_finF':ct_0m_finF]
-    if ri[3]:out['ct_0m_PASinF':ct_0m_PASinF]
-    if ri[4]:out['A_m0_finF':A_m0_finF]
-    if ri[5]:out['A_0m_finF':A_0m_finF]
-    if ri[6]:out['A_0m_PASinF':A_0m_PASinF]
+    if ri[0]:out['ct_finF']=ct_finF
+    if ri[1]:out['ct_m0_finF']=ct_m0_finF
+    if ri[2]:out['ct_0m_finF']=ct_0m_finF
+    if ri[3]:out['ct_0m_PASinF']=ct_0m_PASinF
+    if ri[4]:out['A_m0_finF']=A_m0_finF
+    if ri[5]:out['A_0m_finF']=A_0m_finF
+    if ri[6]:out['A_0m_PASinF']=A_0m_PASinF
+    if ri[7]:out['ct_prod']=ct_prod
+    if ri[8]:out['ct']=ct
+    if ri[9]:out['S2']=S2
     
-    return ct_prod,ct,ct_finF,ct_m0_finF
-        
+    if ri[0] or ri[1] or ri[2] or ri[3] or ri[7] or ri[8] or ri[9]:
+        out['index']=index
+        N=get_count(index)
+        i=N!=0
+        N=N[i]
+        dt=(v['t'][1]-v['t'][0])/(index[1]-index[0])
+        t=(np.cumsum(i)-1)*dt
+        out['N']=N
+        out['t']=t[i]
     
-        
+    return out
 
-        
 
 def mol2vec(mol,n=100,nr=10,tf=None,dt=None):
     """

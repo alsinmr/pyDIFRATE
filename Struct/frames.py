@@ -96,7 +96,7 @@ def bond(molecule,sel1=None,sel2=None,sel3=None,Nuc=None,resids=None,segids=None
         sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
         sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)
         
-    if sel3=='auto':
+    if isinstance(sel3,str) and sel3=='auto':
         uni=sel1.universe
         resids=np.unique(sel2.resids)
         sel0=uni.residues[np.isin(uni.residues.resids,resids)].atoms
