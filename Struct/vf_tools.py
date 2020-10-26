@@ -37,7 +37,11 @@ def pbc_corr(v0,box):
     
     "Copy input, take tranpose for easier calculation"
     v=v0.copy()
-    v=v.T
+    if v.shape[0]==3:
+        v=v.T
+        tp=True
+    else:
+        tp=False
     
     
     i=v>box/2
@@ -48,8 +52,10 @@ def pbc_corr(v0,box):
     ib=np.argwhere(i).T[1]
     v[i]=v[i]+box[ib]
         
-    return v.T
-
+    if tp:
+        return v.T
+    else:
+        return v
 
 #%% Periodic boundary condition for positions
 def pbc_pos(v0,box):
@@ -206,7 +212,31 @@ def getFrame(v1,v2=None,return_angles=False):
         return sc2angles(cA,sA,cB,sB,cG,sG)
     else:
         return cA,sA,cB,sB,cG,sG
+
+
+def applyFrame(*vecs,nuZ_F=None,nuXZ_F=None):
+    """
+    Applies a frame, F, to a set of vectors, *vecs, by rotating such that the
+    vector nuZ_F lies along the z-axis, and nuXZ_F lies in the xz-plane. Input
+    is the vectors (as *vecs, so list separately, don't collect in a list), and
+    the frame, defined by nuZ_F (a vector on the z-axis of the frame), and 
+    optionally nuXZ_F (a vector on xy-axis of the frame). These must be given
+    as keyword arguments.
     
+    vecs_F = applyFrame(*vecs,nuZ_F=nuZ_F,nuXZ_F=None,frame_index=None)
+    
+    Note, one may also omit the frame application and just apply a frame index
+    """
+    if nuZ_F is None:
+        out=vecs
+    else:
+        sc=vft.pass2act(*vft.getFrame(nuZ_F,nuXZ_F))
+        out=[None if v is None else vft.R(v,*sc) for v in vecs]
+        
+    if len(vecs)==1:
+        return out[0]
+    else:
+        return out    
 
 #%% Apply/invert rotations     
 def Rz(v0,c,s=None):
@@ -813,7 +843,7 @@ def Spher2pars(rho,return_angles=False):
     delta,eta,alpha,beta,gamma=Spher2pars(rho,return_angles=True)
     
     
-    Input may be a list (or 2D array), with each new column a new tensor
+    Input may be a list (or 2D array), with each new column a new tensor (5xN)
     """
 
     A0=Spher2Cart(rho)  #Get the Cartesian tensor
@@ -839,7 +869,7 @@ def Spher2pars(rho,return_angles=False):
     
     delta=np.array(delta)
     eta=np.array(eta)
-    euler=R2euler(R)
+    euler=R2euler(np.array(R))
     
     if return_angles:
         euler=sc2angles(*euler)

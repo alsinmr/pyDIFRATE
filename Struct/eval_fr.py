@@ -19,6 +19,67 @@ os.chdir('../data')
 from data_class import data
 os.chdir(curdir)
 
+def frames2data(mol=None,v=None,n=100,nr=10,tf=None,dt=None):
+    """
+    Calculates the correlation functions (frames2ct) and loads the result into
+    data objects (ct2data)
+    """
+    
+    return_index=[True,False,False,False,True,False,True,True,True,True]
+    
+    ct_out=frames2ct(mol=mol,v=v,return_index=return_index,n=n,nr=nr,tf=tf,dt=dt)
+    
+    
+    out=ct2data(ct_out)
+    if mol is not None:
+        for d in out:
+            d.sens.molecule=mol
+            d.detect.molecule=mol
+    
+    return out
+
+def ct2data(ct_out):
+    """
+    Takes the results of a frames2ct calculation (the ct_out dict) and loads 
+    the results into a data object(s) for further processing. One data object 
+    will be returned for ct, if included in the ct_out dict, one for ct_prod,
+    also if included, and the subsequent results are for each frame of 
+    ct_finF.
+
+    Within ct_finF, we also include A_m0_finF and A_0m_PASinF of the previous 
+    frame (that is, the equilibrium values used to construct ct_finF), within
+    vars if included in ct_out
+    """
+    
+    out=list()
+    
+    if 'ct' in ct_out:
+        ct={'Ct':ct_out['ct'],'N':ct_out['N'],'index':ct_out['index'],'t':ct_out['t']}
+        out.append(data(Ct=ct))
+        if 'S2' in ct_out:
+            out[-1].vars['S2']=ct_out['S2']
+        
+    if 'ct_prod' in ct_out:
+        ct={'Ct':ct_out['ct_prod'],'N':ct_out['N'],'index':ct_out['index'],'t':ct_out['t']}
+        out.append(data(Ct=ct))
+        if 'A_0m_PASfinF' in ct_out:
+            out[-1].vars['A_0m_PASinF']=ct_out['A_0m_PASinF'][-1]
+        
+    if 'ct_finF' in ct_out:
+        for k,ct0 in enumerate(ct_out['ct_finF']):
+            ct={'Ct':ct0,'N':ct_out['N'],'index':ct_out['index'],'t':ct_out['t']}
+            out.append(data(Ct=ct))
+            if 'A_m0_finF' in ct_out:
+                out[-1].vars['A_m0_finF']=ct_out['A_m0_finF'][k]
+            if 'A_0m_PASinF' in ct_out:
+                if k==0:
+                    A0=np.zeros([5,out[-1].R.shape[0]])
+                    A0[2]=1
+                else:
+                    A0=ct_out['A_0m_PASinF'][k-1]
+                out[-1].vars['A_0m_PASinF']=A0
+
+    return out
 
 def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     """
@@ -148,7 +209,7 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
         A_0m_PASinF=list()
         for k in range(nf+1):
             if k==nf:
-                b=Ct_D2inf(vZ=vZ,vXZ=vXZ,cmpt='0m',mode='d2',index=index)
+                b=Ct_D2inf(vZ=vZ,vXZ=vXZ,cmpt='0m',mode='D2',index=index)
             else:
                 b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],cmpt='0m',mode='D2',index=index)
             A_0m_PASinF.append(b)
@@ -189,12 +250,14 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     if ri[9]:out['S2']=S2
     
     if ri[0] or ri[1] or ri[2] or ri[3] or ri[7] or ri[8] or ri[9]:
+        if index is None:
+            index=np.arange(v['vT'].shape[-1])
         out['index']=index
         N=get_count(index)
         i=N!=0
         N=N[i]
         dt=(v['t'][1]-v['t'][0])/(index[1]-index[0])
-        t=(np.cumsum(i)-1)*dt
+        t=(np.cumsum(i)-1)*dt/1e3
         out['N']=N
         out['t']=t[i]
     
@@ -460,7 +523,7 @@ def loops(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,calc=None):
     vZ,nuZ_F,nuZ_f=vft.norm(vZ),vft.norm(nuZ_F),vft.norm(nuZ_f) #Make sure terms are normalized
     
     "Apply frame F (remove motion of frame F)"
-    vZF,vXZF,nuZ_fF,nuXZ_fF=applyFrame(vZ,vXZ,nuZ_f,nuXZ_f,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F)
+    vZF,vXZF,nuZ_fF,nuXZ_fF=vft.applyFrame(vZ,vXZ,nuZ_f,nuXZ_f,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F)
     
     if np.any(calc[[0,1,3,4]]): #Do we need X and Y axes for the bond frame?
         sc=vft.getFrame(vZF,vXZF)   
@@ -484,7 +547,7 @@ def loops(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,calc=None):
         
         scfF=vft.getFrame(nuZ_fF,nuXZ_fF)
         vZf=vft.R(vZF,*vft.pass2act(*scfF))
-#        vZf=applyFrame(vZ,nuZ_F=nuZ_f,nuXZ_F=nuXZ_f)
+#        vZf=vft.applyFrame(vZ,nuZ_F=nuZ_f,nuXZ_F=nuXZ_f)
 #        vZf=vft.R(vZF,*scfF)
         eFf=[vft.R([1,0,0],*vft.pass2act(*scfF)),\
              vft.R([0,1,0],*vft.pass2act(*scfF)),\
@@ -632,29 +695,6 @@ def Ct_similar(ct0,A,m=None):
     
     return ct
 
-def applyFrame(*vecs,nuZ_F=None,nuXZ_F=None):
-    """
-    Applies a frame, F, to a set of vectors, *vecs, by rotating such that the
-    vector nuZ_F lies along the z-axis, and nuXZ_F lies in the xz-plane. Input
-    is the vectors (as *vecs, so list separately, don't collect in a list), and
-    the frame, defined by nuZ_F (a vector on the z-axis of the frame), and 
-    optionally nuXZ_F (a vector on xy-axis of the frame). These must be given
-    as keyword arguments.
-    
-    vecs_F = applyFrame(*vecs,nuZ_F=nuZ_F,nuXZ_F=None,frame_index=None)
-    
-    Note, one may also omit the frame application and just apply a frame index
-    """
-    if nuZ_F is None:
-        out=vecs
-    else:
-        sc=vft.pass2act(*vft.getFrame(nuZ_F,nuXZ_F))
-        out=[None if v is None else vft.R(v,*sc) for v in vecs]
-        
-    if len(vecs)==1:
-        return out[0]
-    else:
-        return out
 
 def ini_vec_load(traj,frame_funs,tensor_fun,frame_index=None,index=None,dt=None):
     """

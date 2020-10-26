@@ -255,14 +255,17 @@ def d2(c=0,s=None,m=None,mp=0):
     else:
         return out[0]
 try:
-	load_surface(session,"/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/tensors337984.txt",sc=1,theta_steps=100,phi_steps=50,positive_color=(255, 100, 100, 255),negative_color=(100, 100, 255, 255))
-	rc(session,"turn x 90")
-	rc(session,"set bgColor white")
-	rc(session,"lighting full")
-	rc(session,"save /Users/albertsmith/Documents/Dynamics/Lipids/POPC/FinalMD_ana/Ct_orientation_analysis/D2_res83_fr1_t10.png ")
+	for k in range(50):
+		rc(session,"set bgColor white")
+		rc(session,"open /Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/images/pdb{0:06d}.pdb".format(k))
+		rc(session,"display")
+		load_surface(session,"/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/images/tensors_{0:06d}.txt".format(k),sc=2.09,theta_steps=50,phi_steps=25,positive_color=(255, 100, 100, 255),negative_color=(100, 100, 255, 255))
+		rc(session,"save /Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/images/tensor_{0:06d}.jpg width 1000 height 600 supersample 2".format(k))
+		rc(session,"close")
 except:
 	print("Error in chimera script")
 finally:
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script337984.py")
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/tensors337984.txt")
+	for k in range(50):
+		os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/images/tensors_{0:06d}.txt".format(k))
+		os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/images/pdb{0:06d}.pdb".format(k))
 	rc(session,"exit")
