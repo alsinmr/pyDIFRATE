@@ -81,6 +81,93 @@ def ct2data(ct_out):
 
     return out
 
+def apply_fr_index(v,squeeze=True):
+    """
+    Expands the output of mol2vec such that all frames have the same number of
+    elements (essentially apply the frame_index). This is done in such a way
+    that if a frame is missing for one or more residues (frame_index set to nan),
+    then the motion appears in the next frame out.
+    """
+    nu=[(v0,None) if len(v0)!=2 else v0 for v0 in v['v']]     #Make sure all frames have 2 elements
+    vZ,vXZ=(v['vT'],np.ones(v['vT'].shape)*np.nan) if len(v['vT'])!=2 else (v['vT'][0],v['vT'][1])    #Bond vector (and XZ vector) in the lab frame
+    nf=len(v['v'])
+    nr,nt=vZ.shape[1:]
+    
+    fi=v['frame_index']
+    fiout=list()
+    nuZ=list()
+    nuXZ=list()
+
+    iF0=list()
+
+    for k in range(nf):
+        iF=np.isnan(fi[k])
+        iF0.append(iF)
+        iT=np.logical_not(iF)
+        nuZ.append(np.zeros([3,nr,nt]))
+        nuXZ.append(np.zeros([3,nr,nt]))
+        nuXZ[-1][:]=np.nan
+        
+        
+        nuZ[-1][:,iT]=nu[k][0][:,fi[k][iT].astype(int)]
+        nuZ[-1][:,iF]=vZ[:,iF] if k==0 else nuZ[k-1][:,iF]
+        if nu[k][1] is not None:
+            nuXZ[-1][:,iT]=nu[k][1][:,fi[k][iT].astype(int)]
+        
+        nuXZ[-1][:,iF]=vXZ[:,iF] if k==0 else nuXZ[k-1][:,iF]
+        
+        fiout.append(np.zeros(nr,dtype=int))
+        fiout[-1][iT]=fi[k][iT]
+        fiout[-1][iF]=np.arange(nr)[iF] if k==0 else -1
+    
+    k=0
+    while k<nf-1:
+        test1=np.logical_and(iF0[k],iF0[k+1])
+        test2=np.logical_or(iF0[k],iF0[k+1])
+        if np.all(np.logical_not(test1)) and np.all(test2):
+            "Fill in values of nuZ[k],nuXZ[k], from nuZ[k+1], move all values down, delete last element"
+            nuZ[k][:,iF0[k]]=nuZ[k+1][:,iF0[k]]
+            nuXZ[k][:,iF0[k]]=nuXZ[k+1][:,iF0[k]]
+            
+            fiout[k][iF0[k]]=fiout[k+1][iF0[k]]+np.max(fiout[k])+1
+            nuZ[k+1:-1]=nuZ[k+2:]
+            nuXZ[k+1:-1]=nuXZ[k+2:]
+            fiout[k+1:-1]=fiout[k+2:]
+            nuZ.pop()
+            nuXZ.pop()
+            fiout.pop()
+        k+=1
+        
+    "Fix the frame_index"
+    fiout0=fiout
+    fiout=list()
+    for k in range(len(fiout0)+1):
+        if k==0:
+            fiout.append(np.zeros(nr,dtype=int))
+            fiout[-1][fiout0[k]<0]=-1
+            fiout[-1][fiout[k]>=0]=np.arange(np.sum(fiout[k]>=0))
+        elif k==len(fiout0):
+            fiout.append(np.array(fiout0[-1],dtype=int))
+            m=k-2
+            while np.any(fiout[-1]<0):
+                fiout[-1][fiout[-1]<0]=fiout0[m][fiout[-1]<0]+np.max(fiout0)
+                m+=-1
+        else:
+            fiout.append(np.array(fiout0[k-1],dtype=int))
+            m=k-2
+            while np.any(fiout[-1]<0):
+                fiout[-1][fiout[-1]<0]=fiout0[m][fiout[-1]<0]+np.max(fiout0)
+                m+=-1
+            fiout[-1][fiout0[k]<0]=-1
+        
+        
+    
+    "Make sure vectors are normalized"
+    vZ=vft.norm(vZ)
+    nuZ=[vft.norm(nuz) for nuz in nuZ]
+    
+    return vZ,vXZ,nuZ,nuXZ,fiout
+
 def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     """
     Calculates correlation functions for frames (f in F), for a list of frames.
@@ -128,33 +215,36 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     if return_index is None:return_index=[True,False,False,False,False,False,False,True,True,False]
     ri=np.array(return_index,dtype=bool)
 
-    
-    nu=[(v0,None) if len(v0)!=2 else v0 for v0 in v['v']]     #Make sure all frames have 2 elements
-    vZ,vXZ=(v['vT'],np.ones(v['vT'].shape)*np.nan) if len(v['vT'])!=2 else (v['vT'][0],v['vT'][1])    #Bond vector (and XZ vector) in the lab frame
-    nf=len(v['v'])
-    nr,nt=vZ.shape[1:]
     index=v['index']
     
-    fi=v['frame_index']
-    nuZ=list()
-    nuXZ=list()
-    for k in range(nf):
-        iF=np.isnan(fi[k])
-        iT=np.logical_not(iF)
-        nuZ.append(np.zeros([3,nr,nt]))
-        nuXZ.append(np.zeros([3,nr,nt]))
-        nuXZ[-1][:]=np.nan
-        
-        nuZ[-1][:,iT]=nu[k][0][:,fi[k][iT].astype(int)]
-        nuZ[-1][:,iF]=vZ[:,iF] if k==0 else nuZ[k-1][:,iF]
-        if nu[k][1] is not None:
-            nuXZ[-1][:,iT]=nu[k][1][:,fi[k][iT].astype(int)]
-        
-        nuXZ[-1][:,iF]=vXZ[:,iF] if k==0 else nuXZ[k-1][:,iF]
+    vZ,vXZ,nuZ,nuXZ,_=apply_fr_index(v)
     
-    "Make sure vectors are normalized"
-    vZ=vft.norm(vZ)
-    nuZ=[vft.norm(nuz) for nuz in nuZ]
+#    nu=[(v0,None) if len(v0)!=2 else v0 for v0 in v['v']]     #Make sure all frames have 2 elements
+#    vZ,vXZ=(v['vT'],np.ones(v['vT'].shape)*np.nan) if len(v['vT'])!=2 else (v['vT'][0],v['vT'][1])    #Bond vector (and XZ vector) in the lab frame
+    nf=len(nuZ)
+    nr,nt=vZ.shape[1:]
+#    
+#    
+#    fi=v['frame_index']
+#    nuZ=list()
+#    nuXZ=list()
+#    for k in range(nf):
+#        iF=np.isnan(fi[k])
+#        iT=np.logical_not(iF)
+#        nuZ.append(np.zeros([3,nr,nt]))
+#        nuXZ.append(np.zeros([3,nr,nt]))
+#        nuXZ[-1][:]=np.nan
+#        
+#        nuZ[-1][:,iT]=nu[k][0][:,fi[k][iT].astype(int)]
+#        nuZ[-1][:,iF]=vZ[:,iF] if k==0 else nuZ[k-1][:,iF]
+#        if nu[k][1] is not None:
+#            nuXZ[-1][:,iT]=nu[k][1][:,fi[k][iT].astype(int)]
+#        
+#        nuXZ[-1][:,iF]=vXZ[:,iF] if k==0 else nuXZ[k-1][:,iF]
+    
+#    "Make sure vectors are normalized"
+#    vZ=vft.norm(vZ)
+#    nuZ=[vft.norm(nuz) for nuz in nuZ]
     
     if ri[0] or ri[1] or ri[2] or ri[7]:
         "Calculate ct_m0_finF if requested, if ct_prod requested, if ct_finF requested, or if ct_0m_finF requested"
@@ -264,7 +354,7 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     return out
 
 
-def mol2vec(mol,n=100,nr=10,tf=None,dt=None):
+def mol2vec(mol,n=100,nr=10,tf=None,dt=None,index=None):
     """
     Extracts vectors describing from the frame functions found in the molecule
     object. Arguments are mol, the molecule object, n and nr, which are parameters
@@ -273,7 +363,8 @@ def mol2vec(mol,n=100,nr=10,tf=None,dt=None):
     
     traj=mol.mda_object.trajectory
     if tf is None:tf=traj.n_frames
-    index=trunc_t_axis(tf,n,nr)
+    if index is None:
+        index=trunc_t_axis(tf,n,nr)
     
     return ini_vec_load(traj,mol._vf,mol._vft,mol._frame_info['frame_index'],index=index,dt=dt)
 

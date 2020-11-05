@@ -504,7 +504,6 @@ def MOIxy(molecule,sel,sel1=None,sel2=None,Nuc=None,index=None,resids=None,segid
     uni=molecule.mda_object
     uni.trajectory.rewind()
     
-    box=uni.dimensions[:3]
     
     for k,s in enumerate(sel):
         vr=s.positions

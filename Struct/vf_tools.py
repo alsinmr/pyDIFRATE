@@ -227,11 +227,12 @@ def applyFrame(*vecs,nuZ_F=None,nuXZ_F=None):
     
     Note, one may also omit the frame application and just apply a frame index
     """
+
     if nuZ_F is None:
         out=vecs
     else:
-        sc=vft.pass2act(*vft.getFrame(nuZ_F,nuXZ_F))
-        out=[None if v is None else vft.R(v,*sc) for v in vecs]
+        sc=pass2act(*getFrame(nuZ_F,nuXZ_F))
+        out=[None if v is None else R(v,*sc) for v in vecs]
         
     if len(vecs)==1:
         return out[0]
