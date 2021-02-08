@@ -46,9 +46,11 @@ def ct2data(ct_out):
     also if included, and the subsequent results are for each frame of 
     ct_finF.
 
-    Within ct_finF, we also include A_m0_finF and A_0m_PASinF of the previous 
-    frame (that is, the equilibrium values used to construct ct_finF), within
-    vars if included in ct_out
+    Within ct_finF, we also include A_m0_finF, and also A_0m_PASinF (A_0m_PASinF 
+    is calculated in the previous, so that a given frame contains the equilibrium
+    values used to construct ct_finF). The equilibrium tensor for all motion
+    can be found in ct_prod (technically, this is A_m0_PASinF where F is
+    the lab frame).
     """
     
     out=list()
@@ -62,8 +64,8 @@ def ct2data(ct_out):
     if 'ct_prod' in ct_out:
         ct={'Ct':ct_out['ct_prod'],'N':ct_out['N'],'index':ct_out['index'],'t':ct_out['t']}
         out.append(data(Ct=ct))
-        if 'A_0m_PASfinF' in ct_out:
-            out[-1].vars['A_0m_PASinF']=ct_out['A_0m_PASinF'][-1]
+        if 'A_0m_PASinF' in ct_out:
+            out[-1].vars['A_0m_PASinLF']=ct_out['A_0m_PASinF'][-1]
         
     if 'ct_finF' in ct_out:
         for k,ct0 in enumerate(ct_out['ct_finF']):
@@ -71,6 +73,8 @@ def ct2data(ct_out):
             out.append(data(Ct=ct))
             if 'A_m0_finF' in ct_out:
                 out[-1].vars['A_m0_finF']=ct_out['A_m0_finF'][k]
+            if 'A_0m_finF' in ct_out:
+                out[-1].vars['A_0m_finF']=ct_out['A_0m_finF'][k]
             if 'A_0m_PASinF' in ct_out:
                 if k==0:
                     A0=np.zeros([5,out[-1].R.shape[0]])
@@ -198,6 +202,7 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     
     Default is
     return_index=[True,False,False,False,False,False,False,True,True,False]
+    that is, ct_finF, ct_prod, and ct are included in the default.
     
     That is, we calculate the individual correlation functions, the product of
     those terms, and the directly calculated correlation function by default.
@@ -462,8 +467,21 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
         zz=zzp.mean(-1)
         
         "Get the FT of zzp if required"
-        if ctFT:ftzz=FT(zzp,index).conj()
-
+        if ctFT:ftzz=FT(zzp,index)
+        """
+        AN IMPORTANT NOTE HERE:
+        For awhile, I have had taken the complex conjugate of ftzz and not of
+        the other terms. In principle, should be a teeny bit faster that way.
+        However, it returns, apparently, the complex conjugate of the correct
+        correlation. One solution was to simply take the complex conjugate
+        of the result (previously after taking the inverse transform about 40
+        lines below here). However, I think this only works because the correlation
+        functions are approximately symmetric about 0. Therefore, now I instead
+        take the complex conjugate of the other term (about 15 lines below), 
+        and remove the conjugate here and on the final correlatin functions.
+        
+        Let's assume this works, but watch out for new errors!
+        """
         "These are additional terms required for C_pp"
         if np.any(calc[5:]):
             z=l0['eag']
@@ -475,7 +493,7 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
             if calc[k]:             #Loop over all terms
                 p=ct_prods(l0,k)
                 d20[k]+=p.mean(-1)*zz
-                if ctFT:ct0[k]+=FT(p,index)*ftzz #Calc ct
+                if ctFT:ct0[k]+=FT(p,index).conj()*ftzz #Calc ct
                 if ctDIR:ct0[k]+=fastCT(p,zzp,index,N)
         
         "Loop over all terms C_pp"
@@ -483,7 +501,7 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
             if calc[k]:
                 p,p1=ct_prods(l0,k)
                 d20[k]+=zm*p1.mean(-1)+zz*p.mean(-1) 
-                if ctFT:ct0[k]+=FT(p,index)*ftzz+FT(p1,index)*ftz
+                if ctFT:ct0[k]+=FT(p,index).conj()*ftzz+FT(p1,index)*ftz
                 if ctDIR:ct0[k]+=fastCT(p,zzp,index,N)+fastCT(p1,z,index,N)
     
        
@@ -498,6 +516,7 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
             ct=[None if ct1 is None else (np.fft.ifft(ct1.conj(),axis=-1)[:,:int(n/2)])[:,i]/N for ct1 in ct0]
         else:
             ct=[None if ct1 is None else (np.fft.ifft(ct1,axis=-1)[:,:int(n/2)])[:,i]/N for ct1 in ct0]
+#        ct=[None if ct1 is None else ct1.conj() for ct1 in ct]   #We have the complex conjugate of the correct correlation function
     elif ctDIR:
         ct=[None if ct1 is None else ct1/N[N!=0] for ct1 in ct0]
     "Add offsets to terms C_pp"

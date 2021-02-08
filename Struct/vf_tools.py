@@ -810,6 +810,48 @@ def D2inf_v2(vZ,m=None):
         
     return np.array(D2inf)
 
+def D2avgLF(vZ,m=None):
+    """
+    """
+    if m is None:
+        m1=[-2,-1,0]
+    else:
+        m1=[m]
+        
+    ca,sa,cb,sb,cg,sg=getFrame(vZ)
+    
+        
+    if vZ.ndim==2:
+        N=0
+    else:
+        N=vZ.shape[1]
+    
+    D2avg=list()
+    
+    for m0 in m1:
+        if N==0:
+            d2=np.array(0,dtype=complex)
+        else:
+            d2=np.zeros(N,dtype=complex)
+            
+            if m0==-2:
+                d2=np.sqrt(3/8)*((cg*sb)**2-(sg*sb)**2+2*1j*sg*sb*cg*sb)
+            elif m0==-1:
+                d2=-np.sqrt(3/2)*(cg*sb*cb+1j*sg*sb*cb)
+            elif m0==0:
+                d2=1/2*(3*cb**2-1).mean(-1)
+            elif m0==1:
+                d2=np.sqrt(3/2)*(cg*sb*cb-1j*sg*sb*cb)
+            elif m0==2:
+                d2=np.sqrt(3/8)*((cg*sb)**2-(sg*sb)**2-2*1j*sg*sb*cg*sb)
+        D2avg.append(D2)
+    
+    if m is None:
+        D2avg.append(-np.conjugate(D2inf[1]))
+        D2avg.append(np.conjugate(D2inf[0]))
+
+    return np.array(D2avg)
+
 def Spher2Cart(rho):
     """
     Takes a set of components of a spherical tensor and calculates its cartesian
@@ -998,11 +1040,15 @@ def projZ(v0,vr=[0,0,1]):
     
     Default project is along z
     """
-    v0=np.atleast_2d(v0)
-    if np.ndim(vr)==1 or np.shape(vr)[1]==1:    #Make matrices the same size
-        vr=np.atleast_2d(vr).T.repeat(np.shape(v0)[1],axis=1) 
+#    v0=np.atleast_2d(v0)
+#    if np.ndim(vr)==1 or np.shape(vr)[1]==1:    #Make matrices the same size
+#        vr=np.atleast_2d(vr).T.repeat(np.shape(v0)[1],axis=1) 
     
-    return np.atleast_2d((norm(v0)*norm(vr)).sum(axis=0))*vr
+    vr=norm(vr)
+    a=v0[0]*vr[0]+v0[1]*vr[1]+v0[2]*vr[2]
+    return np.array([a*vr[0],a*vr[1],a*vr[2]])
+    
+#    return np.atleast_2d((norm(v0)*norm(vr)).sum(axis=0))*vr
 
 #%% Project onto plane
 def projXY(v0,vnorm=[0,0,1]):

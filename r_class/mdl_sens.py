@@ -50,18 +50,17 @@ class model(object):
             
     def new_mdl(self,tMdl=None,AMdl=None,Model=None,**kwargs):
         
-        if tMdl!=None and AMdl!=None:
-            if not isinstance(tMdl,np.ndarray):
-                tMdl=np.array(tMdl)
-            if tMdl.shape==():
-                tMdl=np.array([tMdl])
-            if not isinstance(AMdl,np.ndarray):
-                AMdl=np.array(AMdl)
-            if AMdl.shape==():
-                AMdl=np.array([AMdl])
-                
+        if tMdl is not None and AMdl is not None:
+            tMdl=np.atleast_1d(tMdl)
+            AMdl=np.atleast_1d(AMdl)
             
-            MdlPar=dict(Model='Direct',BondSpfc='no')
+            if AMdl.ndim==3:
+                MdlPar=dict(Model='Direct',BondSpfc='yes')
+            elif AMdl.ndim==1:
+                MdlPar=dict(Model='Direct',BondSpfc='no')
+            else:
+                print('AMdl must be a single value, a 1D array, or a 3D array')
+                return
             
             self.MdlPar.append(MdlPar)
             self.tMdl.append(tMdl)

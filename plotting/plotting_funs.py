@@ -415,12 +415,14 @@ def plot_all_Ct(t,Ct,Ct_fit=None,lbl=None,index=None,color=None,fig=None,style='
     
     plot_all_Ct(t,Ct,Ct_fit=None,lbl=None,linecolor=None,figure=None,**kwargs)
     """
-    
+
     if index is not None:
-        index=np.array(index).astype(int)
+        index=np.atleast_1d(index).astype(int)
         Ct=Ct[index]
         if Ct_fit is not None:
             Ct_fit=Ct_fit[index]
+        if lbl is not None:
+            lbl=lbl[index]
     
     nexp=Ct.shape[0]
     ax,xax,yax=subplot_setup(nexp,fig)
@@ -433,19 +435,24 @@ def plot_all_Ct(t,Ct,Ct_fit=None,lbl=None,index=None,color=None,fig=None,style='
     if Ct_fit is None:Ct_fit=[None for k in range(nexp)]
     
 
-    
     for k,a in enumerate(ax):
         plot_Ct(t,Ct[k],Ct_fit[k],ax=a,color=color,style=style,**kwargs)
         if xax[k]:
-            plt.setp(a.get_xticklabels(),visible=False)
+            plt.setp(a.get_xticklabels(),visible=True)
             a.set_xlabel('t / ns')
         else:
             plt.setp(a.get_xticklabels(),visible=False)
             
         if yax[k]:
             a.set_ylabel('C(t)')
+            plt.setp(a.get_yticklabels(),visible=True)
+        else:
+            plt.setp(a.get_yticklabels(),visible=False)
+            
         a.set_xlim(t[0],t[-1])
         a.set_ylim(*ylim)
+        if lbl is not None:
+            a.set_title(lbl[k],y=1,pad=-6,FontSize=6)
     return ax
     
 def subplot_setup(nexp,fig=None):
@@ -491,14 +498,24 @@ def plot_rhoz(sens,index=None,ax=None,bond=None,norm=False,mdl_num=None,**kwargs
     
     plot_rhoz(sens,index=None,norm=False,ax=None,bond=None,**kwargs)
     """
+    
+    if hasattr(sens,'detect_par') and sens.detect_par['R2_ex_corr']:
+        clip=True
+    else:
+        clip=False
+        
     if index is None:
         index=sens.info.columns.values
+    else:
+        clip=False
+    
+
         
     a,_=sens._rho_eff(exp_num=index,bond=bond,mdl_num=mdl_num)
     a=a.T
     
-    if hasattr(sens,'detect_par') and sens.detect_par['R2_ex_corr']:
-        a=a[:,:-1]
+    if clip:a=a[:,:-1]  #Remove R2_ex sensitivity if present
+
 
     if norm:
         norm_vec=np.max(np.abs(a),axis=0)

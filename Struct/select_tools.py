@@ -233,11 +233,12 @@ def find_bonded(sel,sel0=None,exclude=None,n=3,sort='dist',d=1.65):
     recommended to also provide a second selection (sel0) out of which to search
     for the bound atoms. If not included, the full MD analysis universe is searched.
     
-    Note- a list of selections is returned. One may ask for a certain number
-    of atoms (default 3), in which case the user may opt to choose the nearest
-    atoms (sort='dist'), or optionally the largest atoms (sort='mass'), or
-    finally carbon chain (sort='cchain'), which preferentially yields C atoms in
-    the bonded list (and second yields the largest atoms)
+    Note- a list of selections is returned. Sorting may be determined in one
+    of several ways (set sort)
+        'dist':     Sort according to the nearest atoms
+        'mass':     Sort according to the largest atoms first
+        'massi':    Sort according to smallest atoms first (H first)
+        'cchain':   Sort, returing C atoms preferentially (followed by sorting by mass)
     
     One may also exclude a set of atoms (exclude), which then will not be returned
     in the list of bonded atoms. Note that exclude should be a list the same
@@ -245,16 +246,18 @@ def find_bonded(sel,sel0=None,exclude=None,n=3,sort='dist',d=1.65):
     with a list length equal to the number of atoms in sel)
     """
     
-    out=[sel[0:0] for _ in range(n)]
+    if not(hasattr(sel,'__len__')):sel=[sel]
+    
+    out=[sel[0].universe.atoms[0:0] for _ in range(n)]  #Empty output
     
     if sel0 is None:
-        sel0=sel.universe
+        sel0=sel[0].universe
     
-    for k,s in enumerate(sel):
+    for m,s in enumerate(sel):
         sel01=sel0.select_atoms('point {0} {1} {2} {3}'.format(*s.position,d))
-        sel01=sel01-s
+        sel01=sel01-s #Exclude self
         if exclude is not None:
-            sel01=sel01-exclude[k]
+            sel01=sel01-exclude[m]
         if sort[0].lower()=='d':
             i=np.argsort(((sel01.positions-s.position)**2).sum(axis=1))
         elif sort[0].lower()=='c':
@@ -264,6 +267,8 @@ def find_bonded(sel,sel0=None,exclude=None,n=3,sort='dist',d=1.65):
             C=np.argwhere(C)[:,0]
             nC=np.argwhere(nC)[:,0]
             i=np.concatenate((C,nC[i1]))
+        elif sort.lower()=='massi':
+            i=np.argsort(sel01.masses)
         else:
             i=np.argsort(sel01.masses)[::-1]
         sel01=sel01[i]

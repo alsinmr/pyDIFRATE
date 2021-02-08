@@ -40,7 +40,7 @@ class Ct(mdl.model):
         log-spaced (3 entries for tc or z)
         """
     
-        if tc==None:
+        if tc is None:
             if 'z' in kwargs:
                 z=kwargs.get('z')
                 if np.size(z)==3:

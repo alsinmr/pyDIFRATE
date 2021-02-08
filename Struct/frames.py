@@ -449,7 +449,7 @@ def MOIz(molecule,sel,resids=None,segids=None,filter_str=None):
     
     sel=selt.sel_lists(molecule,sel,resids,segids,filter_str)    
     uni=molecule.mda_object
-    uni.trajectory.rewind()
+    uni.trajectory[0]
     
     box=uni.dimensions[:3]
     
@@ -502,7 +502,7 @@ def MOIxy(molecule,sel,sel1=None,sel2=None,Nuc=None,index=None,resids=None,segid
         sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)
     
     uni=molecule.mda_object
-    uni.trajectory.rewind()
+    uni.trajectory[0]
     
     
     for k,s in enumerate(sel):
@@ -528,13 +528,117 @@ def MOIxy(molecule,sel,sel1=None,sel2=None,Nuc=None,index=None,resids=None,segid
         vnorm=np.array(vnorm)
         
         #Pre-allocate output vector, to point along z
-        v=np.zeros([3,sel1.n_atoms])
-        v[2]=1
+        v1=np.zeros([3,sel1.n_atoms])
+        v1[2]=1
+        v2=v1.copy()
         
+        v0=vft.pbc_corr((sel1.positions-sel2.positions).T,box)
         for k,vn in enumerate(vnorm):
-            v0=vft.pbc_corr((sel1.positions-sel2.positions).T,box)
-            v[:,k==index]=vft.projXY(v0[:,k==index],vn)
+            v1[:,k==index]=vft.projXY(v0[:,k==index],vn)
+            v2[:,k==index]=np.array([vn]).T.repeat((k==index).sum(),axis=1)
         
-        return v
+        return v1,v2
+    
+    return sub
+
+def MOIbeta(molecule,sel,sel1=None,sel2=None,Nuc=None,index=None,resids=None,segids=None,filter_str=None):
+    """
+    Separates out rotation within the moment of inertia frame (should be used in
+    conjunction with MOIz). That is, we identify rotational motion, where the z-axis
+    is the direction of the Moment of Inertia vector. 
+    
+    The user must provide one or more selections to define the moment of inertia 
+    (sel). The user must also provide the selections to which the MOI is applied
+    (sel1 and sel2, or Nuc). Additional filters will be used as normal, applied 
+    to all selections (resids,segids,filter_str). In case multiple MOI selections
+    are provided (in a list), the user must provide an index, to specifify which
+    bond goes with which MOI selection. This should usually be the same variable
+    as provided for the frame_index when using MOIz (and one will usually not
+    use a frame_index when setting up this frame)
+    
+    MOIxy(sel,sel1=None,sel2=None,Nuc=None,index=None,resids=None,segids=None,filter_str=None)
+    """
+    
+    sel=selt.sel_lists(molecule,sel,resids,segids,filter_str)
+    
+    if Nuc is not None:
+        sel1,sel2=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+    else:
+        sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
+        sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)
+    
+    uni=molecule.mda_object
+    uni.trajectory[0]
+    
+    
+    sel=selt.sel_lists(molecule,sel,resids,segids,filter_str)    
+    uni=molecule.mda_object
+    uni.trajectory[0]
+    
+    box=uni.dimensions[:3]
+    
+    for k,s in enumerate(sel):
+        vr=s.positions
+        i0=vft.sort_by_dist(vr)
+        sel[k]=sel[k][i0]
+        
+    vref=list()
+    for s in sel:
+        v0=vft.pbc_pos(s.positions.T,box)
+        vref.append(vft.principle_axis_MOI(v0)[:,0])
+        
+    
+    def MOIsub():
+        v=list()
+        box=uni.dimensions[:3]
+        for s,vr in zip(sel,vref):
+            v0=vft.pbc_pos(s.positions.T,box)
+            v1=vft.principle_axis_MOI(v0)[:,0]
+            v.append(v1*np.sign(np.dot(v1,vr)))
+        return np.array(v).T
+    
+#    for k,s in enumerate(sel):
+#        vr=s.positions
+#        i0=vft.sort_by_dist(vr)
+#        sel[k]=sel[k][i0]
+        
+    if index is None:
+        if len(sel)==1:
+            index=np.zeros(sel1.n_atoms,dtype=int)
+        elif len(sel)==sel1.n_atoms:
+            index=np.arange(sel1.n_atoms,dtype=int)
+        else:
+            print('index must be defined')
+            return 
+
+#    vref=list()
+#    box=uni.dimensions[:3]
+#    for s in sel:
+#        v0=vft.pbc_pos(s.positions.T,box)
+#        vref.append(vft.principle_axis_MOI(v0)[:,0])
+
+    def sub():
+        vnorm=MOIsub()
+        #Pre-allocate output vector, to point along z
+        vZ=np.zeros([3,sel1.n_atoms])
+        vZ[2]=1     #If a bond not in index, then vZ just on Z
+#        vXZ=np.zeros([3,sel1.n_atoms])
+#        vXZ[0]=1    #If a bond not in index, then vXZ just along x
+        
+        sc=np.array(vft.getFrame(vnorm)).T
+        v00=vft.norm(vft.pbc_corr((sel1.positions-sel2.positions).T,box))
+        
+        for k,(vn,sc0) in enumerate(zip(vnorm.T,sc)):
+            v0=v00[:,k==index]
+            cb=v0[0]*vn[0]+v0[1]*vn[1]+v0[2]*vn[2]  #Angle between MOI and bond
+            cb[cb>1]=1.0
+            sb=np.sqrt(1-cb**2)
+            v0=np.concatenate(([sb],[np.zeros(sb.shape)],[cb]),axis=0)
+            "Here, we keep the vector fixed in the xz plane of the MOI frame"
+            vZ[:,k==index]=vft.R(v0,*sc0)
+#            vZ[:,k==index]=v0
+#            vXZ[:,k==index]=np.atleast_2d(vn).T.repeat(v0.shape[1],1)
+        
+        return vZ
     
     return sub

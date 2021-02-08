@@ -18,9 +18,9 @@ import vf_tools as vft
 import eval_fr as ef
 import select_tools as selt
 os.chdir('../chimera')
-import vis3D as v3D
-from vis3D import py_line,WrCC
-from chimera_funs import chimera_path,run_command,get_path
+from chimeraX_funs import py_line,WrCC,chimera_path,run_command,copy_funs,write_tensor
+from chimeraX_funs import sel_indices,py_print_npa,guess_disp_mode
+from shutil import copyfile
 os.chdir(curdir)
 
 def time_axis(nt0=1e5,nt=300,step='log',dt=0.005,fr=15,mode='time'):
@@ -78,10 +78,10 @@ def time_axis(nt0=1e5,nt=300,step='log',dt=0.005,fr=15,mode='time'):
 def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
                 file_template='images/tensor_{0:06d}.jpg',scene=None,\
                 save_opts='width 1000 height 600 supersample 2',chimera_cmds=None,\
-                marker=None,pdb_template=None):
+                marker=None,pdb_template=None,reorientT=True):
         
     sel=sel0
-    
+
     "Setup the residue index"
     if ct_m0 is not None:
         ct_m0=np.array(ct_m0)
@@ -112,15 +112,15 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
             sel3=selt.find_bonded(mol.sel2,sel0,exclude=mol.sel1,n=1,sort='cchain')[0]
             s3i=np.array([np.argwhere(s3.index==sel.indices).squeeze() for s3 in sel3])
             
-    if not(os.path.exists(folder)):os.mkdir(folder)
+    if not(os.path.exists(folder)):os.mkdir(folder) #Make sure directory exists
     
-    if not(ct_m0 is None and pdb_template is not None):
+    if ct_m0 is not None or pdb_template is None:
+#    if not(ct_m0 is None and pdb_template is not None):
         mp0=np.array([0,0,0])
         for k,t0 in enumerate(t_index):
             if pdb_template is None:
                 mol.mda_object.trajectory[t0]
         
-#                sel=mol.mda_object.select_atoms(select)
 
                 
                 "Try to keep molecule in center of box, correct boundary condition errors"
@@ -148,8 +148,22 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
                 if pdb_template is None:
                     vZ,vXZ=mol._vft()
                 else:
-                    vZ=(sel[s1i].positions-sel[s2i].positions).T
-                    vXZ=(sel[s3i].positions-sel[s2i].positions).T
+                    if reorientT:
+                        vZ=(sel[s2i].positions-sel[s1i].positions).T
+                        vXZ=(sel[s3i].positions-sel[s1i].positions).T
+                    elif k==0:
+                        mol.mda_object.trajectory[0]
+                        vZ,vXZ=mol._vft()
+                        vZ0=norm(vZ.copy())
+                        vXZ0=vXZ.copy()
+                    else:
+                        vZ=norm((sel[s2i].positions-sel[s1i].positions).T)
+                        cb=(vZ0*vZ).sum(0)
+                        sb=np.sqrt(1-cb**2)
+                        vec=np.array([vZ0[m]*vZ[n]-vZ0[n]*vZ[m] for m,n in zip([1,2,0],[2,0,1])])
+                        sc0=vft.getFrame(vec)
+                        vXZ=vft.R(vft.Rz(vft.R(vXZ0,*vft.pass2act(*sc0)),cb,sb),*sc0)
+                        
                 vZ=norm(vZ)
                 scF=getFrame(vZ[:,index],vXZ[:,index])
                 tensors=Rspher(ct_m0[:,:,t0],*scF)
@@ -158,7 +172,7 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
                 delta,eta,*euler=Spher2pars(tensors,return_angles=True)
                 
                 "Write tensors to file"
-                v3D.write_tensor(os.path.join(folder,'tensors_{0:06d}.txt'.format(k)),delta*sc,eta,euler,pos,marker)
+                write_tensor(os.path.join(folder,'tensors_{0:06d}.txt'.format(k)),delta*sc,eta,euler,pos,marker)
         
             if pdb_template is None:
                 sel.write(os.path.join(folder,'pdb{0:06d}.pdb'.format(k))) 
@@ -172,7 +186,8 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
             pdb_template=os.path.join(folder,pdb_template)
         rmpdb=False
     pdb_template="'"+pdb_template+"'"
-    scene="'"+scene+"'"
+    if scene is not None:
+        scene="'"+scene+"'"
 
     "Now write the chimera script"
     full_path=os.path.join(folder,'chimera_script.py')    
@@ -182,14 +197,14 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
         py_line(f,'import numpy as np')
         py_line(f,run_command(version='X'))
         
-        v3D.copy_funs(f)    #Copy required functions into chimeraX script
+        copy_funs(f)    #Copy required functions into chimeraX script
                 
         
-        py_line(f,'try:')
-#        py_line(f,'if True:')
+        py_line(f,'\ntry:')
+#        py_line(f,'\nif True:')
 
         
-        py_line(f,'for k in range({0}):'.format(nt),1)
+        py_line(f,'for k in range({0:d}):'.format(nt),1)
         if scene is not None:
 #            py_line(f,'session.open_command.open_data("'+scene+'")',2)
             WrCC(f,'open '+scene,2)
@@ -239,6 +254,196 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
         
     "Copy the created chimera files to names in the chimera folder (ex. for debugging)"
     os.spawnl(os.P_NOWAIT,chimera_path(version='X'),chimera_path(version='X'),full_path)
+
+
+def det_fader(data,mol,fr=15,nt0=1e5,nt=300,step='log',scaling=1,\
+                file_template='images/det_fade{0:06d}.jpg',scene=None,\
+                save_opts='width 1000 height 600 supersample 2',chimera_cmds=None,\
+                marker=None,pdb_template=None,disp_mode=None):
+    """
+    Takes a molecule object or a set of pdb files (given as a template string) and 
+    generates images where, as we move through the time axis, we fade between
+    3D plots of the individual detector responses. We need the data object
+    to achieve this, in addition to the molecule object and a MDAnalysis selection
+    for writing 
+    """
+    
+    
+    "Here we try to guess the display mode if not given"
+    if disp_mode is None:
+        disp_mode=guess_disp_mode(mol)
+    
+    di=sel_indices(mol,disp_mode,mode='all')
+    
+    "Setup time axis"
+    t_index=time_axis(nt0=nt0,nt=nt,step=step,mode='index')
+    t=time_axis(fr=fr,nt0=nt0,nt=nt,step=step,mode='avg')
+        
+    file_template=os.path.realpath(file_template)
+    folder,_=os.path.split(file_template)
+    file_template="'"+file_template+"'"
+    
+    if not(os.path.exists(folder)):os.mkdir(folder) #Make sure directory exists
+    
+    "Get colors for plotting"
+    
+    clr0=list()
+    clr=plt.rcParams['axes.prop_cycle'].by_key()['color']
+    for k in range(data.R.shape[1]):
+        clr0.append(np.append(hex_to_rgb(clr[k]),255))
+    clr0=np.array(clr0)    
+    
+    clr=clr0.T
+    "Determine indices of the atoms to be colored"
+    id0=sel_indices(mol,disp_mode,mode='value')
+#    x=np.concatenate([x0*np.ones(len(i)) for i,x0 in zip(id0,x)])
+    id1=np.concatenate([i for i in id0]).astype(int)
+    ids,b=np.unique(id1,return_index=True)
+#    x=np.array([x[id0[b0]==id0].mean() for b0 in b])
+    
+    "Calculate colors and radii as a function of time"
+    rhoz,_=data.sens._rho_eff(mdl_num=None)
+    tc=data.sens.tc()
+#    clr1=np.array([(c*rhoz.T).sum(1)/rhoz.sum(axis=0) for c in clr0.T]).T
+    clr0=[210,180,140,255]  #Tan for less-than-1 total response
+    
+#    x=np.zeros([t.size,len(ids)])
+#    clr=np.zeros([t.size,4],dtype='uint8')
+    R=list()
+    for R0 in data.R.copy().T:
+        R0=np.concatenate([R1*np.ones(len(i)) for i,R1 in zip(id0,R0)])
+        R0=np.array([R0[id1[b0]==id1].mean() for b0 in b])
+        R.append(R0*scaling)
+    R=np.array(R).T
+#    R0*=scaling
+#    for k,t0 in enumerate(t):
+#        b1=np.argmin(np.abs(t0/1e9-data.sens.tc()))
+#        R=(R0*rhoz[:,b1]).sum(1)
+#        R=np.concatenate([R0*np.ones(len(i)) for i,R0 in zip(id0,R)])
+#        x[k]=np.array([R[id1[b0]==id1].mean() for b0 in b])
+#        clr[k]=clr1[b1]
+    
+    
+    "Write out pdbs for plotting if required"    
+    if pdb_template is None:
+        pdb_template=os.path.join(folder,'pdb{0:06d}.pdb')
+        rmpdb=True
+        sel=mol.mda_object.atoms[di]
+        for k,t0 in enumerate(t_index):
+            mol.mda_object.trajectory[t0]
+            
+            
+            "Try to keep molecule in center of box, correct boundary condition errors"
+            if k!=0:
+                sel.positions=pbc_corr(sel.positions-mp0,mol.mda_object.dimensions[:3])
+                mp=sel.positions.mean(0)
+                mp0=mp+mp0
+                sel.positions=sel.positions-mp
+            else:
+                mp0=sel.positions.mean(0)
+                sel.positions=pbc_corr(sel.positions-sel.positions.mean(0),\
+                                       mol.mda_object.dimensions[:3])
+                
+            sel.write(pdb_template.format(k))
+    else:
+        rmpdb=False
+        
+    "Using quotes allows us to have spaces in paths below"
+    pdb_template="'"+pdb_template+"'"
+    if scene is not None:
+        scene="'"+scene+"'"    
+    
+    "Now write the chimera script"
+    full_path=os.path.join(folder,'chimera_script{0:06d}.py'.format(np.random.randint(1e6)))
+    
+    with open(full_path,'w') as f:
+        py_line(f,'import os')
+        py_line(f,'import numpy as np')
+        py_line(f,run_command(version='X'))
+        
+#        py_print_npa(f,'x',x,format_str='.6f',dtype='float',nt=0)
+        py_print_npa(f,'tc',tc,format_str='.6e',dtype='float',nt=0)
+        py_print_npa(f,'rhoz',rhoz,format_str='.6f',dtype='float',nt=0)
+        py_print_npa(f,'t',t,format_str='.6e',dtype='float',nt=0)
+        py_print_npa(f,'R',R,format_str='.6f',dtype='float',nt=0)
+        py_print_npa(f,'clr',clr,format_str='d',dtype='uint8',nt=0)
+        py_print_npa(f,'clr0',clr0,format_str='d',dtype='uint8',nt=0)
+        py_print_npa(f,'di',di,format_str='d',dtype='uint32',nt=0)
+        py_print_npa(f,'ids',ids,format_str='d',dtype='uint32',nt=0)
+        
+        py_line(f,'if True:')
+#        py_line(f,'try:')
+        
+        "Start the loop in chimeraX over time"
+#        py_line(f,'for k,(c,x0) in enumerate(zip(clr,x)):',1)
+        py_line(f,'for k,t0 in enumerate(t):',1)
+        if scene is not None:
+#            py_line(f,'session.open_command.open_data("'+scene+'")',2)
+            WrCC(f,'open '+scene,2)
+        
+        "Open the pdb here"
+        f.write('\t\trc(session,"open {0}".format(k))\n'.format(pdb_template))
+        
+        "Write chimera commands"
+        if chimera_cmds is not None:
+            if isinstance(chimera_cmds,str):chimera_cmds=[chimera_cmds]
+            for cmd in chimera_cmds:
+                WrCC(f,cmd,2)
+        
+#        WrCC(f,'~display',2)
+        WrCC(f,'~ribbon',2)
+        
+        "Get the atoms to be displayed"
+        py_line(f,'while len(session.models)>1:',2)
+        py_line(f,'session.models[0].delete()',3)
+        py_line(f,'atoms=session.models[0].atoms',2)
+        WrCC(f,'display #1',2)
+             
+        py_line(f,'hide=getattr(atoms,"hides")',2)
+        py_line(f,'hide[:]=1',2)
+        py_line(f,'hide[di]=0',2)
+        py_line(f,'setattr(atoms,"hides",hide)',2)
+        
+        #Parameter encoding
+        WrCC(f,'style ball',2)
+        WrCC(f,'size stickRadius 0.2',2)
+        WrCC(f,'color all tan',2)
+
+        #Calculate radius and colors here
+        
+        py_line(f,'b=np.argmin(np.abs(t0/1e9-tc))',2)
+        py_line(f,'x0=(rhoz[:,b]*R)',2)
+        py_line(f,'r=4*x0.sum(1)+0.9',2)
+        py_line(f,'c1=np.array([c0*(1-x0.sum(1))+(c01*x0).sum(1) for c0,c01 in zip(clr0,clr)]).T.astype("uint8")',2)
+    #        py_line(f,'x0[x0<0]=0',2)
+#        py_line(f,'x0[x0>1]=1',2)
+#        py_line(f,'c1=np.array([c00*(1-x0)+c10*x0 for c00,c10 in zip(clr0,c)]).T',2)
+#        py_line(f,'r=4*x0+0.9',2)
+        py_line(f,'r0=getattr(atoms,"radii").copy()',2)
+        py_line(f,'r0[:]=.8',2)
+        py_line(f,'r0[ids]=r',2)
+        py_line(f,'c0=getattr(atoms,"colors").copy()',2)
+        py_line(f,'c0[:]=clr0',2)
+        py_line(f,'c0[ids]=c1',2)
+        py_line(f,'setattr(atoms,"radii",r0)',2)
+        py_line(f,'setattr(atoms,"colors",c0)',2)
+                
+        f.write('\t\trc(session,"save '+"{0} ".format(file_template)+'{0}".format(k))\n'.format(save_opts))
+        
+        if rmpdb:
+            py_line(f,'for k in range({0}):'.format(nt),1)
+            py_line(f,'os.remove("{0}".format(k))'.format(pdb_template),2)
+        py_line(f,'os.remove("{0}")'.format(full_path),1)
+        WrCC(f,'exit',1)
+        
+        copyfile(full_path,full_path[:-9]+'.py')
+                
+
+        
+        
+    "Copy the created chimera files to names in the chimera folder (ex. for debugging)"
+    os.spawnl(os.P_NOWAIT,chimera_path(version='X'),chimera_path(version='X'),full_path)
+        
 
 
 def images2movie(file_template,fileout,fr=15,nt=None):
@@ -438,7 +643,8 @@ def combine_image(file1,file2,fileout,sc=1,location='ne',alpha=1,clear=True):
     
     cv2.imwrite(fileout,im)
     
-def tile_image(filenames,fileout,grid=None,pos=None,sc=None,SZ=None,clear=True):
+def tile_image(filenames,fileout,grid=None,pos=None,sc=None,SZ=None,clear=True,
+               tot_sc=1):
     """
     Takes a list of images (filenames), and either tiles those images (stretching
     so that each has the same shape as the first), or one may explicitly specify
@@ -480,6 +686,7 @@ def tile_image(filenames,fileout,grid=None,pos=None,sc=None,SZ=None,clear=True):
     clear:  Set white space to be see-through, such that one can see images below
             othe images. Note, the first image is on the bottom, and last image
             on top
+    tot_sc: Overall scaling (applied at last step). 
     """
     
     N=len(filenames)    #Number of images
@@ -502,23 +709,30 @@ def tile_image(filenames,fileout,grid=None,pos=None,sc=None,SZ=None,clear=True):
     
     im=[cv2.imread(f) for f in filenames]
     SZ0=[im0.shape[1::-1] for im0 in im]
+    "Make sure all images specify alpha"
     im=[np.concatenate((im0,255*np.ones([sz0[1],sz0[0],1],dtype='uint8')),axis=-1) if im0.shape[-1]==3 else im0 for im0,sz0 in zip(im,SZ0)]  
     
-    if SZ is None:SZ=np.array([SZ0[0][0]*grid[0],SZ0[0][1]*grid[1]],dtype=int)
+
+    
+    
     
     if sc is None:sc=[None for _ in range(N)]   #Default to scale-to-fit
     if len(sc)==2 and N!=2:sc=[sc for _ in range(N)]    #If all scaling factors are the same
     sc=[[sc0,sc0] if (sc0 is not None and not(hasattr(sc0,'__len__'))) else None for sc0 in sc]
         
     "Scale the images"
+    SZ00=SZ0[0]
     for k,(im0,sc0,pos0,sz0) in enumerate(zip(im,sc,pos,SZ0)):
         if sc0 is None and pos0 is None:    #Image in grid without scaling specified
-            sz0=SZ0[0]
+            sz0=np.round(np.array(SZ00)).astype(int) 
         elif sc0 is not None:
             sz0=np.round(np.array(sz0)*np.array(sc0)).astype(int) #Calculate new size
+        else:
+            break
         SZ0[k]=sz0
-        im[k]=cv2.resize(im0,(sz0[0],sz0[1])) #Apply new size
-            
+        im[k]=cv2.resize(im0,(sz0[0],sz0[1]),interpolation=cv2.INTER_AREA) #Apply new size
+    
+    if SZ is None:SZ=np.array([SZ00[0]*grid[0],SZ00[1]*grid[1]],dtype=int)        
     "Set positions for images to be tiled"
     pos=[None if p is None else [p[1],p[0]] for p in pos]   #Swap order
     pos=[[np.floor(k/grid[1])/grid[0],np.mod(k,grid[1])/grid[1]] if p is None\
@@ -536,6 +750,11 @@ def tile_image(filenames,fileout,grid=None,pos=None,sc=None,SZ=None,clear=True):
             ci=np.all(im[k][:e1-s1,:e0-s0]>200,2)    #White space
             (im[k][:e1-s1,:e0-s0])[ci]=(imout[s1:e1,s0:e0])[ci]    #Replace with the final image
         imout[s1:e1,s0:e0]=im[k][:e1-s1,:e0-s0] #Write into final image
+    
+    
+
+    SZ=tuple([int(sz*tot_sc) for sz in SZ])
+    imout=cv2.resize(imout,SZ,interpolation=cv2.INTER_AREA)
     
     cv2.imwrite(fileout,imout)
     
@@ -617,7 +836,8 @@ def text_image(text,filename='text.jpg',figsize=[4,1],FontSize=25):
     fig.savefig(filename)
     
 def Ct_plot_updater(ct,filename='ctplot.jpg',fr=15,dt=0.005,nt0=1e5,nt=300,\
-                    step='log',titles=None,legends=None,figsize=[5,4],RI=True):
+                    step='log',titles=None,legends=None,figsize=[5,4],RI=True,\
+                    tmode='avg'):
     """
     Plots a correlation function or sets of correlation functions. If ct is 2D,
     then one plot is created, but if it is 3D, then the outer dimension is plotted
@@ -635,19 +855,14 @@ def Ct_plot_updater(ct,filename='ctplot.jpg',fr=15,dt=0.005,nt0=1e5,nt=300,\
     correlation function for a motion and plot in black.
     """
 
-#    if step=='log':
-#        t=(np.logspace(0,np.log10(nt0),nt,endpoint=True)-1)*dt
-#    else:
-#        t=(np.linspace(0,nt0,nt,endpoint=False))*dt
-#    Dt=list()
-#    for k in range(len(t)):
-#        i1=np.max([0,k-int(fr/2)])
-#        i2=np.min([k+int(fr/2),len(t)-1])
-#        Dt.append(fr*(t[i2]-t[i1])/(i2-i1))
-#    t0=np.arange(nt0)*dt
-#    t=np.array([np.argmin(np.abs(Dt0-t0)).squeeze() for Dt0 in Dt])
     
-    t=time_axis(fr=fr,dt=dt,nt0=nt0,nt=nt,step=step,mode='avg_index')
+    if tmode[:1].lower()=='t' or tmode[:1]=='i':
+        t=time_axis(fr=fr,dt=dt,nt0=nt0,nt=nt,step=step,mode='index')
+    elif len(tmode)>=3 and tmode[:3].lower()=='avg':
+        t=time_axis(fr=fr,dt=dt,nt0=nt0,nt=nt,step=step,mode='avg_index')
+    else:
+        print('tmode not recognized: set to "avg" or "t"')
+        return
     ct=np.array(ct)
     
     fig=plt.figure(figsize=figsize)
@@ -669,6 +884,8 @@ def Ct_plot_updater(ct,filename='ctplot.jpg',fr=15,dt=0.005,nt0=1e5,nt=300,\
     npl=len(ct)        
     
     ax=[fig.add_subplot(npl,1,k) for k in range(1,npl+1)]
+    
+    
     hdl=[]
     
     for k in range(len(t)):
@@ -683,7 +900,12 @@ def Ct_plot_updater(ct,filename='ctplot.jpg',fr=15,dt=0.005,nt0=1e5,nt=300,\
                             h.append(a.semilogx(np.arange(1,t[k]+1)*dt,ct[m][-1,1:t[k]+1].T.imag,\
                                                 marker='o',markersize=1,markerfacecolor='black',color='black')[0])
                     else:
-                        h=a.semilogx(np.arange(1,t[k]+1)*dt,ct[m][:,1:t[k]+1].T,marker='o',markersize=1)
+                        clr=[[0.5,.5,.5],'black','#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd']
+                        ls=['--','-',':',':',':',':',':']
+                        for n,ct0 in enumerate(ct[m]):
+                            
+                            h.append(a.semilogx(np.arange(1,t[k]+1)*dt,ct0[1:t[k]+1],markersize=1,color=clr[n],linestyle=ls[n])[0])
+#                        h=a.semilogx(np.arange(1,t[k]+1)*dt,ct[m][:,1:t[k]+1].T,marker='o',markersize=1)
                     
                     for q,h0 in enumerate(h):      
                         if RI:
@@ -720,8 +942,10 @@ def Ct_plot_updater(ct,filename='ctplot.jpg',fr=15,dt=0.005,nt0=1e5,nt=300,\
                         else:
                             a.plot(0,ct[m][q,0].T,Marker='o',markerfacecolor=h0.get_color(),markeredgewidth=0)
                     a.set_xlim(0,t[-1]*dt)
-                    
-                a.set_ylim(-.1,1.1)
+                if RI:     
+                    a.set_ylim(np.min([-.1,1.2*ct[m][2:].real.min(),1.2*ct[m][2:].imag.min()]),1.1)
+                else:
+                    a.set_ylim(np.min([-.1,ct[m].real.min()]),1.1)
                 hdl.append(h)
                 a.set_ylabel('C(t)')
                 if m==len(ax)-1:
@@ -729,7 +953,7 @@ def Ct_plot_updater(ct,filename='ctplot.jpg',fr=15,dt=0.005,nt0=1e5,nt=300,\
                 else:
                     a.set_xticklabels([])
                 if legends is not None and legends[m] is not None:
-                    a.legend(legends[m],loc='upper right')
+                    a.legend(legends[m],loc='upper right',fontsize=8,fancybox=True,framealpha=.5)
                 if titles is not None:
                     a.set_title(titles[m])
             fig.tight_layout()
@@ -858,61 +1082,83 @@ def frame_gen(pdb_template,mol,sel0,sel,pivot,order=None,fn=0,nt0=1e5,nt=1e3,ste
 #        fi=fi[np.logical_not(np.isnan(v['frame_index'][fn-1][fi]))]
     fi1=np.unique(fi[fn],return_index=True)[1]
     fi=fi1[fi[fn][fi1]>=0]
-    vZ=vZ[:,fi]
+
+            
+    vZ=vft.norm(vZ[:,fi])
     if vXZ is not None:vXZ=vXZ[:,fi]
-    if nuZ_F is not None:nuZ_F=nuZ_F[:,fi]
+    if nuZ_F is not None:nuZ_F=vft.norm(nuZ_F[:,fi])
     if nuXZ_F is not None:nuXZ_F=nuXZ_F[:,fi]
     
     vZfF,vXZfF=vft.applyFrame(vZ,vXZ,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F)
 
     
+    """
+    here, we have the initial orientation of the outer frame. Starting positions
+    of the bonds should be calculated by removing this rotation, and then
+    adding it back in *after* the inner frame's rotation has been performed.
     
+    Probably, the inner frame's rotation should also be removed to get the 
+    initial positions, since it will be added back at the first time step.]
     
+    Application of sc0 below doesn't make all that much sense to me here. 
+    Probably this also needs to be removed
+    """
     if nuZ_F is not None:
-        sc0=vft.getFrame(nuZ_F[:,:,0],nuXZ_F[:,:,0])
+        scF=np.array(vft.getFrame(nuZ_F[:,:,0],nuXZ_F[:,:,0]))
     else:
-        sc0=[0,0,0]
-    vZfF=vft.R(vZfF.swapaxes(1,2),*sc0).swapaxes(1,2)
-    vXZfF=vft.R(vXZfF.swapaxes(1,2),*sc0).swapaxes(1,2)
-    
+        scF=np.zeros([6,vZ.shape[1]])
+        scF[[0,2,4]]=1
+    scF=scF.T
+#    vZfF=vft.R(vZfF.swapaxes(1,2),*sc0).swapaxes(1,2)
+#    vXZfF=vft.R(vXZfF.swapaxes(1,2),*sc0).swapaxes(1,2)
     
     sc=np.array(vft.getFrame(vZfF,vXZfF)).T
-    
-    order=np.arange(len(si),dtype=int) if order is None else np.array(order,dtype=int)
+
     
 
+    "Reorder the frames (in case pivot points overlap into other frames)"    
+    order=np.arange(len(si),dtype=int) if order is None else np.array(order,dtype=int)
     si=[si[o] for o in order]
     pi=[pi[o] for o in order]
     
-    "Calculate initial positions (go into frame of vf at initial time"
+    
+    "Calculate initial positions (go into frame of vf at initial time)"
     mol.mda_object.trajectory[0]
-    pos0=sel0.positions
+    
+    pos0=sel0.positions.copy()
+    #    pos0=pos0-pos0.mean(0)+np.array(Dxyz)  #Center the molecule
+    pos0=pos0-sel0.positions.mean(0) #Center the molecule
+    
     pos00=pos0.copy()
-    for si0,pi0,sc0 in zip(si,pi,sc[0][order]):
+    for si0,pi0,sc0,sc0F in zip(si,pi,sc[0][order],scF[order]):
         if pi0 is not None:
-            pos0[si0]+=(pos0[pi0]-pos00[pi0])
-            pos0[si0]=vft.R((pos0[si0]-pos0[pi0]).T,*vft.pass2act(*sc0)).T+pos0[pi0]
+            pos0[si0]+=(pos0[pi0]-pos00[pi0])   #If the pivot point moved, then shift all atoms in the group
+            pos0[si0]=vft.R(vft.R((pos0[si0]-pos0[pi0]).T,*vft.pass2act(*sc0F)),*vft.pass2act(*sc0)).T+pos0[pi0]
+
 
     
-    pos0=pos0-pos0.mean(0)+np.array(Dxyz)  #Center the molecule
+
 #    sel0.guess_bonds()
     "Sweep over and write out all pdbs"
     for k,sc1 in enumerate(sc):
-        pos=pos0.copy(0)
-        for si0,pi0,sc0 in zip(si,pi,sc1[order]):
+        pos=pos0.copy()
+        for si0,pi0,sc0,sc0F in zip(si,pi,sc1[order],scF[order]):
             if pi0 is not None:
-                pos[si0]+=(pos[pi0]-pos0[pi0])
-                pos[si0]=vft.R((pos[si0]-pos[pi0]).T,*sc0).T+pos[pi0]
-        
+                pos[si0]+=(pos[pi0]-pos0[pi0]) #If the pivot point moved, then shift all atoms in the group
+                pos[si0]=vft.R(vft.R((pos[si0]-pos[pi0]).T,*sc0),*sc0F).T+pos[pi0]
         sel0.positions=pos.copy()
         sel0.write(pdb_template.format(k),bonds='all')
 #        sel0.write(file_template.format(k))
         
         
         
-    
-    
-    
+
+def hex_to_rgb(value):
+    """Return (red, green, blue) for the color given as #rrggbb."""
+    value = value.lstrip('#')
+    lv = len(value)
+    return [int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3)]  
+
         
         
 

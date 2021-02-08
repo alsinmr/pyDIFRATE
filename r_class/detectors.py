@@ -99,12 +99,11 @@ class detect(mdl.model):
         "Determine if any models are bond specific"
         self.BondSpfc='no'
         if sens._rho(bond=-1).ndim==3:
-            self.BondSpfc='yes'     #If the previously applied models are bond-specific, we need to maintain bond speciicity
+            self.BondSpfc='yes'     #If the previously applied models are bond-specific, we need to maintain bond specificity
         else:
             for k in self.MdlPar_in:
                 if k.get('BondSpfc')=='yes':
                     self.BondSpfc='yes'
-        
 
         "Pass the molecule object"
         """Note that this is not a copy, but rather a pointer to the same object.
@@ -351,7 +350,7 @@ class detect(mdl.model):
             self.__r_info(None,**kwargs)
 
 #%% Automatic generation of detectors from a set of sensitivities                 
-    def r_auto(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,**kwargs):
+    def r_auto(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
         self.n=n
         
         self.detect_par['inclS2']=inclS2
@@ -396,16 +395,33 @@ class detect(mdl.model):
         err=np.zeros(ntc)       #Error of fit
         
 
+        """
+        In the follow lines (loop over ntc, or z0), we optimize detectors at 
+        either every possible correlation time, or correlation times specified
+        by z0. 
+        """
+
         "Prepare data for parallel processing"
         Y=list()
-        for k in range(0,ntc):
-            Y.append((Vt,k))
+        if z0 is None:
+            z0index=range(ntc)
+        else:
+            if n>len(z0):
+                print('z0 must have at least length n')
+                return
+            else:
+                z0index=list()
+                for z1 in z0:
+                    z0index.append(np.argmin(np.abs(self.z()-z1)))
+        
+        for k in z0index:
+            Y.append((Vt,k))            
 
         "Default is parallel processing"
         if not(parallel):
             X=list()
-            for k in range(0,ntc):
-                X.append(linprog_par(Y[k]))
+            for Y0 in Y:
+                X.append(linprog_par(Y0))
         else:
             with mp.Pool() as pool:
                 X=pool.map(linprog_par,Y)
@@ -415,9 +431,20 @@ class detect(mdl.model):
         those detectors where the maximum is closest to the correlation time set
         to 1. We search for those here:
         """
-        for k in range(0,ntc):
-            err[k]=np.abs(np.argmax(np.dot(Vt.T,X[k]))-k)
+        if z0 is None:
+            for k in range(0,ntc):
+                err[k]=np.abs(np.argmax(np.dot(Vt.T,X[k]))-k)
+        else:
+            err=np.ones(ntc)*ntc
+            for m,k in enumerate(z0index):
+                err[k]=np.abs(np.argmax(np.dot(Vt.T,X[m]))-k)
+            x0=X.__iter__()
+            X=[x0.__next__() if k in z0index else None for k in range(ntc)]
+                
         
+        if 'Type' in self.info_in.index and 'S2' in self.info_in.loc['Type'].to_numpy() and z0 is None:
+            err[0]=0    #Forces a detector that is non-zero at the shortest correlation time if S2 included
+            "Possibly need to delete above two lines...not fully tested"
         
         """Ideally, the number of detectors equals the number of minima in err,
         however, due to calculation error, this may not always be the case. We
@@ -681,11 +708,9 @@ class detect(mdl.model):
                 self.SVD[k]['T']=T[index]
                 if Normalization is not None:
                     self.__r_norm(k,**kwargs)
-                if ('R2_ex_corr' in kwargs and kwargs['R2_ex_corr']) or\
-                    self.detect_par['R2_ex_corr']:
+                if self.detect_par['R2_ex_corr']:
                     self.R2_ex_corr(bond=k,**kwargs)
-                if ('inclS2' in kwargs and kwargs['inclS2']) or\
-                    self.detect_par['inclS2']:
+                if self.detect_par['inclS2']:
                     self.inclS2(bond=k,**kwargs)
                     
                 
@@ -1201,16 +1226,16 @@ class detect(mdl.model):
             if self.__rAvg is None:
                 print('First generate the detectors for the average sensitivities')
             else:
-                return self.__rhoAvg
+                return self.__rhoAvg.copy()
         else:
             if np.size(self.__rho[bond])==1:
                 print('First generate the detectors for the selected bond')
                 return
             else:
                 if bond==-1:
-                    return np.array(self.__rho)
+                    return np.array(self.__rho).copy()
                 else:
-                    return self.__rho[bond]
+                    return self.__rho[bond].copy()
             
     def Rc(self,bond=None):
         nb=self._nb()

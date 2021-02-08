@@ -50,7 +50,7 @@ class rates(mdl.model):
                     self.__tc=np.power(10,kwargs.get('z'))
                 "Allow users to input z instead of tc"
             else:
-                self.__tc=np.logspace(-14,-2,200)
+                self.__tc=np.logspace(-14,-3,200)
                 
         elif np.size(tc)==3:
             self.__tc=np.logspace(np.log10(tc[0]),np.log10(tc[1]),tc[2])
@@ -272,17 +272,33 @@ class rates(mdl.model):
          
     "Function called to set Methyl CD2H defaults"
     def __CD2H_def(self,k):
-        self.__sys.get('Nuc')[k]='13C'
-        if self.__sys.get('Nuc1')[k] is None:
-            self.__sys.get('Nuc1')[k]=['1H','2H','2H']
-        if self.__sys.get('dXY')[k] is None:
-            self.__sys.get('dXY')[k]=[dipole_coupling(.1115,'1H','13C'),
-                      dipole_coupling(.1110,'2H','13C'),
-                      dipole_coupling(.1110,'2H','13C')]
-        if self.__sys.get('CSA')[k] is None:
-            self.__sys.get('CSA')[k]=16.6667  
-        if self.__sys.get('theta')[k] is None:
-            self.__sys.get('theta')[k]=0
+        if self.__exp.get('Type')[k]=='NOE':
+            self.__sys['Nuc'][k]='13C'
+            if self.__sys['Nuc1'][k] is None:
+                self.__sys['Nuc1'][k]='1H'
+            if self.__sys['dXY'][k] is None:
+                self.__sys['dXY'][k]=dipole_coupling(.1115,'13C',self.__sys['Nuc1'][k])
+            if self.__sys['CSA'][k] is None:
+                self.__sys['CSA'][k]=50 #16.6667*3, see below why we multiply by 3
+        else:
+            self.__sys.get('Nuc')[k]='13C'
+            if self.__sys.get('Nuc1')[k] is None:
+                self.__sys.get('Nuc1')[k]=['1H','2H','2H']
+            if self.__sys.get('dXY')[k] is None:
+                self.__sys.get('dXY')[k]=[dipole_coupling(.1115,'1H','13C'),
+                          dipole_coupling(.1110,'2H','13C'),
+                          dipole_coupling(.1110,'2H','13C')]
+            if self.__sys.get('CSA')[k] is None:
+                self.__sys.get('CSA')[k]=50 #16.6667*3
+                """
+                We've multiplied the desired CSA by 3, because we assume this is methyl rotation
+                Then: methyl rotation will induce little relaxation via the CSA,
+                but at lower frequencies, where both CSA and the methyl group
+                reorientation incude relaxation, we will then have the correct
+                relative sizes of the residual tensors
+                """
+            if self.__sys.get('theta')[k] is None:
+                self.__sys.get('theta')[k]=0
             
     "Function called to set 2H defaults (Quadrupole only)"     
     def __2H_def(self,k):

@@ -116,11 +116,19 @@ def avg_data(data_in,weighted=True,weight=None):
     be printed (no warning will occur for a difference in sign). If weighting
     is included, then data will be averaged, considering the standard deviation
     of the data.
+    
     """
     if isinstance(data_in,dict):
         data_in,_=dict2list(data_in)
         
-    data=data_in[0].copy()
+    try:
+        data=data_in[0].copy()
+    except:
+        data=data_in[0].__class__()
+        data.sens=data_in[0].sens
+        data.R=data_in[0].R.copy()
+        print('Warning: deep copy failed')
+            
     
     R=list()
     Rvar=list()
@@ -183,7 +191,7 @@ def append_data(data_in,labels=None,index=None):
     sign=sens_sign_check(data,data_in)
     
     
-    flds=['R','R_std','R_u','R_l','Rc','Rin','Rin_std','S2']
+    flds=['R','R_std','R_u','R_l','Rc','Rin','Rin_std','S2','S2in','S2in_std','S2c']
     R=dict()
     label=list()
     for f in flds:R[f]=list()

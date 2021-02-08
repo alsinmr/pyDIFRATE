@@ -8,12 +8,14 @@ Created on Tue May  7 16:51:28 2019
 
 import numpy as np
 import os
+import pandas as pd
 os.chdir('../r_class')
 from Ctsens import Ct
 from detectors import detect
 os.chdir('../chimera')
 from chimera_funs import plot_cc as plt_cc3D
 from chimera_funs import plot_rho
+from chimeraX_funs import run_chimeraX,get_default_colors
 os.chdir('../plotting')
 import plotting_funs as pf
 os.chdir('../data')
@@ -29,7 +31,7 @@ class data(object):
         self.vars=dict()    #Location for extra variables by name
         
         self.label=None
-        self.chi=None
+        self.chi2=None
         
         self.R=None
         self.R_std=None
@@ -49,6 +51,10 @@ class data(object):
         self.Rin=None
         self.Rin_std=None
         self.Rc=None
+        
+        self.S2in=None
+        self.S2in_std=None
+        self.S2c=None
         
         self.ired=None
         self.type=None
@@ -179,7 +185,7 @@ class data(object):
         |with obj.new_detect()
         """
         
-        if np.size(exp_num)>1:
+        if hasattr(exp_num,'__len__'):
             exp_num=np.atleast_1d(exp_num)
             exp_num[::-1].sort()
             for m in exp_num:
@@ -391,14 +397,28 @@ class data(object):
         
         info=self.sens.info_in
         
-        if 't' in info.index.values:
-            t=info.loc['t'].to_numpy()
+        if info is None or 't' in info.index.values:
+            if info is None:
+                t=np.arange(1,self.Rin.shape[1]+1)
+            else:
+                t=info.loc['t'].to_numpy()
             ax=pf.plot_all_Ct(t,Ct=self.Rin,Ct_fit=self.Rc,lbl=self.label,index=index,fig=fig,style=style,**kwargs)
         else:
-            if errorbars:
-                ax=pf.plot_fit(self.label,self.Rin,self.Rc,self.Rin_std,info,index,exp_index,fig)
+            if self.S2c is not None:
+                Rin=np.concatenate((self.Rin,np.atleast_2d(self.S2in).T),1)
+                Rin_std=np.concatenate((self.Rin_std,np.atleast_2d(self.S2in_std).T),1)
+                Rc=np.concatenate((self.Rc,np.atleast_2d(self.S2c).T),1)
+                info0=info[0]
+                for a,b in info0.items():
+                    info0[a]='' if isinstance(b,str) else 0
+                info0['Type']='S2'
+                info=pd.concat((info,info0),1,ignore_index=True)
+                    
             else:
-                ax=pf.plot_fit(self.label,self.Rin,self.Rc,None,info,index,exp_index,fig)
+                Rin,Rin_std,Rc=self.Rin,self.Rin_std,self.Rc
+            if not(errorbars):Rin_std=None
+            
+            ax=pf.plot_fit(self.label,Rin,Rc,Rin_std,info,index,exp_index,fig)
         
         return ax
                 
@@ -475,48 +495,83 @@ class data(object):
         
         
         
-    def draw_rho3D(self,det_num=None,resi=None,fileout=None,scaling=None,**kwargs):
+#    def draw_rho3D(self,det_num=None,resi=None,fileout=None,scaling=None,**kwargs):
+#        
+#        if det_num is None:
+#            values=1-self.S2
+#        else:
+#            values=self.R[:,det_num]
+#        
+#      
+#        res1=self.sens.molecule.sel1.resids
+#        chain1=self.sens.molecule.sel1.segids
+#        res2=self.sens.molecule.sel2.resids
+#        chain2=self.sens.molecule.sel2.segids
+#        
+#
+#        if np.size(res1)==np.size(res2) and (np.all(res1==res2) and np.all(chain1==chain2)):
+#            resi0=resi
+#            resi=res1
+#            chain=chain1
+##            chain[chain=='PROA']='p'
+#            
+#            
+#            
+#            if resi0 is not None:
+#                index=np.in1d(resi,resi0)
+#                resi=resi[index]
+#                chain=chain[index]
+#                values=values[index]
+#              
+#            if scaling is None:
+#                scale0=np.max(values)
+#                scaling=1/scale0
+#                
+#            plot_rho(self.sens.molecule,resi,values,chain=chain,\
+#                     fileout=fileout,scaling=scaling,**kwargs)
+#                
+#        else:
+#            if scaling is None:
+#                scale0=np.max(values)
+#                scaling=1/scale0
+#            
+#            plot_rho(self.sens.molecule,None,values,scaling=scaling,**kwargs)
+##            print('Selections over multiple residues/chains- not currently implemented')
+            
+    def draw_rho3D(self,det_num=None,index=None,scaling=1,disp_mode=None,\
+                   chimera_cmds=None,fileout=None,save_opts=None,\
+                   scene=None,x0=None,colors=None):
+        
+        if colors is None:
+            if det_num is None:
+                colors=[[255,255,0,255],[255,0,0,255]]
+            else:
+                clr=get_default_colors(det_num)
+                colors=[np.array([210,180,140,255]),clr]
+
         
         if det_num is None:
-            values=1-self.S2
+            x=1-self.S2.copy()
         else:
-            values=self.R[:,det_num]
-        
-      
-        res1=self.sens.molecule.sel1.resids
-        chain1=self.sens.molecule.sel1.segids
-        res2=self.sens.molecule.sel2.resids
-        chain2=self.sens.molecule.sel2.segids
-        
+            x=self.R[:,det_num].copy()
+         
+        mol=self.sens.molecule
+        if index is not None:
+            if np.max(index)==1 and len(index)>2:
+                index=np.array(index,dtype=bool)
+            else:
+                index=np.array(index,dtype=int)
+            s1,s2=mol.sel1,mol.sel2
+            mol.sel1=mol.sel1[index]
+            mol.sel2=mol.sel2[index]
+            x=x[index]
 
-        if np.size(res1)==np.size(res2) and (np.all(res1==res2) and np.all(chain1==chain2)):
-            resi0=resi
-            resi=res1
-            chain=chain1
-#            chain[chain=='PROA']='p'
-            
-            
-            
-            if resi0 is not None:
-                index=np.in1d(resi,resi0)
-                resi=resi[index]
-                chain=chain[index]
-                values=values[index]
-              
-            if scaling is None:
-                scale0=np.max(values)
-                scaling=1/scale0
-                
-            plot_rho(self.sens.molecule,resi,values,chain=chain,\
-                     fileout=fileout,scaling=scaling,**kwargs)
-                
-        else:
-            if scaling is None:
-                scale0=np.max(values)
-                scaling=1/scale0
-            
-            plot_rho(self.sens.molecule,None,values,scaling=scaling,**kwargs)
-#            print('Selections over multiple residues/chains- not currently implemented')
+        x*=scaling
+        
+        run_chimeraX(mol=mol,disp_mode=disp_mode,x=x,chimera_cmds=chimera_cmds,\
+                     fileout=fileout,save_opts=save_opts,scene=scene,x0=x0,
+                     colors=colors)
+        if index is not None:mol.sel1,mol.sel2=s1,s2
             
     def draw_mode(self,mode_num=None,resi=None,fileout=None,scaling=None,**kwargs):
         

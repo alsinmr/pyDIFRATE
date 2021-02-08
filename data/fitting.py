@@ -75,8 +75,8 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
         conf=0.68
     out.conf=conf
     
-    
-    if data.S2 is not None and subS2 and not(detect.detect_par['inclS2']):
+    inclS2=detect.detect_par['inclS2']
+    if data.S2 is not None and subS2 and not(inclS2):
         print('Subtracting S2')
         subS2=True
     else:
@@ -135,6 +135,7 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
 
 
     Rc=np.zeros(data.R.shape)
+    S2c=np.zeros(data.R.shape[0])
 
     nd=detect.r(bond=0).shape[1]
     out.R=np.zeros([nb,nd])
@@ -146,21 +147,29 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
         out.R_std[k,:]=Y[k][1]
         out.R_l[k,:]=Y[k][2]
         out.R_u[k,:]=Y[k][3]
-        if detect.detect_par['inclS2'] and data.S2 is not None:
+#        if detect.detect_par['inclS2'] and data.S2 is not None:
+        if inclS2:
             R0in=np.concatenate((detect.R0in(k),[0]))
             Rc0=np.dot(detect.r(bond=k),out.R[k,:])+R0in
             Rc[k,:]=Rc0[:-1]
+            S2c[k]=Rc0[-1]
         else:
             Rc[k,:]=np.dot(detect.r(bond=k),out.R[k,:])+detect.R0in(k)
 
     if save_input:
         out.Rc=Rc
+        if inclS2:
+            out.S2c=1-S2c
         
     out.sens.info.loc['stdev']=np.median(out.R_std,axis=0)
         
     if save_input:
         out.Rin=data.R
         out.Rin_std=data.R_std
+        if inclS2:
+            out.S2in=data.S2
+            out.S2in_std=data.S2_std
+            
     
         
     out.detect=dt(detect)
@@ -169,7 +178,7 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     out.label=data.label
     
 
-    out.chi=np.sum((data.R-Rc)**2/(data.R_std**2),axis=1)
+    out.chi2=np.sum((data.R-Rc)**2/(data.R_std**2),axis=1)
     
     return out
 

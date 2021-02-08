@@ -46,7 +46,7 @@ def save_DIFRATE(filename,obj):
     """
     
     """Note- I don't understand why this function is necessary. The MDAnalysis
-    universe exists in the atom selections, and can recovered from these. 
+    universe exists in the atom selections, and can be recovered from these. 
     Nonetheless, pickling fails if we don't first remove the saved universe.
     """
     
@@ -86,6 +86,7 @@ def load_DIFRATE(filename):
     """
     
     obj=load_bin(filename)
+    
     
     if hasattr(obj,'sens') and hasattr(obj,'detect'):
         if obj.sens is not None and obj.sens.molecule is not None and obj.sens.molecule.sel1 is not None:

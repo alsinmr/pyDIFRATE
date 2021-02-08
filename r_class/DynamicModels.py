@@ -44,7 +44,11 @@ def ModelSel(Model,direct='dXY',struct=None,**kwargs):
         BndSpfc='no'
     else:
         try:
-            fun=globals()[Model]
+            if Model in globals():
+                fun=globals()[Model]
+            else:
+                print('Model "{0}" was not recognized'.format(Model))
+                return
 #            if 'struct' in fun.__code__.co_varnames[range(fun.__code__.co_argcount)]:
 #                print('Bond Specific')
 #                if struct.vXY.size==0:
@@ -53,7 +57,7 @@ def ModelSel(Model,direct='dXY',struct=None,**kwargs):
             tMdl,AMdl,BndSpfc=fun(struct=struct,direct=direct,**kwargs)
             
         except:
-            print('Model "{0}" was not recognized'.format(Model))
+            print('Model "{0}" failed. Check parameters'.format(Model))
             return
     
 #    if Model=='IsoDif':

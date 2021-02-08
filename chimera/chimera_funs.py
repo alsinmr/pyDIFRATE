@@ -53,7 +53,7 @@ def open_chimera(mol,**kwargs):
     else:
         protein=False    
     
-    with open(full_path,'w+') as f:
+    with open(full_path,'w') as f:
         f.write(run_command()) #imports runCommand into python
         f.write('try:\n')
         if 'model_id' in kwargs:
