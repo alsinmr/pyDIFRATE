@@ -821,34 +821,36 @@ def D2avgLF(vZ,m=None):
     ca,sa,cb,sb,cg,sg=getFrame(vZ)
     
         
-    if vZ.ndim==2:
-        N=0
-    else:
-        N=vZ.shape[1]
+#    if vZ.ndim==2:
+#        N=0
+#    else:
+#        N=vZ.shape[1]
     
     D2avg=list()
     
     for m0 in m1:
-        if N==0:
-            d2=np.array(0,dtype=complex)
-        else:
-            d2=np.zeros(N,dtype=complex)
+#        if N==0:
+#            d2=np.array(0,dtype=complex)
+#        else:
+#            d2=np.zeros(N,dtype=complex)
             
-            if m0==-2:
-                d2=np.sqrt(3/8)*((cg*sb)**2-(sg*sb)**2+2*1j*sg*sb*cg*sb)
-            elif m0==-1:
-                d2=-np.sqrt(3/2)*(cg*sb*cb+1j*sg*sb*cb)
-            elif m0==0:
-                d2=1/2*(3*cb**2-1).mean(-1)
-            elif m0==1:
-                d2=np.sqrt(3/2)*(cg*sb*cb-1j*sg*sb*cb)
-            elif m0==2:
-                d2=np.sqrt(3/8)*((cg*sb)**2-(sg*sb)**2-2*1j*sg*sb*cg*sb)
-        D2avg.append(D2)
+        if m0==-2:
+            d2=np.sqrt(3/8)*((cg*sb)**2-(sg*sb)**2+2*1j*sg*sb*cg*sb).mean(-1)
+        elif m0==-1:
+            d2=-np.sqrt(3/2)*(cg*sb*cb+1j*sg*sb*cb).mean(-1)
+        elif m0==0:
+            d2=1/2*(3*cb**2-1).mean(-1)
+        elif m0==1:
+            d2=np.sqrt(3/2)*(cg*sb*cb-1j*sg*sb*cb).mean(-1)
+        elif m0==2:
+            d2=np.sqrt(3/8)*((cg*sb)**2-(sg*sb)**2-2*1j*sg*sb*cg*sb).mean(-1)
+        D2avg.append(d2)
     
     if m is None:
-        D2avg.append(-np.conjugate(D2inf[1]))
-        D2avg.append(np.conjugate(D2inf[0]))
+        D2avg.append(-np.conjugate(D2avg[1]))
+        D2avg.append(np.conjugate(D2avg[0]))
+    else:
+        D2avg=D2avg[0]
 
     return np.array(D2avg)
 

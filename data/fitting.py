@@ -347,12 +347,15 @@ def dist_opt(X):
     return Ropt,dist
 
 #%% Function to fit a set of detector responses to a single correlation time
-def fit2tc(data,df=2,sens=None,Abounds=False):
+def fit2tc(data,df=2,sens=None,z=None,Abounds=False):
     """
     Takes a data object, and corresponding sensitivity (optional if included in
     data), and fits each set of detector responses to a single correlation time
     (mono-exponential fit). Returns the log-correlation time for each data entry,
-    corresponding amplitudes, error, and back-calculated values
+    corresponding amplitudes, error, and back-calculated values.
+    
+    Note that the sensitivity may be a sensitivity object, or a numpy array, but
+    in the latter case, the log-correlation time axis, z, must also be included
     
     One may change the fitting function:
         df=1:   exp(-t/tc)
@@ -362,19 +365,26 @@ def fit2tc(data,df=2,sens=None,Abounds=False):
     Note- in the case of df=3, C is *not* calculated. Instead, any detector that
     reaches its max (test:>.95*max(rhoz)) at the last correlation time is omitted 
     from the fit. Its predicted value is still included in Rc
+    
+    Setting Abounds to True will force A to fall within the range of 0 and 1
         
-    z,A,err,Rc=fit2tc(data,df=2,sens=None)
+    z,A,err,Rc=fit2tc(data,df=2,sens=None,z=None,Abounds=False)
     """
     
     if sens is None:
         sens=data.sens
+        
+    z0=sens.z() if z is None else z
         
     err=list()
     z=list()
     A=list()
     rho_c=list()
     for k,(rho,rho_std) in enumerate(zip(data.R,data.R_std)):
-        rhoz=sens.rhoz(k)
+        if hasattr(sens,'rhoz'):
+            rhoz=sens.rhoz(k)
+        else:
+            rhoz=sens
 
         
         if df==3:
@@ -403,7 +413,7 @@ def fit2tc(data,df=2,sens=None,Abounds=False):
 
         i=np.argmin(err0)
         err.append(err0[i])
-        z.append(sens.z()[i])
+        z.append(z0[i])
         if df==2:
             rho_c.append(rhoz[:,i]*beta[i])
             A.append(beta[i])

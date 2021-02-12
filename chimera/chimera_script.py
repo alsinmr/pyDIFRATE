@@ -1,289 +1,109 @@
-import os
-import numpy as np
-from chimerax.core.commands import run as rc
-
-"""
-Everything after these lines is printed into the chimeraX script, so don't add
-anything below that you don't need in chimeraX
-"""
-def sphere_triangles(theta_steps=100,phi_steps=50):
-    """
-    Creates arrays of theta and phi angles for plotting spherical tensors in ChimeraX.
-    Also returns the corresponding triangles for creating the surfaces
-    """
-    
-    theta=np.linspace(0,2*np.pi,theta_steps,endpoint=False).repeat(phi_steps)
-    phi=np.repeat([np.linspace(0,np.pi,phi_steps,endpoint=True)],theta_steps,axis=0).reshape(theta_steps*phi_steps)
-    
-    triangles = []
-    for t in range(theta_steps):
-        for p in range(phi_steps-1):
-            i = t*phi_steps + p
-            t1 = (t+1)%theta_steps
-            i1 = t1*phi_steps + p
-            triangles.append((i,i+1,i1+1))
-            triangles.append((i,i1+1,i1))
-    
-    return theta,phi,triangles
-    
-def spherical_surface(delta,eta=None,euler=None,pos=None,sc=2.09,
-                      theta_steps = 100,
-                      phi_steps = 50,
-                      positive_color = (255,100,100,255), # red, green, blue, alpha, 0-255 
-                      negative_color = (100,100,255,255)):
-    """
-    Function for generating a surface in ChimeraX. delta, eta, and euler angles
-    should be provided, as well positions for each tensor (length of all arrays
-    should be the same, that is (N,), (N,), (3,N), (3,N) respectively.
-    
-    Returns arrays with the vertices positions (Nx3), the triangles definitions
-    (list of index triples, Nx3), and a list of colors (Nx4)
-    
-    xyz,tri,colors=spherical_surface(delta,eta=None,euler=None,pos=None,
-                                     theta_steps=100,phi_steps=50,
-                                     positive_color=(255,100,100,255),
-                                     negative_color=(100,100,255,255))
-    """
-    # Compute vertices and vertex colors
-    a,b,triangles=sphere_triangles(theta_steps,phi_steps)
-    
-    if euler is None:euler=[0,0,0]
-    if pos is None:pos=[0,0,0]
-    if eta is None:eta=0
-    
-    # Compute r for each set of angles
-    sc=np.sqrt(2/3)*sc
-    
-    A=[-1/2*delta*eta,0,np.sqrt(3/2)*delta,0,-1/2*delta*eta]   #Components in PAS
-    
-    #0 component after rotation by a and b
-    A0=np.array([A[mp+2]*d2(b,m=0,mp=mp)*np.exp(1j*mp*a) for mp in range(-2,3)]).sum(axis=0).real
-    
-    #Coordinates before rotation by alpha, beta, gamma
-    x0=np.cos(a)*np.sin(b)*np.abs(A0)*sc/2
-    y0=np.sin(a)*np.sin(b)*np.abs(A0)*sc/2
-    z0=np.cos(b)*np.abs(A0)*sc/2
-
-    alpha,beta,gamma=euler
-    #Rotate by alpha
-    x1,y1,z1=x0*np.cos(alpha)+y0*np.sin(alpha),-x0*np.sin(alpha)+y0*np.cos(alpha),z0
-    #Rotate by beta
-    x2,y2,z2=x1*np.cos(beta)-z1*np.sin(beta),y1,np.sin(beta)*x1+np.cos(beta)*z1
-    #Rotate by gamma
-    x,y,z=x2*np.cos(gamma)+y2*np.sin(gamma),-x2*np.sin(gamma)+y2*np.cos(gamma),z2
-
-    x=x+pos[0]
-    y=y+pos[1]
-    z=z+pos[2]
-    
-#    xyz=[[x0,y0,z0] for x0,y0,z0 in zip(x,y,z)]
-    #Determine colors
-    colors=np.zeros([A0.size,4],np.uint8)
-    colors[A0>=0]=positive_color
-    colors[A0<0]=negative_color
-    
-
-    # Create numpy arrays
-#    xyz = np.array(xyz, np.float32)
-    xyz=np.ascontiguousarray(np.array([x,y,z]).T,np.float32)       #ascontiguousarray forces a transpose in memory- not just editing the stride
-    colors = np.array(colors, np.uint8)
-    tri = np.array(triangles, np.int32)
-
-    return xyz,tri,colors
- 
-
-def load_tensor(filename):
-    """
-    Reads in a tab-separated file with delta, eta, alpha,beta, gamma, and x,y,z
-    for a set of tensors. 
-    
-    delta,eta,euler,pos=load_tensor(filename)
-    """
-    delta=list()
-    eta=list()
-    alpha=list()
-    beta=list()
-    gamma=list()
-    x=list()
-    y=list()
-    z=list()
-    marker=list()
-    with open(filename,'r') as f:
-        for line in f:
-            out=line.strip().split('\t')
-            out=[np.array(o,float) for o in out]
-            delta.append(out[0])
-            eta.append(out[1])
-            alpha.append(out[2])
-            beta.append(out[3])
-            gamma.append(out[4])
-            x.append(out[5])
-            y.append(out[6])
-            z.append(out[7])
-            marker.append(out[8])
-
-    delta=np.array(delta)
-    eta=np.array(eta)
-    euler=np.array([alpha,beta,gamma]).T
-    pos=np.array([x,y,z]).T
-    marker=np.array(marker)
-
-    return delta,eta,euler,pos,marker            
-        
-    
-
-def load_surface(session,tensor_file,sc=2.09,theta_steps=100,phi_steps=50,
-                 positive_color=(255,100,100,255),negative_color=(100,100,255,255),
-                 marker_pos_color=(100,255,100,255),marker_neg_color=(255,255,100,255)):
-    
-    Delta,Eta,Euler,Pos,Marker=load_tensor(tensor_file)
-    
-    from chimerax.core.models import Surface
-    from chimerax.surface import calculate_vertex_normals,combine_geometry_vntc
-    
-    geom=list()
-    
-    for k,(delta,eta,euler,pos,marker) in enumerate(zip(Delta,Eta,Euler,Pos,Marker)):
-        if marker==1:
-            pc=marker_pos_color
-            nc=marker_neg_color
-        else:
-            pc=positive_color
-            nc=negative_color
-        xyz,tri,colors=spherical_surface(\
-                                         delta=delta,eta=eta,euler=euler,pos=pos,\
-                                         sc=sc,theta_steps=theta_steps,\
-                                         phi_steps=phi_steps,\
-                                         positive_color=pc,\
-                                         negative_color=nc)
-
-        norm_vecs=calculate_vertex_normals(xyz,tri)
-        
-        geom.append((xyz,norm_vecs,tri,colors))    
-        
-    xyz,norm_vecs,tri,colors=combine_geometry_vntc(geom)    
-    s = Surface('surface',session)
-    s.set_geometry(xyz,norm_vecs,tri)
-    s.vertex_colors = colors
-    session.models.add([s])
-
-    return s
-
-
-def d2(c=0,s=None,m=None,mp=0):
-    """
-    Calculates components of the d2 matrix. By default only calculates the components
-    starting at m=0 and returns five components, from -2,-1,0,1,2. One may also
-    edit the starting component and select a specific final component 
-    (mp=None returns all components, whereas mp may be specified between -2 and 2)
-    
-    d2_m_mp=d2(m,mp,c,s)  #c and s are the cosine and sine of the desired beta angle
-    
-        or
-        
-    d2_m_mp=d2(m,mp,beta) #Give the angle directly
-    
-    Setting mp to None will return all values for mp in a 2D array
-    
-    (Note that m is the final index)
-    """
-    
-    if s is None:
-        c,s=np.cos(c),np.sin(c)
-    
-    """
-    Here we define each of the components as functions. We'll collect these into
-    an array, and then call them out with the m and mp indices
-    """
-    "First, for m=-2"
-    
-    if m is None or mp is None:
-        if m is None and mp is None:
-            print('m or mp must be specified')
-            return
-        elif m is None:
-            if mp==-2:
-                index=range(0,5)
-            elif mp==-1:
-                index=range(5,10)
-            elif mp==0:
-                index=range(10,15)
-            elif mp==1:
-                index=range(15,20)
-            elif mp==2:
-                index=range(20,25)
-        elif mp is None:
-            if m==-2:
-                index=range(0,25,5)
-            elif m==-1:
-                index=range(1,25,5)
-            elif m==0:
-                index=range(2,25,5)
-            elif m==1:
-                index=range(3,25,5)
-            elif m==2:
-                index=range(4,25,5)
-    else:
-        index=[(mp+2)*5+(m+2)]
-    
-    out=list()    
-    for i in index:
-        #mp=-2
-        if i==0:x=0.25*(1+c)**2
-        if i==1:x=0.5*(1+c)*s
-        if i==2:x=np.sqrt(3/8)*s**2
-        if i==3:x=0.5*(1-c)*s
-        if i==4:x=0.25*(1-c)**2
-        #mp=-1
-        if i==5:x=-0.5*(1+c)*s
-        if i==6:x=c**2-0.5*(1-c)
-        if i==7:x=np.sqrt(3/8)*2*c*s
-        if i==8:x=0.5*(1+c)-c**2
-        if i==9:x=0.5*(1-c)*s
-        #mp=0
-        if i==10:x=np.sqrt(3/8)*s**2
-        if i==11:x=-np.sqrt(3/8)*2*s*c
-        if i==12:x=0.5*(3*c**2-1)
-        if i==13:x=np.sqrt(3/8)*2*s*c
-        if i==14:x=np.sqrt(3/8)*s**2
-        #mp=1
-        if i==15:x=-0.5*(1-c)*s
-        if i==16:x=0.5*(1+c)-c**2
-        if i==17:x=-np.sqrt(3/8)*2*s*c
-        if i==18:x=c**2-0.5*(1-c)
-        if i==19:x=0.5*(1+c)*s
-        #mp=2
-        if i==20:x=0.25*(1-c)**2
-        if i==21:x=-0.5*(1-c)*s
-        if i==22:x=np.sqrt(3/8)*s**2
-        if i==23:x=-0.5*(1+c)*s
-        if i==24:x=0.25*(1+c)**2
-        out.append(x)
-        
-    if m is None or mp is None:
-        return np.array(out)
-    else:
-        return out[0]
-
-
-
 try:
+	from chimerax.core.commands import run as rc
 
-	di=np.array([0,1,2,3,4,5,6,7,8,9,\
-		10,11,12,13,14,15,16,17,18,19,\
-		20,21,22,23,24,25,26,27,28,29,\
-		30,31,32,33,34,35,36,37,38,39,\
-		40,41,42,43,44,45,46,47,48,49,\
-		50,51,52,53,54,55,56,57,58,59,\
-		60,61,62,63,64,65,66,67,68,69,\
-		70,71,72,73,74,75,76,77,78,79,\
-		80,81,82,83,84,85,86,87,88,89,\
-		90,91,92,93,94,95,96,97,98,99,\
-		100,101,102,103,104,105,106,107,108,109,\
-		110,111,112,113,114,115,116,117,118,119,\
-		120,121,122,123,124,125,126,127,128,129,\
-		130,131,132,133]).astype("uint32")
-	rc(session,"open /Users/albertsmith/Documents/Dynamics/Lipids/POPC/FinalMD_ana/direct/scene3D.cxs")
+	import os
+	import numpy as np
+
+	di=np.array([0,4,19,21,23,31,33,35,41,43,\
+		45,60,62,64,76,78,80,83,85,87,\
+		107,109,111,121,123,125,132,134,136,138,\
+		139,140,141,142,143,144,146,164,166,168,\
+		176,178,180,182,184,188,191,192,193,194,\
+		195,196,197,199,219,221,223,233,235,237,\
+		248,250,252,263,265,267,287,289,291,293,\
+		294,295,296,297,298,299,301,321,323,325,\
+		327,329,330,331,332,333,337,338,339,341,\
+		354,356,358,360,363,365,369,370,371,372,\
+		373,374,375,377,380,382,384,394,396,398,\
+		410,412,414,426,428,430,440,442,444,450,\
+		452,454,460,462,464,470,472,474,489,491,\
+		493,506,508,510,513,515,517,520,522,524,\
+		539,541,543,563,565,567,582,584,586,593,\
+		595,597,605,607,609,622,624,626,636,638,\
+		640,650,652,654,664,666,668,675,677,679,\
+		681,683,684,685,686,687,691,692,693,695,\
+		706,708,710,720,722,724,726,728,729,730,\
+		731,732,736,737,738,740,742,744,745,746,\
+		747,748,752,753,754,756,759,761,763,781,\
+		783,785,788,790,792,803,805,807,814,816,\
+		818,838,840,842,844,846,847,848,849,850,\
+		854,855,856,858,860,863,865,869,870,871,\
+		872,873,874,875,877,879,881,885,888,889,\
+		890,891,892,893,894,896,899,901,903,913,\
+		915,917,928,930,932,949,951,953,956,958,\
+		960,963,965,967,985,987,989,992,994,996,\
+		1012,1014,1016,1036,1038,1040,1048,1050,1052,1062]).astype("uint32")
+
+	ids=np.array([136,138,139,140,141,188,191,192,193,194,\
+		291,293,294,295,296,327,329,330,331,332,\
+		363,369,370,371,372,681,683,684,685,686,\
+		726,728,729,730,731,742,744,745,746,747,\
+		844,846,847,848,849,863,869,870,871,872,\
+		885,888,889,890,891]).astype("uint32")
+
+	r=np.array([4.386437,4.386437,4.386437,4.386437,4.386437,4.379716,4.379716,4.379716,4.379716,4.379716,\
+		4.169266,4.169266,4.169266,4.169266,4.169266,1.907023,1.907023,1.907023,1.907023,1.907023,\
+		0.909057,0.909057,0.909057,0.909057,0.909057,3.364487,3.364487,3.364487,3.364487,3.364487,\
+		4.010225,4.010225,4.010225,4.010225,4.010225,2.387893,2.387893,2.387893,2.387893,2.387893,\
+		4.767923,4.767923,4.767923,4.767923,4.767923,3.562475,3.562475,3.562475,3.562475,3.562475,\
+		1.380448,1.380448,1.380448,1.380448,1.380448]).astype("float")
+
+	clr=np.array([[155,112,182,255],
+		[155,112,182,255],
+		[155,112,182,255],
+		[155,112,182,255],
+		[155,112,182,255],
+		[156,113,182,255],
+		[156,113,182,255],
+		[156,113,182,255],
+		[156,113,182,255],
+		[156,113,182,255],
+		[159,117,180,255],
+		[159,117,180,255],
+		[159,117,180,255],
+		[159,117,180,255],
+		[159,117,180,255],
+		[194,160,152,254],
+		[194,160,152,254],
+		[194,160,152,254],
+		[194,160,152,254],
+		[194,160,152,254],
+		[209,179,140,254],
+		[209,179,140,254],
+		[209,179,140,254],
+		[209,179,140,254],
+		[209,179,140,254],
+		[171,132,170,255],
+		[171,132,170,255],
+		[171,132,170,255],
+		[171,132,170,255],
+		[171,132,170,255],
+		[161,120,178,255],
+		[161,120,178,255],
+		[161,120,178,255],
+		[161,120,178,255],
+		[161,120,178,255],
+		[186,151,158,255],
+		[186,151,158,255],
+		[186,151,158,255],
+		[186,151,158,255],
+		[186,151,158,255],
+		[150,105,187,255],
+		[150,105,187,255],
+		[150,105,187,255],
+		[150,105,187,255],
+		[150,105,187,255],
+		[168,128,172,255],
+		[168,128,172,255],
+		[168,128,172,255],
+		[168,128,172,255],
+		[168,128,172,255],
+		[202,170,145,254],
+		[202,170,145,254],
+		[202,170,145,254],
+		[202,170,145,254],
+		[202,170,145,254]]).astype("uint8")
+	rc(session,"open /Users/albertsmith/Documents/GitHub/pyDIFRATE/Struct/rmsfit_HETs_whole.xtc_0.pdb")
 	rc(session,"~display")
 	rc(session,"~ribbon")
 	if len(session.models)>1:
@@ -296,12 +116,17 @@ try:
 	hide[:]=1
 	hide[di]=0
 	setattr(atoms,"hides",hide)
-	rc(session,"style stick")
-	load_surface(session,"/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/tensors_554557.txt",sc=3.5,theta_steps=50,phi_steps=25,positive_color=[255, 100, 100, 255],negative_color=[100, 100, 255, 255],marker_pos_color=[100, 255, 100, 255],marker_neg_color=[255, 255, 100, 255])
-	rc(session,"color tan atoms")
-	rc(session,"display")
+	rc(session,"style ball")
+	rc(session,"size stickRadius 0.2")
+	rc(session,"color all tan")
+	r0=getattr(atoms,"radii").copy()
+	clr0=getattr(atoms,"colors").copy()
+	r0[:]=.8
+	r0[ids]=r
+	clr0[ids]=clr
+	setattr(atoms,"radii",r0)
+	setattr(atoms,"colors",clr0)
 except:
 	pass
 finally:
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script554557.py")
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/tensors_554557.txt")
+	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script159254.py")
