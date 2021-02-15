@@ -1295,7 +1295,7 @@ class detect(mdl.model):
         return self.__spinsys
         
     def tc(self):
-        return self.__tc
+        return self.__tc.copy()
     
     def z(self):
         return np.log10(self.__tc)

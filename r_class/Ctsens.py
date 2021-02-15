@@ -17,7 +17,7 @@ from fast_index import trunc_t_axis,get_count
 os.chdir('../r_class')
 
 class Ct(mdl.model):
-    def __init__(self,tc=None,t=None,**kwargs):
+    def __init__(self,tc=None,z=None,t=None,**kwargs):
         
         """Probably a better way to do this, but I need to identify which
         child of mdl_sens is which later. Using isinstance requires me to 
@@ -41,19 +41,18 @@ class Ct(mdl.model):
         """
     
         if tc is None:
-            if 'z' in kwargs:
-                z=kwargs.get('z')
+            if z is not None:
                 if np.size(z)==3:
                     self.__tc=np.logspace(z[0],z[1],z[2])
                 else:
-                    self.__tc=np.power(10,kwargs.get('z'))
+                    self.__tc=np.power(10,z)
                 "Allow users to input z instead of tc"
             else:
                 self.__tc=np.logspace(-14,-3,200)
         elif np.size(tc)==3:
             self.__tc=np.logspace(np.log10(tc[0]),np.log10(tc[1]),tc[2])
         else:
-            self.__tc=tc
+            self.__tc=np.array(tc)
         """We don't allow editing of the tc vector; you must initialize a new 
         instance of rates if you want to change it"""
         
@@ -170,7 +169,7 @@ class Ct(mdl.model):
         return self.__t
     
     def tc(self):
-        return self.__tc
+        return self.__tc.copy()
     
     def z(self):
         return np.log10(self.__tc)
