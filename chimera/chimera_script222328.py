@@ -277,8 +277,7 @@ try:
 		[244,139,44,255],
 		[244,139,44,255],
 		[244,139,44,255]]).astype("uint8")
-	mdl=session.open_command.open_data("/Users/albertsmith/Documents/Dynamics/HETs_reana/test_scene.cxs")[0]
-	session.models.add(mdl)
+	rc(session,"open "/Users/albertsmith/Documents/GitHub/pyDIFRATE/Struct/2kj3.pdb_10.pdb"")
 	rc(session,"~display")
 	rc(session,"~ribbon")
 	if len(session.models)>1:
@@ -304,4 +303,4 @@ try:
 except:
 	pass
 finally:
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script650849.py")
+	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script222328.py")

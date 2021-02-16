@@ -477,9 +477,13 @@ def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_o
             py_print_npa(f,'clr',clrs,format_str='d',dtype='uint8',nt=1)
             
         if scene is not None:
-            WrCC(f,'open '+scene,1)
+#            WrCC(f,'open '+scene,1)
+            py_line(f,'mdl=session.open_command.open_data("{0}")[0]'.format(scene),1)
+            py_line(f,'session.models.add(mdl)',1)
         else:
-            WrCC(f,'open '+pdb,1)
+#            WrCC(f,"open '"+pdb+"'",1)
+            py_line(f,'mdl=session.open_command.open_data("{0}")[0]'.format(pdb),1)
+            py_line(f,'session.models.add(mdl)',1)
         WrCC(f,'~display',1)
         WrCC(f,'~ribbon',1)
         
