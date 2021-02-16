@@ -55,7 +55,7 @@ from iRED import Ct_fast
 #os.chdir('../Struct')
 #from structure import molecule
 ##import frame2traj
-#
+
 #os.chdir('../chimera')
 #import chimera_funs as chimera
 #
