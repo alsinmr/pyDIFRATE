@@ -539,6 +539,64 @@ def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_o
 
     os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
 
+def molecule_only(mol,disp_mode=None):
+    """
+    Displays the molecule in ChimeraX
+    """
+    
+    if mol.pdb is None:
+        mol.MDA2pdb()
+    pdb=mol.pdb #Get pdb name
+
+    rand_index=np.random.randint(1e6)   #We'll tag a random number onto the filename
+    full_path=get_path('chimera_script{0:06d}.py'.format(rand_index))     #Location to write out chimera script
+    
+    "Here we try to guess the display mode if not given"
+    if disp_mode is None and (mol.sel1 is not None or mol.sel2 is not None):
+        disp_mode=guess_disp_mode(mol)
+        
+        di=sel_indices(mol,disp_mode,mode='all')
+    else:
+        di=None
+    
+    
+    with open(full_path,'w') as f:
+
+        py_line(f,'try:')
+        py_line(f,run_command(),1)
+        py_line(f,'import os',1)
+        py_line(f,'import numpy as np',1)
+        if di is not None:
+            py_print_npa(f,'di',di,format_str='d',dtype='uint32',nt=1)
+        
+            
+
+        WrCC(f,'open '+pdb,1)
+        WrCC(f,'~display',1)
+        WrCC(f,'~ribbon',1)
+        
+        #Get the atoms to be displayed
+        py_line(f,'if len(session.models)>1:',1)
+        py_line(f,'atoms=session.models[1].atoms',2)
+        WrCC(f,'display #1.1',2)
+        py_line(f,'else:',1)
+        py_line(f,'atoms=session.models[0].atoms',2)
+        WrCC(f,'display #1',2)
+             
+        py_line(f,'hide=getattr(atoms,"hides")',1)
+        py_line(f,'hide[:]=1',1)
+        py_line(f,'hide[di]=0',1)
+        py_line(f,'setattr(atoms,"hides",hide)',1)
+        
+        py_line(f,'except:')
+        py_line(f,'pass',1)
+        py_line(f,'finally:')
+        py_line(f,'os.remove("{0}")'.format(full_path),1)
+
+    copyfile(full_path,full_path[:-9]+'.py')
+
+    os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
+
 def draw_tensors(A,mol=None,sc=2.09,tstep=0,disp_mode=None,index=None,scene=None,\
                  fileout=None,save_opts=None,chimera_cmds=None,\
                  colors=[[255,100,100,255],[100,100,255,255]],marker=None,\

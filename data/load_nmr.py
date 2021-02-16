@@ -198,7 +198,6 @@ def read_data(f,keys0):
         Rstd=np.concatenate(Rstd,axis=1)
     else:
         Rstd=None
-    
     if len(S2)!=0:
         S2=np.atleast_1d(np.concatenate(S2,axis=0).squeeze())
     else:
@@ -255,7 +254,6 @@ def read_lines(f,keys0):
                 elif ne!=R0.size:
                     print('Inconsistent row lengths, data input aborted')
                     return None
-                
                 R.append(R0)
                 
     return np.atleast_2d(R)

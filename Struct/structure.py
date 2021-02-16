@@ -14,7 +14,8 @@ import os
 from Struct.vec_funs import new_fun,print_frame_info
 import copy
 #os.chdir('../chimera')
-from chimera.chimera_funs import open_chimera
+#from chimera.chimera_funs import open_chimera
+from chimera.chimeraX_funs import molecule_only
 #os.chdir('../Struct')
 import Struct.select_tools as selt
 
@@ -363,12 +364,12 @@ class molecule(object):
         
         return full_path
     
-    def chimera(self,**kwargs):
+    def chimera(self,disp_mode=None):
         """
         Starts a chimera session with the pdb stored in molecule.pdb
         """
-        open_chimera(self,**kwargs)
-        
+#        open_chimera(self,**kwargs)
+        molecule_only(self,disp_mode=None)
     def mk_whole(self,sel=None):
         """
         Unwraps all segments in a selection of the MD analysis universe 
