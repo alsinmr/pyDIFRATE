@@ -11,11 +11,11 @@ import numpy as np
 import MDAnalysis as md
 import matplotlib.pyplot as plt
 from shutil import copyfile
-os.chdir('../Struct')
-import select_tools as selt
-os.chdir('../Struct')
-from vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr,pars2Spher,sc2angles,pass2act
-os.chdir('../chimera')
+#os.chdir('../Struct')
+import Struct.select_tools as selt
+#os.chdir('../Struct')
+from Struct.vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr,pars2Spher,sc2angles,pass2act
+#os.chdir('../chimera')
 
 def chimera_path(**kwargs):
     "Returns the location of the ChimeraX program"

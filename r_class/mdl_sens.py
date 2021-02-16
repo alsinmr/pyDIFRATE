@@ -12,13 +12,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import copy
-import DynamicModels as dm
-import os
-os.chdir('../Struct')
-import structure
-os.chdir('../plotting')
-from plotting_funs import plot_rhoz
-os.chdir('../r_class')
+import r_class.DynamicModels as dm
+#import os
+#os.chdir('../Struct')
+from Struct.structure import molecule
+#os.chdir('../plotting')
+from plots.plotting_funs import plot_rhoz
+#os.chdir('../r_class')
 #import detectors
 from scipy.interpolate import interp1d as interp
 
@@ -45,7 +45,7 @@ class model(object):
         self.MdlPar=list()
         self.tMdl=list()
         self.AMdl=list()
-        self.molecule=structure.molecule()
+        self.molecule=molecule()
         
             
     def new_mdl(self,tMdl=None,AMdl=None,Model=None,**kwargs):

@@ -31,15 +31,15 @@ instead of the accuracy
 
 import numpy as np
 #import multiprocessing as mp
-import os
-os.chdir('../data')
-from data_class import data
-os.chdir('../iRED')
+#import os
+#os.chdir('../data')
+from data.data_class import data
+#os.chdir('../iRED')
 #from MDAnalysis.analysis.align import rotation_matrix
 #from psutil import virtual_memory
 #from fast_index import trunc_t_axis,get_count
-from fast_funs import S2calc,Ct,get_trunc_vec,align_mean
-from fast_index import trunc_t_axis
+from iRED.fast_funs import S2calc,Ct,get_trunc_vec,align_mean
+from iRED.fast_index import trunc_t_axis
 
 def Ct2data(molecule,n=100,nr=10,**kwargs):
     """

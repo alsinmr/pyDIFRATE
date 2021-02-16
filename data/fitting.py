@@ -7,14 +7,14 @@ Created on Wed May  8 12:26:05 2019
 """
 
 import numpy as np
-import data_class as dc
+import data.data_class as dc
 from scipy.optimize import lsq_linear as lsq
 from scipy.stats import norm
-import os
+#import os
 import multiprocessing as mp
-os.chdir('../r_class')
-from detectors import detect as dt
-os.chdir('../data')
+#os.chdir('../r_class')
+from r_class.detectors import detect as dt
+#os.chdir('../data')
 
 def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel=True,subS2=True,**kwargs):
     """
@@ -22,7 +22,6 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     fit the detectors that result from the R2 exchange correction. Should have an 
     automatic mechanism to discard these in later fits.
     """
-    
     if detect is None:
         if data.detect is None:
             print('A detect object must be provided in the input or as part of the data object')

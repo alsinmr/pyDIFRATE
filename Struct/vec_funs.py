@@ -7,9 +7,9 @@ Created on Wed Aug 21 13:21:49 2019
 """
 
 
-import frames
-import user_frames
-import special_frames
+import Struct.frames as frames
+import Struct.user_frames as user_frames
+import Struct.special_frames as special_frames
 
 fr=[user_frames,special_frames,frames]
 

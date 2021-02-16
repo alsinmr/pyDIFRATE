@@ -7,21 +7,21 @@ Created on Tue May  7 16:51:28 2019
 """
 
 import numpy as np
-import os
+#import os
 import pandas as pd
-os.chdir('../r_class')
-from Ctsens import Ct
-from detectors import detect
-os.chdir('../chimera')
-from chimera_funs import plot_cc as plt_cc3D
-from chimera_funs import plot_rho
-from chimeraX_funs import run_chimeraX,get_default_colors
-os.chdir('../plotting')
-import plotting_funs as pf
-os.chdir('../data')
-from fitting import fit_data
-from bin_in_out import save_DIFRATE
-from load_nmr import load_NMR
+#os.chdir('../r_class')
+from r_class.Ctsens import Ct
+from r_class.detectors import detect
+#os.chdir('../chimera')
+from chimera.chimera_funs import plot_cc as plt_cc3D
+from chimera.chimera_funs import plot_rho
+from chimera.chimeraX_funs import run_chimeraX,get_default_colors
+#os.chdir('../plotting')
+import plots.plotting_funs as pf
+#os.chdir('../data')
+from data.fitting import fit_data
+from data.bin_in_out import save_DIFRATE
+from data.load_nmr import load_NMR
 import copy
 
 class data(object):

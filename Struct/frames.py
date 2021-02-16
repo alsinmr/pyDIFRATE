@@ -7,8 +7,8 @@ Created on Thu Feb  6 10:43:33 2020
 """
 
 import numpy as np
-import vf_tools as vft
-import select_tools as selt
+import Struct.vf_tools as vft
+import Struct.select_tools as selt
 
 #%% Frames
 """

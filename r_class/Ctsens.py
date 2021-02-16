@@ -8,13 +8,13 @@ Created on Wed Apr 10 16:49:23 2019
 
 import numpy as np
 import pandas as pd
-import DIFRATE_funs as dff
-import matplotlib.pyplot as plt
-import mdl_sens as mdl
+#import DIFRATE_funs as dff
+#import matplotlib.pyplot as plt
+import r_class.mdl_sens as mdl
 import os
-os.chdir('../iRED')
-from fast_index import trunc_t_axis,get_count
-os.chdir('../r_class')
+#os.chdir('../iRED')
+from iRED.fast_index import trunc_t_axis,get_count
+#os.chdir('../r_class')
 
 class Ct(mdl.model):
     def __init__(self,tc=None,z=None,t=None,**kwargs):

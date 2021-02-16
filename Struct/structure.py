@@ -11,12 +11,12 @@ from MDAnalysis.lib.mdamath import make_whole
 import MDAnalysis.analysis.align
 import numpy as np
 import os
-from vec_funs import new_fun,print_frame_info
+from Struct.vec_funs import new_fun,print_frame_info
 import copy
-os.chdir('../chimera')
-from chimera_funs import open_chimera
-os.chdir('../Struct')
-import select_tools as selt
+#os.chdir('../chimera')
+from chimera.chimera_funs import open_chimera
+#os.chdir('../Struct')
+import Struct.select_tools as selt
 
 class molecule(object):
     def __init__(self,*args):
@@ -367,7 +367,6 @@ class molecule(object):
         """
         Starts a chimera session with the pdb stored in molecule.pdb
         """
-        
         open_chimera(self,**kwargs)
         
     def mk_whole(self,sel=None):

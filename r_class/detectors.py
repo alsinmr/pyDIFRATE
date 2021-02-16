@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-import mdl_sens as mdl
+import r_class.mdl_sens as mdl
 from numpy.linalg import svd
 #from scipy.sparse.linalg import svds
 from scipy.sparse.linalg import eigs
@@ -19,8 +19,8 @@ from scipy.optimize import linprog
 from scipy.optimize import lsq_linear as lsqlin
 import multiprocessing as mp
 import warnings
-os.chdir('../plotting')
-import plotting_funs as pf
+#os.chdir('../plotting')
+import plots.plotting_funs as pf
 os.chdir(cwd)
 
 warnings.filterwarnings("ignore",r"Ill-conditioned matrix*")

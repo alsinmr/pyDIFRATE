@@ -5,14 +5,14 @@ Created on Wed Aug 28 10:24:19 2019
 
 @author: albertsmith
 """
-import os
+#import os
 import numpy as np
 import multiprocessing as mp
-from parCt import par_class as pct
-from fast_index import get_count
-os.chdir('../Struct')
-import vf_tools as vft
-os.chdir('../iRED')
+from iRED.parCt import par_class as pct
+from iRED.fast_index import get_count
+#os.chdir('../Struct')
+import Struct.vf_tools as vft
+#os.chdir('../iRED')
 
 #%% Estimate the order parameter
 def S2calc(vec):

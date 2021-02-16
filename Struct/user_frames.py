@@ -55,6 +55,6 @@ frames.py. A few critical points:
 
 
 import numpy as np
-import vf_tools as vft
-import select_tools as selt
+import Struct.vf_tools as vft
+import Struct.select_tools as selt
 
