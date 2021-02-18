@@ -120,8 +120,19 @@ class data(object):
             
         elif 'filename' in kwargs:
             "Can you really replace all of self like this?"
-            self=load_NMR(kwargs['filename'])
-            
+            #self=load_NMR(kwargs['filename'])
+
+            #print(dir(load_NMR(kwargs["filename"])))
+            temp_data = load_NMR(kwargs["filename"])
+            for att in dir(temp_data):
+                try:
+                    setattr(self,att,getattr(temp_data,att))
+                except:
+                    pass
+            '''well, no, you can't. it is just storing a new temporary object called "self"
+            one way is this: return a new Object and replace the old object in the script/console
+            or make a new object here and itereate all attributes to replace'''
+            #return load_NMR(kwargs['filename'])
         if 'EstErr' in kwargs:
             if kwargs.get('EstErr')[0].lower()=='n':
                 EstErr=False
@@ -419,7 +430,6 @@ class data(object):
             if not(errorbars):Rin_std=None
             
             ax=pf.plot_fit(self.label,Rin,Rc,Rin_std,info,index,exp_index,fig)
-        
         return ax
                 
     def draw_cc3D(self,bond,det_num=None,chain=None,fileout=None,scaling=None,norm='y',**kwargs):
@@ -567,7 +577,7 @@ class data(object):
             x=x[index]
 
         x*=scaling
-        
+        assert mol is None, "select molecule with data.sens.molecule.select_atoms..."
         run_chimeraX(mol=mol,disp_mode=disp_mode,x=x,chimera_cmds=chimera_cmds,\
                      fileout=fileout,save_opts=save_opts,scene=scene,x0=x0,
                      colors=colors)
