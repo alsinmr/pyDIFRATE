@@ -53,6 +53,16 @@ class par_class():
 #        cls.storeCt(i,ct)
 #        cls.ct[i]=ct
         return ct
+    
+    @classmethod
+    def CtFT(cls,v):
+        i,ref_num=v
+        index=cls.index[ref_num]
+        X=cls.X[i]
+        Y=cls.Y[i]
+        Z=cls.Z[i]
+        
+        
 #    
     @classmethod
     def store_vecs(cls,vec,nc):

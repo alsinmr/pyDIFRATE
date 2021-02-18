@@ -6,18 +6,15 @@ Created on Tue Oct  6 10:46:10 2020
 @author: albertsmith
 """
 
-import os
-curdir=os.getcwd()
+#import os
+#curdir=os.getcwd()
 import numpy as np
-os.chdir('../Struct')
-import vf_tools as vft
-os.chdir('../iRED')
-from fast_index import trunc_t_axis
-from iRED_fast import vec2iRED
-from fast_funs import get_trunc_vec,get_count,printProgressBar
-os.chdir('../data')
-from data_class import data
-os.chdir(curdir)
+import Struct.vf_tools as vft
+from iRED.fast_index import trunc_t_axis
+from iRED.fast_funs import get_count,printProgressBar
+#os.chdir('../data')
+from data.data_class import data
+#os.chdir(curdir)
 
 def frames2data(mol=None,v=None,n=100,nr=10,tf=None,dt=None):
     """

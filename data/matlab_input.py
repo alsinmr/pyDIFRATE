@@ -8,10 +8,11 @@ Created on Mon Sep  2 13:03:49 2019
 
 from scipy.io import loadmat as LM
 import numpy as np
-import os
-os.chdir('../r_class')
-from sens import rates as Rates
-os.chdir('../data')
+from r_class.sens import rates as Rates
+#import os
+#os.chdir('../r_class')
+#from sens import rates as Rates
+#os.chdir('../data')
 
 
 def mat2py(filename):

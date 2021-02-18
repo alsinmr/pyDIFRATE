@@ -351,6 +351,9 @@ class detect(mdl.model):
 
 #%% Automatic generation of detectors from a set of sensitivities                 
     def r_auto(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
+
+        assert n<=self.Rin().shape[0],'Number of detectors cannot be larger than the number of experiments'
+        
         self.n=n
         
         self.detect_par['inclS2']=inclS2
