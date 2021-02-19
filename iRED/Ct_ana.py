@@ -13,12 +13,12 @@ compare to iRED results
 
 import numpy as np
 import multiprocessing as mp
-import os
-os.chdir('../data')
-from data_class import data
-os.chdir('../iRED')
-from iRED_ana import get_vec
-from iRED_ana import align_vec
+#import os
+#os.chdir('../data')
+from data.data_class import data
+#os.chdir('../iRED')
+from iRED.iRED_ana import get_vec
+from iRED.iRED_ana import align_vec
 
 #%% Create a data object from the Correlation function results
 def Ct2data(molecule,**kwargs):

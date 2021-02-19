@@ -7,7 +7,8 @@ Created on Wed Jul 31 16:37:08 2019
 """
 
 import pickle
-
+#from data import data_class
+#from data.data_class import data
 
 def save_bin(filename,obj):
     """

@@ -16,7 +16,9 @@ from iRED import Ct_fast
 from Struct import eval_fr as frames
 from chimera import chimeraX_funs as chimeraX
 
-
+"Temporary hack to recover old data objects that have been saved"
+#import DR_old
+#from data import data_class
 
 
 

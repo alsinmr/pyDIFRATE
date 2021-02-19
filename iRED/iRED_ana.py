@@ -14,12 +14,12 @@ bond vector direction.
 
 import numpy as np
 import multiprocessing as mp
-import os
+#import os
 import MDAnalysis as md
 from MDAnalysis.analysis import align
-os.chdir('../data')
-from data_class import data
-os.chdir('../iRED')
+#os.chdir('../data')
+from data.data_class import data
+#os.chdir('../iRED')
 
 
 #%% Run the full iRED analysis

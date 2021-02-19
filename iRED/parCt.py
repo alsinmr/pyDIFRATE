@@ -38,6 +38,11 @@ class par_class():
     def Ct(cls,v):
         i,ref_num=v
         index=cls.index[ref_num]
+        
+        "Use FT if more than 10% of data points are populated"
+        if index.size/(index[-1]+1)>.1:
+            return cls.CtFT(v)
+        
         X=cls.X[i]
         Y=cls.Y[i]
         Z=cls.Z[i]
@@ -56,14 +61,27 @@ class par_class():
     
     @classmethod
     def CtFT(cls,v):
+        print('Processing with FT')
         i,ref_num=v
         index=cls.index[ref_num]
-        X=cls.X[i]
-        Y=cls.Y[i]
-        Z=cls.Z[i]
+        SZ=[(index[-1]+1)*2,np.shape(cls.X[i])[1]]
+        X=np.zeros(SZ)
+        Y=np.zeros(SZ)
+        Z=np.zeros(SZ)
+        X[index]=cls.X[i]
+        Y[index]=cls.Y[i]
+        Z[index]=cls.Z[i]
+        ft_prod=np.zeros(SZ,dtype=complex)
         
+        v=[X,Y,Z]
+
+        for k in range(3):
+            for j in range(k,3):
+                ft0=np.fft.fft(v[k]*v[j],axis=0)
+                ft_prod+=ft0.conj()*ft0 if k==j else 2*ft0.conj()*ft0
         
-#    
+        return np.fft.ifft(ft_prod,axis=0)[:int(SZ[0]/2)].real       
+    
     @classmethod
     def store_vecs(cls,vec,nc):
         """Responsible for sorting out the vectors for each process.

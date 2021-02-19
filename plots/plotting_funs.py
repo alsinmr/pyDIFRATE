@@ -269,8 +269,7 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
     if lbl0 is not None:
         ax.set_xticks(lbl)
         ax.set_xticklabels(lbl0,rotation=90)
-        
-            
+                
     return ax    
  
 #%% Plot the data fit
@@ -371,7 +370,7 @@ def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=Non
                 a.text(np.min(lbl),a.get_ylim()[1]*0.88,string,FontSize=8)
                 string=r'$\nu_r$={0} kHz, $\nu_1$={1} kHz'.format(i['vr'],i['v1'])
                 a.text(np.min(lbl),a.get_ylim()[1]*0.73,string,FontSize=8)
-                
+    fig.show()            
     return ax        
             
 
@@ -453,6 +452,8 @@ def plot_all_Ct(t,Ct,Ct_fit=None,lbl=None,index=None,color=None,fig=None,style='
         a.set_ylim(*ylim)
         if lbl is not None:
             a.set_title(lbl[k],y=1,pad=-6,FontSize=6)
+    
+    fig.show()
     return ax
     
 def subplot_setup(nexp,fig=None):
@@ -540,6 +541,7 @@ def plot_rhoz(sens,index=None,ax=None,bond=None,norm=False,mdl_num=None,**kwargs
     ax.set_xlim(sens.z()[[0,-1]])
     ax.set_title('Sensitivity (no model)')
     
+    fig.show()
     return hdl    
 
 #%% Plot the quality of the rate constant reproduction
@@ -593,6 +595,7 @@ def plot_Rc(sens,exp_num=None,norm=True,bond=None,ax=None):
     
     hdl=hdl1+hdl2
     
+    fig.show()
     return hdl
 
 #%% Sets plot attributes from kwargs

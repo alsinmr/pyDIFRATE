@@ -92,6 +92,7 @@ def Ct(vec,**kwargs):
             ct0.append(Ct_par(v))
     else:
         ref_num,v0=pct.store_vecs(vec,nc)
+        print('Success')
         try:
             with mp.Pool(processes=nc) as pool:
 #                ct=pool.map(ctpar.Ct,v0)
