@@ -510,4 +510,77 @@ def calc_prod(data,r,nf=None):
     out.R_std=np.sqrt(R1_var)    
     
     return out
+ 
+
+def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
+    """
+    Takes some initial data, I0, that is a function a function of x0 in some
+    dimension of I0 (by default, we search for a matching dimension- if more than
+    one dimension match, then the first matching dimension will be used)
+    
+    Then, we extrapolate I0 between the input points such that we return a new
+    I with axis x. 
+    
+    This is a simple linear extrapolation– just straight lines between points.
+    If points in x fall outside of points in x0, we will use the two end points
+    to calculate a slope and extrapolate from there.
+    
+    x0 must be sorted in ascending order. x does not need to be sorted.
+    
+    If values of x fall outside of the range of x0, by default, we will take the
+    slope at the ends of the given range. Alternatively, set mode to 'last_value'
+    to just take the last value in x0
+    """
+    
+    assert all(np.diff(x0)>=0),"x0 is not sorted in ascending order"
+    
+    x0=np.array(x0)
+    I0=np.array(I0)
+    x=np.array(x)
+    
+    "Determine what dimension we should extrapolate over"
+    if dim is None:
+        i=np.argwhere(x0.size==np.array(I0.shape)).squeeze()
+        assert i.size!=0,"No dimensions of I0 match the size of x0"
+        dim=i if i.ndim==0 else i[0]
         
+    "Swap dimensions of I0"
+    I0=I0.swapaxes(0,dim)
+    
+    
+    "Deal with x being extend beyond x0 limits"
+    if x.min()<=x0[0]:
+        I0=np.insert(I0,0,np.zeros(I0.shape[1:]),axis=0)
+        x0=np.concatenate(([x.min()-1],x0),axis=0)
+        if mode.lower()=='last_slope':
+            run=x0[1]-x0[0]
+            rise=I0[1]-I0[0]
+            slope=rise/run           
+            I0[0]=I0[1]-slope*(x0[1]-x0[0])
+        else:
+            I0[0]=I0[1]
+    if x.max()>=x0[-1]:
+        I0=np.concatenate((I0,[np.zeros(I0.shape[1:])]),axis=0)
+        x0=np.concatenate((x0,[x.max()+1]),axis=0)
+        if mode.lower()=='last_slope':
+            run=x0[-2]-x0[-1]
+            rise=I0[-2]-I0[-1]
+            slope=rise/run
+            I0[-1]=I0[-2]-slope*(x0[-2]-x0[-1])
+        else:
+            I0[-1]=I0[-2]
+        
+    "Index for summing"
+    i=np.digitize(x,x0)
+    
+    I=((I0[i-1].T*(x0[i]-x)+I0[i].T*(x-x0[i-1]))/(x0[i]-x0[i-1])).T
+    
+    return I.swapaxes(0,dim)
+    
+    
+        
+        
+
+
+
+       
