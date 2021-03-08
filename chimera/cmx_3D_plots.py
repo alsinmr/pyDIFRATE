@@ -72,7 +72,7 @@ def copy_fun(f=None,name=None):
             assert end_copy,"Could not find the end_code in file: {0}".format(end_code)
         f.write('\n')
 
-def make_surf(x,y,z,colors=None,triangles=None,chimera_cmds=None,fileout=None,save_opts=None):
+def make_surf(x,y,z,colors=None,triangles=None,chimera_cmds=None,fileout=None,save_opts=None,scene=None):
     """
     Plots a surface in chimeraX from x,y, and z. May also include colors
     """
@@ -105,6 +105,11 @@ def make_surf(x,y,z,colors=None,triangles=None,chimera_cmds=None,fileout=None,sa
                 py_line(f,'colors.append(locals()[key])',2)
             else:
                 py_print_npa(f,'colors',colors,nt=1)
+        
+        if scene:
+            WrCC(f,'open '+scene,1)
+            
+        
         py_line(f,'surf3D(session,x,y,z,colors,triangles)',1)
         
         if chimera_cmds is not None:
@@ -125,11 +130,15 @@ def make_surf(x,y,z,colors=None,triangles=None,chimera_cmds=None,fileout=None,sa
 #        py_line(f,'pass',1)
         if fileout is not None: #Exit if a file is saved
             WrCC(f,'exit',1)
+#            pass
     copyfile(full_path,full_path[:-9]+'.py')
     
+#    if fileout is None:
     os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
+#    else:
+#        os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),'--nogui '+ full_path)
             
-def multi_surf(x,y,z,colors=None,chimera_cmds=None,fileout=None,save_opts=None):
+def multi_surf(x,y,z,colors=None,chimera_cmds=None,fileout=None,save_opts=None,scene=None,debug=False):
     """
     Takes lists of x, y, and z coordinates, and optionally also colors. Each
     element of the lists corresponds to one surface to be plotted in chimera.
@@ -160,6 +169,9 @@ def multi_surf(x,y,z,colors=None,chimera_cmds=None,fileout=None,save_opts=None):
                     py_line(f,'colors{0}.append(locals()[key])'.format(k),2)
                 else:
                     py_print_npa(f,'colors{0}'.format(k),c0,nt=1)
+        if scene:
+            WrCC(f,'open '+scene,1)
+            
         for k in range(len(x)):
             py_line(f,'surf3D(session,x{0},y{0},z{0},colors{0})'.format(k),1)
             
@@ -172,16 +184,24 @@ def multi_surf(x,y,z,colors=None,chimera_cmds=None,fileout=None,save_opts=None):
             if len(fileout)>=4 and fileout[-4]!='.':fileout=fileout+'.png'
             if save_opts is None:save_opts=''
             WrCC(f,"save " +fileout+' '+save_opts,1)
+        py_line(f,'close=True',1)
         py_line(f,'except:')
-        py_line(f,'pass',1)
+        py_line(f,'close=False',1)
+        py_line(f,'print("ChimeraX script failed")',1)
+        WrCC(f,'ui tool show Log',1)
         py_line(f,'finally:')
         py_line(f,'os.remove("{0}")'.format(full_path),1)
 #        py_line(f,'pass',1)
         if fileout is not None: #Exit if a file is saved
-            WrCC(f,'exit',1)
+            py_line(f,'if close:',1)
+            WrCC(f,'exit',2)
+#            pass
     copyfile(full_path,full_path[:-9]+'.py')
     
-    os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
+    if debug:
+        os.system(chimera_path()+' --debug '+full_path)
+    else:
+        os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
 
 def image2surf(filename,x0,y0,xLen,yLen=None):
     im=cv2.imread(filename)     

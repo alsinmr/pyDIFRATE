@@ -262,7 +262,10 @@ def py_print_npa(f,name,x,format_str='.6f',dtype=None,nt=0):
     f.write('\n')
     for _ in range(nt):f.write('\t')
     
-    if x.ndim==0:
+    if x.size==0:
+        print('Warning: writing an empty matrix to ChimeraX')
+        f.write(name+'=np.zeros({0})'.format(x.shape))
+    elif x.ndim==0:
         f.write((name+'=np.array({0:'+format_str+'})').format(x))
     elif x.ndim==1:
         f.write(name+'=np.array([')
