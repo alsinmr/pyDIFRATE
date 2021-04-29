@@ -16,7 +16,8 @@ from iRED import Ct_fast
 from Struct import eval_fr as frames
 from chimera import chimeraX_funs as chimeraX
 from chimera import cmx_3D_plots as cmx_plots
-
+#from Sensitivities.test_class import Test as Test
+import Sensitivities
 "Temporary hack to recover old data objects that have been saved"
 import DR_old
 #from data import data_class

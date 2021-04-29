@@ -7,7 +7,7 @@ Created on Wed May  8 12:26:05 2019
 """
 
 import numpy as np
-import data.data_class as dc
+#import data.data_class as dc
 from scipy.optimize import lsq_linear as lsq
 from scipy.stats import norm
 #import os
@@ -16,7 +16,7 @@ import multiprocessing as mp
 from r_class.detectors import detect as dt
 #os.chdir('../data')
 
-def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel=True,subS2=True,**kwargs):
+def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel=True,subS2=False,**kwargs):
     """
     Subsequent fitting is currently failing (I think), because we are later trying to 
     fit the detectors that result from the R2 exchange correction. Should have an 
@@ -36,7 +36,8 @@ def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel
     nb=data.R.shape[0]  #number of data points to fit (n_bonds)
     
     "Output object"
-    out=dc.data()
+#    out=dc.data()
+    out=data.__class__()
     "The new sensitivities of the output data are the detectors used"
     out.sens=detect.copy()
     out.sens._disable()    #Clear the input sensitivities (restricts ability to further edit sens)

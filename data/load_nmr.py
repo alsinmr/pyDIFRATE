@@ -8,13 +8,9 @@ Created on Mon Jul 29 14:14:04 2019
 @author: albertsmith
 """
 
-#import os
 import numpy as np
-
-#os.chdir('../r_class')
 from r_class.sens import rates
 from r_class.detectors import detect
-#os.chdir('../data')
 import data.data_class as dc
 
 def load_NMR(filename):

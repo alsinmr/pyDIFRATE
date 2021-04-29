@@ -21,7 +21,6 @@ import plots.plotting_funs as pf
 #os.chdir('../data')
 from data.fitting import fit_data
 from data.bin_in_out import save_DIFRATE
-from data.load_nmr import load_NMR
 import copy
 
 class data(object):
@@ -118,9 +117,6 @@ class data(object):
             if 'S2' in kwargs:
                 self.S2=kwargs.get('S2')
             
-        elif 'filename' in kwargs:
-            "Can you really replace all of self like this?"
-            self=load_NMR(kwargs['filename'])
             
         if 'EstErr' in kwargs:
             if kwargs.get('EstErr')[0].lower()=='n':
@@ -226,11 +222,13 @@ class data(object):
             for m in index:
                 self.del_data_pt(m)
         else:
-            attr=['R','R_l','R_u','R_std','Rc','Rin','Rin_std','label']
+            attr=['R','R_l','R_u','R_std','Rc','Rin','Rin_std','label',\
+                  'S2','S2_std','S2c','S2in','S2in_std']
             for at in attr:
-                x=getattr(self,at)
-                if x is not None:
-                    setattr(self,at,np.delete(x,index,axis=0))
+                if hasattr(self,at):
+                    x=getattr(self,at)
+                    if x is not None:
+                        setattr(self,at,np.delete(x,index,axis=0))
                 
 #%% Run fit_data from the object     
     def fit(self,detect=None,**kwargs):

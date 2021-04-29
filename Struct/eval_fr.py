@@ -454,7 +454,6 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
         
     "Here we create a generator that contains each term in the correlation function"
     l=loops(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,calc=calc)
-    
     for l0 in l:
         "These terms appear in all correlation functions"
         if 'eag' in l0.keys():
@@ -504,6 +503,7 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
        
     "Now calculate inverse transforms if calc_ct"
     if ctFT:
+        print('Use Fourier Transform')
         #Here the number of time point pairs for each element of the correlation function
 #        N=get_count(index) if index is not None else np.arange(n,0,-1)
         i=N!=0
@@ -759,8 +759,7 @@ def fastCT(x,y,index=None,N=None):
     y=y.T
 
     for k in range(x.shape[0]):
-        ct[i1[index[k:]-index[k]]]+=x[k]*y[k:]
-    
+        ct[i1[index[k:]-index[k]]]+=x[k]*y[k:]    
 
     return ct.T
         

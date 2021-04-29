@@ -117,7 +117,8 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
     if ct_m0 is not None or pdb_template is None:
 #    if not(ct_m0 is None and pdb_template is not None):
         mp0=np.array([0,0,0])
-        for k,t0 in enumerate(t_index):
+        "Start the loop over pdbs"
+        for k,t0 in enumerate(t_index): 
             if pdb_template is None:
                 mol.mda_object.trajectory[t0]
         
@@ -160,9 +161,9 @@ def md2images(mol,sel0,ct_m0=None,index=None,nt0=1e5,nt=300,step='log',sc=2.09,\
                         vZ=norm((sel[s2i].positions-sel[s1i].positions).T)
                         cb=(vZ0*vZ).sum(0)
                         sb=np.sqrt(1-cb**2)
-                        vec=np.array([vZ0[m]*vZ[n]-vZ0[n]*vZ[m] for m,n in zip([1,2,0],[2,0,1])])
-                        sc0=vft.getFrame(vec)
-                        vXZ=vft.R(vft.Rz(vft.R(vXZ0,*vft.pass2act(*sc0)),cb,sb),*sc0)
+                        vec=np.array([vZ0[m]*vZ[n]-vZ0[n]*vZ[m] for m,n in zip([1,2,0],[2,0,1])]) #Cross product
+                        sc0=vft.getFrame(vec)  #Rotate around a vector perpendicular to starting and current position
+                        vXZ=vft.R(vft.Rz(vft.R(vXZ0,*vft.pass2act(*sc0)),cb,sb),*sc0) #Frame of vec, cb/sb, frame of vec
                         
                 vZ=norm(vZ)
                 scF=getFrame(vZ[:,index],vXZ[:,index])
@@ -1014,7 +1015,7 @@ def frame_gen(pdb_template,mol,sel0,sel,pivot,order=None,fn=0,nt0=1e5,nt=1e3,ste
     """
     Writes pdbs where the motion in those pdbs is the result of motion of a specific
     frame. One must provide a file template, a trajectory object, a selection to
-    include in the pdbs, a vector function defined the frame being moved (which
+    include in the pdbs, a vector function defining the frame being moved (which
     returns N frames), and optionally a vector funtion defining an out frame (
     a frame index may be provided that maps vF, the outer function, to vf, the
     vector function responsible for motion, or a list of two elements that maps
@@ -1031,8 +1032,8 @@ def frame_gen(pdb_template,mol,sel0,sel,pivot,order=None,fn=0,nt0=1e5,nt=1e3,ste
     influence on the reorientational correlation function.
     
     One may re-order the frames, to change which motions move which pivots.
-    Specify "order" to achieve this. Order is an integer array (list), that 
-    that specifies which order to apply the frames.
+    Specify "order" to achieve this. Order is an integer array (list), which 
+    specifies which order to apply the frames.
     
     Note that having the pivot point inside another selection may cause the
     appearance of unwanted bond-breaking. This can be resolved by performing:

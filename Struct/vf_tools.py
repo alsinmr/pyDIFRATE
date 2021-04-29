@@ -587,6 +587,7 @@ def D2(cA=0,sA=0,cB=0,sB=None,cG=None,sG=None,m=None,mp=0):
     """
     if sB is None:
         cA,sA,cB,sB,cG,sG=np.cos(cA),np.sin(cA),np.cos(sA),np.sin(sA),np.cos(cB),np.sin(cB)
+
         
     d2c=d2(cB,sB,m,mp)
     
@@ -870,7 +871,7 @@ def Spher2Cart(rho):
                  [-0.5,0,-np.sqrt(1/6),0,-.5],
                  [0,.5*1j,0,.5*1j,0]])
     SZ0=rho.shape
-    SZ=[5,np.prod(SZ0[1:])]
+    SZ=[5,np.prod(SZ0[1:]).astype(int)]
     out=np.dot(M,rho.reshape(SZ)).real
     return out.reshape(SZ0)
     
@@ -931,7 +932,7 @@ def pars2Spher(delta,eta=None,cA=None,sA=None,cB=None,sB=None,cG=None,sG=None):
     """
 
     if cA is None:
-        cA,sA,cB,sB,cG,sG=1,0,1,0,1,0
+        cA,sA,cB,sB,cG,sG=np.array([1,0,1,0,1,0])
     
     if eta is None:
         eta=np.zeros(np.shape(delta))

@@ -46,7 +46,9 @@ def S2(tc,exper):
     
 def R1(tc,exper):
     "Returns longitudinal relaxation rate constant"
+    "Dipolar relaxation updated to include MAS spinning, relevant for homonuclear couplings"
     v0=exper['v0']*1e6
+    vr=exper['vr']*1e3
     dXY=exper['dXY']
     Nuc=exper['Nuc']
     Nuc1=exper['Nuc1']
@@ -62,13 +64,25 @@ def R1(tc,exper):
             vY=NucInfo(Nuc1)/NucInfo('1H')*v0
             S=NucInfo(Nuc1,'spin')
             sc=S*(S+1)*4/3 # Scaling factor depending on the spin, =1 for spin 1/2
-            R+=sc*(np.pi*dXY/2)**2*(J(tc,vX-vY)+3*J(tc,vX)+6*J(tc,vY+vX))
+            
+            if vX==vY:
+                Delv=exper['CSoff']*vX/1e6
+                R+=sc*(np.pi*dXY/2)**2*(1/6*J(tc,Delv+2*vr)+1/6*J(tc,Delv-2*vr)\
+                   +1/3*J(tc,Delv+vr)+1/3*J(tc,Delv-vr)+3*J(tc,vX)+6*J(tc,2*vX))
+            else:
+               R+=sc*(np.pi*dXY/2)**2*(J(tc,vX-vY)+3*J(tc,vX)+6*J(tc,vY+vX))
+
         else:
             for k in range(0,np.size(dXY)):
                 S=NucInfo(Nuc1[k],'spin')
                 sc=S*(S+1)*4/3 # Scaling factor depending on the spin, =1 for spin 1/2
                 vY=NucInfo(Nuc1[k])/NucInfo('1H')*v0
-                R+=sc*(np.pi*dXY[k]/2)**2*(J(tc,vX-vY)+3*J(tc,vX)+6*J(tc,vY+vX))
+                if vX==vY:
+                    Delv=exper['CSoff'][k]*vX/1e6
+                    R+=sc*(np.pi*dXY[k]/2)**2*(1/6*J(tc,Delv+2*vr)+1/6*J(tc,Delv-2*vr)\
+                       +1/3*J(tc,Delv+vr)+1/3*J(tc,Delv-vr)+3*J(tc,vX)+6*J(tc,2*vX))
+                else:
+                    R+=sc*(np.pi*dXY[k]/2)**2*(J(tc,vX-vY)+3*J(tc,vX)+6*J(tc,vY+vX))
                 
     "CSA relaxation"
     R+=3/4*(2*np.pi*CSA)**2*J(tc,vX)

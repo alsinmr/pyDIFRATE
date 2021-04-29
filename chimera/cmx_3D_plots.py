@@ -138,7 +138,7 @@ def make_surf(x,y,z,colors=None,triangles=None,chimera_cmds=None,fileout=None,sa
 #    else:
 #        os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),'--nogui '+ full_path)
             
-def multi_surf(x,y,z,colors=None,chimera_cmds=None,fileout=None,save_opts=None,scene=None,debug=False):
+def multi_surf(x,y,z,colors=None,triangles=None,chimera_cmds=None,fileout=None,save_opts=None,scene=None,debug=False):
     """
     Takes lists of x, y, and z coordinates, and optionally also colors. Each
     element of the lists corresponds to one surface to be plotted in chimera.
@@ -147,14 +147,20 @@ def multi_surf(x,y,z,colors=None,chimera_cmds=None,fileout=None,save_opts=None,s
                                         #This lets us run multiple instances without interference
     full_path=get_path('chimera_script{0:06d}.py'.format(rand_index))     #Location to write out chimera script
     
+    if triangles is None:triangles=[None for _ in range(len(x))] #Empty triangles variable
+    
     with open(full_path,'w') as f:
         copy_fun(f,'imports')
         copy_fun(f,'surf3D')
         py_line(f,'try:')
-        for k,(x0,y0,z0,c0) in enumerate(zip(x,y,z,colors)):
+        for k,(x0,y0,z0,c0,tri0) in enumerate(zip(x,y,z,colors,triangles)):
             py_print_npa(f,'x{0}'.format(k),x0,nt=1)
             py_print_npa(f,'y{0}'.format(k),y0,nt=1)
             py_print_npa(f,'z{0}'.format(k),z0,nt=1)
+            if tri0:
+                py_print_npa(f,'tri{0}'.format(k),tri0,format_str='d',dtype='int32',nt=1)
+            else:
+                py_line(f,'tri{0}=None'.format(k),1)
             if colors is None:
                 py_line(f,'colors{0}=None'.format(k),nt=1)
             else:
@@ -173,7 +179,7 @@ def multi_surf(x,y,z,colors=None,chimera_cmds=None,fileout=None,save_opts=None,s
             WrCC(f,'open '+scene,1)
             
         for k in range(len(x)):
-            py_line(f,'surf3D(session,x{0},y{0},z{0},colors{0})'.format(k),1)
+            py_line(f,'surf3D(session,x{0},y{0},z{0},colors{0},tri{0})'.format(k),1)
             
         if chimera_cmds is not None:
             if isinstance(chimera_cmds,str):chimera_cmds=[chimera_cmds]

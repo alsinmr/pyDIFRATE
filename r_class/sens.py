@@ -41,7 +41,6 @@ class rates(mdl.model):
         """
         if tc is None:
             if z is not None:
-                print(z)
                 if np.size(z)==3:
                     self.__tc=np.logspace(z[0],z[1],z[2])
                 else:
@@ -65,7 +64,7 @@ class rates(mdl.model):
         "Names of the experimental variables that are available"
         self.__exper=['Type','v0','v1','vr','offset','stdev']
         "Names of the spin system variables that are available"
-        self.__spinsys=['Nuc','Nuc1','dXY','CSA','QC','eta','theta']
+        self.__spinsys=['Nuc','Nuc1','dXY','CSA','CSoff','QC','eta','theta']
 
         "Initialize storage for rate constant calculation"
         self.__R=list()
@@ -135,6 +134,7 @@ class rates(mdl.model):
             self.__set_defaults(ne)
             
             "Create the new pandas array"
+            
             info=pd.concat([pd.DataFrame.from_dict(self.__exp),pd.DataFrame.from_dict(self.__sys)],axis=1).T
         else:  
             ne=info.shape[1]
@@ -178,7 +178,7 @@ class rates(mdl.model):
         for k in self.__spinsys:
             a=np.atleast_1d(self.__sys.get(k))
 
-            if (k=='dXY' or k=='Nuc1') and np.size(a)>1:
+            if (k=='dXY' or k=='Nuc1' or k=='CSoff') and np.size(a)>1:
                 a=[a]*ne
             else:
                 a=[a[0]]*ne

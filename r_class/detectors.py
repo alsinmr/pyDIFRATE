@@ -1458,7 +1458,6 @@ def svd0(X,n):
         U,S,Vt=svd(X)       #But, typically better results from full calculation
         U=U[:,0:np.size(S)] #Drop all the empty vectors
         Vt=Vt[0:np.size(S),:]
-    
    
     return U,S,Vt
 
