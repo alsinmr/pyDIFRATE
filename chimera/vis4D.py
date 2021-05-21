@@ -456,7 +456,7 @@ def images2movie(file_template,fileout,fr=15,nt=None):
     file_template=os.path.realpath(file_template)
     folder,_=os.path.split(file_template)
     
-    if not(len(fileout)>3 and fileout[-4:]=='.mp4'):
+    if not(len(fileout)>3 and (fileout[-4:]=='.mp4' or fileout[-4:]=='.mov')):
         fileout+='.mp4'
     
     im0=cv2.imread(file_template.format(0))
@@ -509,7 +509,6 @@ def multi_images(files,fileout,sc=1,locations='ne',alpha=1,SZ0=None,clear=True):
     else:
         imout=255*np.ones(np.concatenate((SZ0,[3])),dtype='uint8')
         
-
     
     for location,im,sz in zip(locations,IM,SZ):
         if isinstance(location,str):
@@ -544,8 +543,8 @@ def multi_images(files,fileout,sc=1,locations='ne',alpha=1,SZ0=None,clear=True):
                print('Location not recognized')
                return
         else:
-            xoff=int(location[0]*(SZ0[1]-sz[1])+sz[1]/2)
-            yoff=int(location[1]*(SZ0[0]-sz[0])+sz[0]/2)
+            xoff=int(location[0]*(SZ0[1])-sz[1]/2)
+            yoff=int(location[1]*(SZ0[0])-sz[0]/2)
         x1b,x2b=(0,-xoff) if xoff<0 else (xoff,0)
         x1e,x2e=(SZ0[1],SZ0[1]-xoff) if xoff+sz[1]>SZ0[1] else (xoff+sz[1],sz[1])
         y1b,y2b=(0,-yoff) if yoff<0 else (yoff,0)
@@ -950,13 +949,16 @@ def Ct_plot_updater(ct,filename='ctplot.jpg',fr=15,dt=0.005,nt0=1e5,nt=300,\
                 hdl.append(h)
                 a.set_ylabel('C(t)')
                 if m==len(ax)-1:
-                    a.set_xlabel(r'$t$ / ns')
+                    a.set_xlabel(r'$t$')
+                    a.set_xticks([1e-3,1e-1,1e1])
+                    a.set_xticklabels(['1 ps','100 ps','10 ns'])
                 else:
                     a.set_xticklabels([])
+                    a.set_xticks([1e-3,1e-1,1e1])
                 if legends is not None and legends[m] is not None:
                     a.legend(legends[m],loc='upper right',fontsize=8,fancybox=True,framealpha=.5)
                 if titles is not None:
-                    a.set_title(titles[m])
+                    a.set_title(titles[m],fontsize=plt.rcParams['font.size'])
             fig.tight_layout()
             fig.savefig(filename)
             yield

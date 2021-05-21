@@ -3,7 +3,7 @@ try:
 
 	import os
 	import numpy as np
-	rc(session,"open /Users/albertsmith/Documents/GitHub/pyDIFRATE/Struct/pdbr2000000.pdb_0.pdb")
+	rc(session,"open /Users/albertsmith/Documents/GitHub/pyDIFRATE/Struct/HETs_MET_4pw_final_BBfit_1ms.xtc_102001.pdb")
 	rc(session,"~display")
 	rc(session,"~ribbon")
 	if len(session.models)>1:
@@ -19,4 +19,4 @@ try:
 except:
 	pass
 finally:
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script924449.py")
+	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script407318.py")

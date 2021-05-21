@@ -42,8 +42,9 @@ def new_fun(Type,molecule,**kwargs):
     try:       
         fun=fun0(molecule,**kwargs)
     except:
-        print('Frame definition failed')
         print_frame_info(Type)
+        assert 0,'Frame definition failed'
+        
         return
     
     return fun

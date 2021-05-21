@@ -335,7 +335,7 @@ def peptide_plane(mol,resids=None,segids=None,filter_str=None,full=True):
     selm1=sel0_filter(selm1,np.array(resids)-1)
     if full:
         selH=sel0.residues.atoms.select_atoms('protein and (name H HN CD and around 1.5 name N)')
-        selCA=sel0.residues.atoms.select_atoms('protein and (name CA and around 1.6 name N)')
+        selCA=sel0.residues.atoms.select_atoms('protein and (name CA and around 1.7 name N)')
     
 #    i=np.argwhere(np.isin(sel0.residues.resids,sel1.residues.resids-1)).squeeze()
     selCm1=selm1.residues.atoms.select_atoms('protein and (name C and around 1.4 name O)')

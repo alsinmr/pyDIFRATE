@@ -35,6 +35,16 @@ def frames2data(mol=None,v=None,n=100,nr=10,tf=None,dt=None):
     
     return out
 
+def frames2tensors(mol=None,v=None,n=100,nr=10,tf=None,dt=None):
+    """
+    Calculates the various residual tensors for a set of frames, returned in a
+    dictionary object. (This function is simply running frames2ct with 
+    return_index set to True only for the time-independent terms)
+    """
+    return_index=[False,False,False,False,True,True,True,False,False,True]
+    
+    return frames2ct(mol=mol,v=v,return_index=return_index,n=n,nr=nr,tf=tf,dt=dt)
+
 def ct2data(ct_out):
     """
     Takes the results of a frames2ct calculation (the ct_out dict) and loads 
@@ -265,6 +275,7 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
         A_m0_finF=np.array(A_m0_finF)
     elif ri[4] or ri[5]:
         "Calculate A_m0_finF if requested, or A_0m_finF requested"
+        A_m0_finF=list()
         for k in range(nf+1):
             if k==0:
                 b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],cmpt='m0',mode='d2',index=index)

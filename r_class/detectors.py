@@ -5,23 +5,24 @@ Created on Thu Apr 11 20:32:25 2019
 
 @author: albertsmith
 """
-import os
-cwd=os.getcwd()
+#import os
+#cwd=os.getcwd()
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
+#from matplotlib.patches import Polygon
 import r_class.mdl_sens as mdl
 from numpy.linalg import svd
 #from scipy.sparse.linalg import svds
 from scipy.sparse.linalg import eigs
 from scipy.optimize import linprog
 from scipy.optimize import lsq_linear as lsqlin
+from tools.DRtools import linear_ex
 import multiprocessing as mp
 import warnings
 #os.chdir('../plotting')
 import plots.plotting_funs as pf
-os.chdir(cwd)
+#os.chdir(cwd)
 
 warnings.filterwarnings("ignore",r"Ill-conditioned matrix*")
 warnings.filterwarnings("ignore",r"Solving system with option*")
@@ -349,7 +350,312 @@ class detect(mdl.model):
                 kwargs['sort_rho']='n'
             self.__r_info(None,**kwargs)
 
-#%% Automatic generation of detectors from a set of sensitivities                 
+#%% Automatic generation of detectors from a set of sensitivities
+    def r_auto2(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
+
+        assert n<=self.Rin().shape[0],'Number of detectors cannot be larger than the number of experiments'
+        
+        self.n=n
+        
+        self.detect_par['inclS2']=inclS2
+
+        "A little bit silly that the variable names changed...fix later"
+        Neg=NegAllow  
+        R2ex=R2_ex_corr
+        
+        "Store some of the inputs"
+        self.detect_par.update({'Normalization':Normalization,'inclS2':inclS2,'R2_ex_corr':R2_ex_corr,'NegAllow':NegAllow})
+
+            
+        nb=self._nb()
+        "If bond set to -1, run through all orientations."
+        if bond is None:
+            bonds=np.zeros(0)
+        elif np.size(bond)==1 and np.atleast_1d(bond)[0]==-1:
+            bond=None
+            bonds=np.arange(0,nb)
+        else:
+            bond=np.atleast_1d(bond)
+            bonds=bond[1:]
+            bond=bond[0]
+            
+            
+        if nb==1:
+            "If we only have one set of sensitivities (that is, no orientation dependence, then don't use averages"
+            bond=0
+            
+        if bond is None:
+            "Here we operate on the average sensitivities"
+            U,S,Vt,VCSA=self.getSVD(None,n)
+            norm=np.repeat(np.transpose([self.norm]),np.size(self.__tc),axis=1)
+            self.__RcAvg=np.divide(np.dot(U,np.dot(np.diag(S),Vt)),norm)
+        else:                
+            "We work on the first bond given, and use r_target for the remaining bonds"
+            U,S,Vt,VCSA=self.getSVD(bond,n)
+            norm=np.repeat(np.transpose([self.norm]),np.size(self.__tc),axis=1)
+            self.__Rc[bond]=np.divide(np.dot(U,np.dot(np.diag(S),Vt)),norm)
+     
+        ntc=np.size(self.__tc) #Number of correlation times
+        
+
+        """
+        In the follow lines (loop over ntc, or z0), we optimize detectors at 
+        either every possible correlation time, or correlation times specified
+        by z0. 
+        """
+
+        def true_range(k,untried):
+            """Finds the range around k in untried where all values are True
+            """
+            i=np.nonzero(np.logical_not(untried[k:]))[0]
+            right=(k+i[0]) if len(i)!=0 else len(untried)
+            i=np.nonzero(np.logical_not(untried[:k]))[0]
+            left=(i[-1]+1) if len(i)!=0 else 0
+            
+            return left,right
+
+        def find_nearest(Vt,k,untried,error=None,endpoints=False):
+            """Finds the location of the best detector near index k. Note that the
+            vector untried indicates where detectors may still exist. k must fall 
+            inside a range of True elements in untried, and we will only search within
+            that range. Note that by default, finding the best detector at the
+            end of that range will be disallowed, since the range is usually bound
+            by detectors that have already been identified. Exceptions are the first
+            and last positions. untried will be modified in-place
+            """
+            
+            left,right=true_range(k,untried)
+            
+            maxi=100000
+            test=k
+            while k!=maxi:
+                if not(np.any(untried[left:right])):return     #Give up if the whole range of untried around k is False
+                k=test
+                rhoz0,x,maxi=det_opt(Vt,k)
+                error[k]=np.abs(k-maxi)
+                if k<=maxi:untried[k:maxi+1]=False  #Update the untried index
+                else:untried[maxi:k+1]=False
+                test=maxi
+            
+            if (k<=left or k>=right-1) and not(endpoints):
+                return None #Don't return ends of the range unless 0 or ntc
+            else:
+                return rhoz0,x,k
+         
+        def biggest_gap(untried):
+            """Finds the longest range of True values in the untried index
+            """
+            k=np.nonzero(untried)[0][0]
+            gap=0
+            biggest=0
+            while True:
+                left,right=true_range(k,untried)
+                if right-left>gap:
+                    gap=right-left
+                    biggest=np.mean([left,right],dtype=int)
+                i0=np.nonzero(untried[right:])[0]
+                if len(i0)>0:
+                    k=right+np.nonzero(untried[right:])[0][0]
+                else:
+                    break
+            return biggest
+
+                
+        
+        def det_opt(Vt,k,target=None):
+            """Performs the optimization of a detectors having a value of 1 at the kth
+            correlation time, and minimized elsewhere. Target is the minimum allowed
+            value for the detector as a function of correlation time. Default is zeros
+            everywhere.
+            
+            Returns the optimized detector and the location of the maximum of that 
+            detector
+            """
+            ntc=Vt.shape[1]
+            target=target if target else np.zeros(ntc)
+            x=linprog(Vt.sum(1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),\
+                      method='interior-point',options={'disp':False})
+            rhoz=(Vt.T@x['x']).T
+            maxi=np.argmax(np.abs(rhoz))
+            return rhoz,x['x'],maxi
+    
+        #Locate where the Vt are sufficiently large to have maxima
+        i0=np.nonzero(np.any(np.abs(Vt.T)>(np.abs(Vt).max(1)*.75),1))[0]
+        
+        untried=np.ones(ntc,dtype=bool)
+        untried[:i0[0]]=False
+        untried[i0[-1]+1:]=False
+        count=0     #How many detectors have we found?
+        index=list()    #List of indices where detectors are found
+        rhoz=list()     #Optimized sensitivity
+        X=list()        #Columns of the T-matrix
+        err=np.ones(ntc,dtype=int)*ntc #Keep track of error at all time points tried
+
+        "Locate the left-most detector"
+        if untried[0]:
+            rhoz0,x,k=find_nearest(Vt,0,untried,error=err,endpoints=True)
+            rhoz.append(rhoz0)
+            X.append(x)
+            index.append(k)
+            count+=1
+        "Locate the right-most detector"
+        if untried[-1] and n>1:
+            rhoz0,x,k=find_nearest(Vt,ntc-1,untried,error=err,endpoints=True)
+            rhoz.append(rhoz0)
+            X.append(x)
+            index.append(k)
+            count+=1
+        "Locate remaining detectors"
+        while count<n:  
+            "Look in the middle of the first untried range"
+            k=biggest_gap(untried)
+            out=find_nearest(Vt,k,untried,error=err)  #Try to find detectors
+            if out: #Store if succesful
+                rhoz.append(out[0])
+                X.append(out[1])
+                index.append(out[2])
+                untried[out[2]-1:out[2]+2]=False #No neighboring detectors
+                count+=1
+        
+        
+        i=np.argsort(index).astype(int)
+        pks=np.array(index)[i]
+        rhoz=np.array(rhoz)[i]
+        T=np.array(X)[i]
+        
+        
+        """Detectors that are not approaching zero at the end of the range of
+        correlation times tend to oscillate where they do approach zero. We want
+        to push that oscillation slightly below zero
+        """
+        
+        for k in [0,n-1]:
+            try:
+                if (rhoz[k,0]>0.95*np.max(rhoz[k,:]) or rhoz[k,-1]>0.95*np.max(rhoz[k,:])) and Neg!=0:
+    
+                    reopt=True #Option to cancel the re-optimization in special cases
+                    
+                    if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
+                        pm=1;
+                    else:
+                        pm=-1;                        
+                    
+                    temp=rhoz[k,:]
+                    "Locate maxima and minima in the detector"
+                    mini=np.where((temp[2:]-temp[1:-1]>=0) & (temp[1:-1]-temp[0:-2]<=0))[0]+1
+                    maxi=np.where((temp[2:]-temp[1:-1]<=0) & (temp[1:-1]-temp[0:-2]>=0))[0]+1
+                    
+                    """Filter out minima that occur at more than 90% of the sensitivity max,
+                    since these are probably just glitches in the optimization.
+                    """
+                    if np.size(mini)>=2 and np.size(maxi)>=2:
+                        mini=mini[(temp[mini]<.9) & (temp[mini]<.05*np.max(-pm*np.diff(temp[maxi])))]
+                    elif np.size(mini)>=2:
+                        mini=mini[temp[mini]<.9]
+                        
+                    if np.size(maxi)>=2:
+                        maxi=maxi[(temp[maxi]<.9) & (temp[maxi]>0.0)]
+    #                    maxi=maxi[(temp[maxi]<.9) & (temp[maxi]>0.0*np.max(-pm*np.diff(temp[maxi])))]
+                    
+                    
+                    if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
+                        "Calculation for the first detection vector"
+    
+                        if np.size(maxi)>=2 & np.size(mini)>=2:
+                            step=int(np.round(np.diff(mini[0:2])/2))
+                            slope2=-(temp[maxi[-1]]-temp[maxi[0]])*Neg/(maxi[-1]-maxi[0])
+                        elif np.size(maxi)==1 and np.size(mini)>=1:
+                            step=maxi[0]-mini[0]
+                            slope2=temp[maxi[0]]*Neg/step
+                        else:
+                            reopt=False
+                            
+                        if reopt:
+                            a=np.max([1,mini[0]-step])
+                            slope1=-temp[maxi[0]]/step*Neg
+                            line1=np.arange(0,-temp[maxi[0]]*Neg-1e-12,slope1)
+                            line2=np.arange(-temp[maxi[0]]*Neg,1e-12,slope2)
+                            try:
+                                target=np.concatenate((np.zeros(a),line1,line2,np.zeros(ntc-a-np.size(line1)-np.size(line2))))
+                            except:
+                                reopt=False
+                                    
+                    else:
+                        "Calculation otherwise (last detection vector)"
+                        if np.size(maxi)>=2 & np.size(mini)>=2:
+                            step=int(np.round(np.diff(mini[-2:])/2))
+                            slope2=-(temp[maxi[0]]-temp[maxi[-1]])*Neg/(maxi[0]-maxi[-1])
+                        elif np.size(maxi)==1 and np.size(mini)>=1:
+                            step=mini[-1]-maxi[0]
+                            slope2=-temp[maxi[0]]*Neg/step
+                        else:
+                            reopt=False
+                            
+                        if reopt:
+                            a=np.min([ntc,mini[-1]+step])
+                            slope1=temp[maxi[-1]]/step*Neg
+        
+                            line1=np.arange(-temp[maxi[-1]]*Neg,1e-12,slope1)
+                            line2=np.arange(0,-temp[maxi[-1]]*Neg-1e-12,slope2)                    
+                            target=np.concatenate((np.zeros(a-np.size(line1)-np.size(line2)),line2,line1,np.zeros(ntc-a)))
+                        
+    
+                    if reopt:
+                        Y=(Vt,pks[k],target)
+                        
+                        X=linprog_par(Y)
+                        T[k,:]=X
+                        rhoz[k,:]=np.dot(T[k,:],Vt)
+            except:
+                pass
+
+   
+        "Save the results into the detect object"
+#        self.r0=self.__r
+        if bond is None:
+            self.__rAvg=np.multiply(np.repeat(np.transpose([1/self.norm]),n,axis=1),\
+                        np.dot(U,np.linalg.solve(T.T,np.diag(S)).T))
+            self.__rhoAvg=rhoz
+            self.SVDavg['T']=T
+            self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rhoAvg.copy()}
+            if R2ex:
+                self.R2_ex_corr(bond,**kwargs)
+            self.__r_norm(bond,**kwargs)
+            if inclS2:
+                self.inclS2(bond=None,**kwargs)
+            self.__r_info(bond,**kwargs)
+            if np.size(bonds)>0:
+                if 'NT' in kwargs: #We don't re-normalize the results of detectors obtained with r_target
+                    kwargs.pop('NT')
+                if 'Normalization' in kwargs:
+                    kwargs.pop('Normalization')
+                self.r_target(n,bond=bonds,Normalization=None,**kwargs)
+        else:
+
+            """This isn't correct yet- if more than one bond, we want to 
+            use the result for the average calculation as a target for the 
+            individual bonds, not loop over all bonds with the result here
+            """
+            self.__r[bond]=np.multiply(np.repeat(np.transpose([1/self.norm]),n,axis=1),\
+                        np.dot(U,np.linalg.solve(T.T,np.diag(S)).T))
+            self.__rho[bond]=rhoz
+            self.__rhoCSA[bond]=np.dot(T,VCSA)
+            self.SVD[bond]['T']=T
+            self.__r_auto={'Error':err,'Peaks':pks,'rho_z':self.__rho[bond].copy()}
+            if R2ex:                
+                self.R2_ex_corr(bond,**kwargs)
+                        
+            self.__r_norm(bond,**kwargs)
+            if inclS2:
+                self.inclS2(bond=k,**kwargs)
+            self.__r_info(bond,**kwargs)
+            if np.size(bonds)>0:
+                if 'NT' in kwargs: #We don't re-normalize the results of detectors obtained with r_target
+                    kwargs.pop('NT')
+                if 'Normalization' in kwargs:
+                    kwargs.pop('Normalization')
+                self.r_target(n,self.__rho[bond],bonds,Normalization=None,**kwargs)
+                 
     def r_auto(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
 
         assert n<=self.Rin().shape[0],'Number of detectors cannot be larger than the number of experiments'
@@ -722,6 +1028,94 @@ class detect(mdl.model):
         self.__r_info(bond,**kwargs)
         
     
+#    def r_IMPACT(self,n=None,tc=None,z=None,IMPACTbnds=True,inclS2=False,Normalization='MP',unidist_range=[-11,-8],**kwargs):
+#        """
+#        Optimizes a set of detectors that behave as an IMPACT fit. That is, 
+#        we set up an array of correlation times to fit data to. 
+#        
+#        Options are to request a specific number of correlation times, in which
+#        case we will optimize the fit of a uniform distribution with n 
+#        correlation times, where we vary the width and center of the array of
+#        correlation times. Otherwise, one may input the array of correlation 
+#        times directly (set either n or tc as an array).
+#        
+#        Furthermore, by default we calculate the sensitivities for a single
+#        correlation time using bounds on each correlation time (min=0,max=1),
+#        and with the sum of all amplitudes adding to 1 (IMPACTbnds=True). This 
+#        is the default IMPACT behavior, although it is not the recommended 
+#        detectors methodology (detectors optimized to use the IMPACT methodology
+#        will not behave like true detectors!). Alternatively, we may set 
+#        IMPACTbnds False for standard detectors behavior.
+#        
+#        Note that IMPACT required all amplitudes to sum to 1. We do not require
+#        this, although setting inclS2 to True, and Normalization to MP will add
+#        a detector that will cause the total amplitude to be 1. This is equivalent
+#        to adding a very short (~10 ps) correlation time to the correlation 
+#        time array.
+#        
+#        IMPACT Reference:
+#        Khan, S. N., C. Charlier, R. Augustyniak, N. Salvi, V. Dejean, 
+#        G. Bodenhausen, O. Lequin, P. Pelupessy, and F. Ferrage. 
+#        “Distribution of Pico- and Nanosecond Motions in Disordered Proteins 
+#        from Nuclear Spin Relaxation.” Biophys J, 2015. 
+#        https://doi.org/10.1016/j.bpj.2015.06.069.
+#        """
+#    
+#    
+#        assert not(n is None and tc is None and z is None),"Set n, tc, or z"
+#        
+#        self.detect_par['inclS2']=inclS2
+#        if Normalization is not None:self.detect_par['Normalization']=Normalization
+#        if 'R2_ex_corr' in kwargs:self.detect_par['R2_ex_corr']=kwargs['R2_ex_corr']
+#        
+#        if tc is None and z is None:
+#            dz=np.diff(self.z()[:2])[0]
+#            i1=np.argmin(np.abs(self.z()-unidist_range[0]))
+#            i2=np.argmin(np.abs(self.z()-unidist_range[1]))
+#            R=self.__R[0][:,i1:i2].sum(1)/(i2-i1)
+##            assert n<=R.size,"n must be less than or equal to the number of experiments"
+#            
+#            err=list()
+#            w=list()
+#            c=list()
+#            for width in np.linspace(2,8,30):
+#                zswp=self.z()
+#                zswp=np.linspace(self.z()[0]+width/2,self.z()[-1]-width/2,100)
+#                for center in zswp:
+#                    z=np.linspace(-width/2,width/2,n)+center
+#                    r=linear_ex(self.z(),self.__R[0],z)
+#                    err.append(lsqlin(r,R,(0,1) if IMPACTbnds else (-np.inf,np.inf))['cost'])
+#                    w.append(width)
+#                    c.append(center)
+#            i=np.argmin(np.array(err))
+#            z=np.linspace(-w[i]/2,w[i]/2,n)+c[i]
+#                
+#
+#        z=np.array(z) if tc is None else np.log10(tc)
+#        print(z)
+#        assert len(z)<=self.__R[0].shape[0],\
+#            "Number of correlation times must be less than or equal to the number of experiments"
+#        r=linear_ex(self.z(),self.__R[0],z)
+#        
+#        ntc=self.tc().size
+#        rhoz=np.zeros([len(z),ntc])
+#        rhozCSA=np.zeros([len(z),ntc])
+#        for k in range(ntc):
+#            rhoz[:,k]=lsqlin(r,self.__R[0][:,k],(0,1) if IMPACTbnds else (-np.inf,np.inf))['x']
+#            rhozCSA[:,k]=lsqlin(r,self.__RCSA[0][:,k],(0,1) if IMPACTbnds else (-np.inf,np.inf))['x']
+#        self.__rho[0]=rhoz
+#        self.__rhoCSA[0]=rhozCSA
+#        self.__r[0]=r
+#        self.n=self.__r[0].shape[1]
+#        self.SVD[0]={'U':None,'S':None,'Vt':None,'VtCSA':None,'T':np.eye(self.n)}
+#        if Normalization is not None:
+#            self.__r_norm(0,Normalization=Normalization)
+#        if self.detect_par['R2_ex_corr']:
+#            self.R2_ex_corr(bond=0,**kwargs)
+#        if self.detect_par['inclS2']:
+#            self.inclS2(bond=0,Normalization=Normalization)     
+#        self.__r_info()
+            
     
     def __addS2(self,bond=None,**kwargs):
         if 'NT' in kwargs:
@@ -731,7 +1125,6 @@ class detect(mdl.model):
         else:
             NT=self.detect_par.get('Normalization')
             
-        pass
     
     def R2_ex_corr(self,bond=None,v_ref=None,**kwargs):
         """
@@ -1460,6 +1853,7 @@ def svd0(X,n):
         Vt=Vt[0:np.size(S),:]
    
     return U,S,Vt
+
 
 
     

@@ -19,7 +19,52 @@ from Struct.vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr,pars2Spher,
 
 def chimera_path(**kwargs):
     "Returns the location of the ChimeraX program"
-    return '/Applications/ChimeraX-1.0.app/Contents/MacOS/ChimeraX'
+    
+    assert is_chimera_setup(),\
+        "ChimeraX path does not exist. Run chimeraX.set_chimera_path(path) first, with "+\
+        "path set to the ChimeraX executable file location."
+    
+    with open(os.path.join(get_path(),'ChimeraX_program_path.txt'),'r') as f:
+        path=f.readline()
+    
+    return path
+
+def is_chimera_setup():
+    "Determines whether chimeraX executable path has been provided"
+    return os.path.exists(os.path.join(get_path(),'ChimeraX_program_path.txt'))
+
+def clean_up():
+    """Deletes chimera scripts and tensor files that may have been created but 
+    not deleted
+    
+    (Under ideal circumstances, this shouldn't happen, but may occur due to errors)
+    """
+    
+    names=[fn for fn in os.listdir(get_path()) \
+           if fn.startswith('chimera_script') and fn.endswith('.py') and len(fn)==23]
+    
+    tensors=[fn for fn in os.listdir(get_path()) \
+           if fn.startswith('tensors') and fn.endswith('.txt') and len(fn)==18]
+    
+    for n in names:
+        os.remove(os.path.join(get_path(),n))
+    for t in tensors:
+        os.remove(os.path.join(get_path(),t))
+    
+    print('{0} files removed'.format(len(names)+len(tensors)))
+
+def set_chimera_path(path):
+    """
+    Stores the location of ChimeraX in a file, entitled ChimeraX_program_path.txt
+    
+    This function needs to be run before execution of Chimera functions (only
+    once)
+    """
+    assert os.path.exists(path),"No file found at '{0}'".format(path)
+    
+    with open(os.path.join(get_path(),'ChimeraX_program_path.txt'),'w') as f:
+        f.write(path)
+        
 
 def run_command(**kwargs):
     "Code to import runCommand from chimeraX"
