@@ -8,13 +8,13 @@ Created on Tue Apr  2 21:41:57 2019
 
 import numpy as np
 import pandas as pd
-import r_class.DIFRATE_funs as dff
+import pyDIFRATE.r_class.DIFRATE_funs as dff
 import matplotlib.pyplot as plt
-import r_class.mdl_sens as mdl
+import pyDIFRATE.r_class.mdl_sens as mdl
 #import sens
-from tools.DRtools import dipole_coupling
+from pyDIFRATE.tools.DRtools import dipole_coupling
 #os.chdir('../plotting')
-from plots.plotting_funs import plot_rhoz
+from pyDIFRATE.plots.plotting_funs import plot_rhoz
 #os.chdir('../r_class')
 
 class rates(mdl.model):  

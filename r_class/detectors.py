@@ -11,17 +11,17 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 #from matplotlib.patches import Polygon
-import r_class.mdl_sens as mdl
+import pyDIFRATE.r_class.mdl_sens as mdl
 from numpy.linalg import svd
 #from scipy.sparse.linalg import svds
 from scipy.sparse.linalg import eigs
 from scipy.optimize import linprog
 from scipy.optimize import lsq_linear as lsqlin
-from tools.DRtools import linear_ex
+from pyDIFRATE.tools.DRtools import linear_ex
 import multiprocessing as mp
 import warnings
 #os.chdir('../plotting')
-import plots.plotting_funs as pf
+import pyDIFRATE.plots.plotting_funs as pf
 #os.chdir(cwd)
 
 warnings.filterwarnings("ignore",r"Ill-conditioned matrix*")
@@ -514,7 +514,7 @@ class detect(mdl.model):
                 rhoz.append(out[0])
                 X.append(out[1])
                 index.append(out[2])
-                untried[out[2]-1:out[2]+2]=False #No neighboring detectors
+#                untried[out[2]-1:out[2]+2]=False #No neighboring detectors
                 count+=1
         
         

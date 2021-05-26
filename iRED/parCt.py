@@ -7,7 +7,7 @@ Created on Thu Aug 29 12:36:42 2019
 """
 import numpy as np
 #import traceback
-from iRED.fast_index import get_count
+from pyDIFRATE.iRED.fast_index import get_count
 
 #%% Parallel class for fast parallel calculation
 class par_class():

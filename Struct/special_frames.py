@@ -57,8 +57,8 @@ for proteins, because it is relatively simple)
 
 
 import numpy as np
-import Struct.vf_tools as vft
-import Struct.select_tools as selt
+import pyDIFRATE.Struct.vf_tools as vft
+import pyDIFRATE.Struct.select_tools as selt
 
 
 def membrane_grid(molecule,grid_pts,sigma=25,sel0=None,sel='type P',resids=None,segids=None,filter_str=None):

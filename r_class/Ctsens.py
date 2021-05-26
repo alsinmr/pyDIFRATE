@@ -10,10 +10,10 @@ import numpy as np
 import pandas as pd
 #import DIFRATE_funs as dff
 #import matplotlib.pyplot as plt
-import r_class.mdl_sens as mdl
+import pyDIFRATE.r_class.mdl_sens as mdl
 import os
 #os.chdir('../iRED')
-from iRED.fast_index import trunc_t_axis,get_count
+from pyDIFRATE.iRED.fast_index import trunc_t_axis,get_count
 #os.chdir('../r_class')
 
 class Ct(mdl.model):

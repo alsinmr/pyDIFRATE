@@ -13,7 +13,7 @@ from scipy.stats import norm
 #import os
 import multiprocessing as mp
 #os.chdir('../r_class')
-from r_class.detectors import detect as dt
+from pyDIFRATE.r_class.detectors import detect as dt
 #os.chdir('../data')
 
 def fit_data(data,detect=None,bounds=True,ErrorAna=None,save_input=True,parallel=True,subS2=False,**kwargs):

@@ -8,15 +8,15 @@ Created on Wed Aug 28 10:06:35 2019
 
 import numpy as np
 import multiprocessing as mp
-import os
-os.chdir('../data')
-from data_class import data
-os.chdir('../iRED')
+#import os
+#os.chdir('../data')
+from pyDIFRATE.data.data_class import data
+#os.chdir('../iRED')
 from MDAnalysis.analysis.align import rotation_matrix
 from psutil import virtual_memory
-from fast_funs import S2calc,Ct,get_trunc_vec,align_mean
-from fast_index import trunc_t_axis,get_count
-from par_iRED import par_class as ipc
+from pyDIFRATE.iRED.fast_funs import S2calc,Ct,get_trunc_vec,align_mean
+from pyDIFRATE.iRED.fast_index import trunc_t_axis,get_count
+from pyDIFRATE.iRED.par_iRED import par_class as ipc
 from time import time
 
 #%% Run the full iRED analysis

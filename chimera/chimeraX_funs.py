@@ -12,9 +12,9 @@ import MDAnalysis as md
 import matplotlib.pyplot as plt
 from shutil import copyfile
 #os.chdir('../Struct')
-import Struct.select_tools as selt
+import pyDIFRATE.Struct.select_tools as selt
 #os.chdir('../Struct')
-from Struct.vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr,pars2Spher,sc2angles,pass2act
+from pyDIFRATE.Struct.vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr,pars2Spher,sc2angles,pass2act
 #os.chdir('../chimera')
 
 def chimera_path(**kwargs):

@@ -12,12 +12,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import copy
-import r_class.DynamicModels as dm
+import pyDIFRATE.r_class.DynamicModels as dm
 #import os
 #os.chdir('../Struct')
-from Struct.structure import molecule
+from pyDIFRATE.Struct.structure import molecule
 #os.chdir('../plotting')
-from plots.plotting_funs import plot_rhoz
+from pyDIFRATE.plots.plotting_funs import plot_rhoz
 #os.chdir('../r_class')
 #import detectors
 from scipy.interpolate import interp1d as interp

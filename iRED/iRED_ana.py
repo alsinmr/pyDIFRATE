@@ -18,7 +18,7 @@ import multiprocessing as mp
 import MDAnalysis as md
 from MDAnalysis.analysis import align
 #os.chdir('../data')
-from data.data_class import data
+from pyDIFRATE.data.data_class import data
 #os.chdir('../iRED')
 
 

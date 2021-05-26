@@ -8,7 +8,7 @@ Created on Mon Sep  2 13:03:49 2019
 
 from scipy.io import loadmat as LM
 import numpy as np
-from r_class.sens import rates as Rates
+from pyDIFRATE.r_class.sens import rates as Rates
 #import os
 #os.chdir('../r_class')
 #from sens import rates as Rates

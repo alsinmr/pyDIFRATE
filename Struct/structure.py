@@ -11,13 +11,13 @@ from MDAnalysis.lib.mdamath import make_whole
 import MDAnalysis.analysis.align
 import numpy as np
 import os
-from Struct.vec_funs import new_fun,print_frame_info
+from pyDIFRATE.Struct.vec_funs import new_fun,print_frame_info
 import copy
 #os.chdir('../chimera')
 #from chimera.chimera_funs import open_chimera
-from chimera.chimeraX_funs import molecule_only
+from pyDIFRATE.chimera.chimeraX_funs import molecule_only
 #os.chdir('../Struct')
-import Struct.select_tools as selt
+import pyDIFRATE.Struct.select_tools as selt
 
 class molecule(object):
     def __init__(self,*args):

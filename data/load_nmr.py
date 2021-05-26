@@ -9,9 +9,10 @@ Created on Mon Jul 29 14:14:04 2019
 """
 
 import numpy as np
-from r_class.sens import rates
-from r_class.detectors import detect
-import data.data_class as dc
+from pyDIFRATE.r_class.sens import rates
+from pyDIFRATE.r_class.detectors import detect
+from pyDIFRATE.data import data_class as dc
+#import pyDIFRATE.data.data_class as dc
 
 def load_NMR(filename):
     """

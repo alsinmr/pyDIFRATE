@@ -55,6 +55,6 @@ frames.py. A few critical points:
 
 
 import numpy as np
-import Struct.vf_tools as vft
-import Struct.select_tools as selt
+import pyDIFRATE.Struct.vf_tools as vft
+import pyDIFRATE.Struct.select_tools as selt
 

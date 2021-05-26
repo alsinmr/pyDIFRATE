@@ -10,17 +10,17 @@ import numpy as np
 #import os
 import pandas as pd
 #os.chdir('../r_class')
-from r_class.Ctsens import Ct
-from r_class.detectors import detect
+from pyDIFRATE.r_class.Ctsens import Ct
+from pyDIFRATE.r_class.detectors import detect
 #os.chdir('../chimera')
-from chimera.chimera_funs import plot_cc as plt_cc3D
-from chimera.chimera_funs import plot_rho
-from chimera.chimeraX_funs import run_chimeraX,get_default_colors
+from pyDIFRATE.chimera.chimera_funs import plot_cc as plt_cc3D
+from pyDIFRATE.chimera.chimera_funs import plot_rho
+from pyDIFRATE.chimera.chimeraX_funs import run_chimeraX,get_default_colors
 #os.chdir('../plotting')
-import plots.plotting_funs as pf
+import pyDIFRATE.plots.plotting_funs as pf
 #os.chdir('../data')
-from data.fitting import fit_data
-from data.bin_in_out import save_DIFRATE
+from pyDIFRATE.data.fitting import fit_data
+from pyDIFRATE.data.bin_in_out import save_DIFRATE
 import copy
 
 class data(object):

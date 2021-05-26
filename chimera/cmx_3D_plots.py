@@ -11,7 +11,7 @@ import numpy as np
 import cv2
 from shutil import copyfile
 #import chimera.chimeraX_funs as cmx
-from chimera.chimeraX_funs import py_line,chimera_path,get_path,py_print_npa,WrCC
+from pyDIFRATE.chimera.chimeraX_funs import py_line,chimera_path,get_path,py_print_npa,WrCC
 
 
 def copy_imports(f):

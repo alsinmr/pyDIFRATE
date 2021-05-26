@@ -11,7 +11,7 @@ Collection of useful functions for DIFRATE
 import numpy as np
 #import os 
 #os.chdir('../tools')
-from tools.DRtools import NucInfo
+from pyDIFRATE.tools.DRtools import NucInfo
 #os.chdir('../r_class')
 
     

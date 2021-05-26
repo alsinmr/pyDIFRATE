@@ -6,7 +6,7 @@ Created on Wed May 15 13:39:40 2019
 @author: albertsmith
 """
 
-import DIFRATE as DR
+import pyDIFRATE as DR
 import numpy as np
 from scipy.signal import savgol_filter
 

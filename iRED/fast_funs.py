@@ -8,10 +8,10 @@ Created on Wed Aug 28 10:24:19 2019
 #import os
 import numpy as np
 import multiprocessing as mp
-from iRED.parCt import par_class as pct
-from iRED.fast_index import get_count
+from pyDIFRATE.iRED.parCt import par_class as pct
+from pyDIFRATE.iRED.fast_index import get_count
 #os.chdir('../Struct')
-import Struct.vf_tools as vft
+import pyDIFRATE.Struct.vf_tools as vft
 #os.chdir('../iRED')
 
 #%% Estimate the order parameter
