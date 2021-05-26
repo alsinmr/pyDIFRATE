@@ -1,8 +1,8 @@
 # __init__.py
 
 
-#from .r_class import all_sens as sens
-import pyDIFRATE.r_class as sens
+from pyDIFRATE.r_class import all_sens as sens
+#import pyDIFRATE.r_class as sens
 
 from .Struct.structure import molecule
 from .data.data_class import data
