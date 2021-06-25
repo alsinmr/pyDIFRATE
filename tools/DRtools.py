@@ -536,7 +536,8 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
     
     x0=np.array(x0)
     I0=np.array(I0)
-    x=np.array(x)
+    ndim=np.ndim(x)
+    x=np.atleast_1d(x)
     
     "Determine what dimension we should extrapolate over"
     if dim is None:
@@ -575,7 +576,10 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
     
     I=((I0[i-1].T*(x0[i]-x)+I0[i].T*(x-x0[i-1]))/(x0[i]-x0[i-1])).T
     
-    return I.swapaxes(0,dim)
+    if ndim==0:
+        return I[0]
+    else:
+        return I.swapaxes(0,dim)
     
     
         

@@ -182,10 +182,9 @@ def guess_disp_mode(mol):
 
 def sel_indices(mol,disp_mode,mode='all'):
     """
-    Generates a string or list of strings to select atoms either for plotting
-    dynamics or for showing the correct selection. Set mode to all to select
-    all atoms to be displayed and to 'value' to get a list of strings for each
-    selection to be plotted.
+    Generates list of indices plotting dynamics or for showing the correct 
+    selection. Set mode to all to select all atoms to be displayed and to 
+    'value' to get an index for each selection to be plotted.
     
     str=sel_str(mol,disp_mode='protein',mode='all')
     
@@ -237,9 +236,9 @@ def sel_indices(mol,disp_mode,mode='all'):
                     bonded=selt.find_bonded(s1,uni.residues[s2.resindex].atoms,sort='massi',n=3)
                 
                 for b in bonded:sel0=sel0+b[0]
-             
+        out=uni2pdb_index(np.unique(sel0.ids),mol.pdb_id)
         
-        return uni2pdb_index(np.unique(sel0.ids),mol.pdb_id)
+        return out[out!=-1]
         
     else:
         if disp_mode.lower()=='backbone':
@@ -281,6 +280,8 @@ def sel_indices(mol,disp_mode,mode='all'):
             print('Unrecognized display mode ({0}) in sel_indices'.format(disp_mode))
             print('Use backbone,bond,methyl, or equiv')
             return
+        
+#        ids=[i*(i!=-1) for i in ids]
         
         return ids
 
@@ -413,7 +414,7 @@ def color_calc(x,x0=None,colors=[[0,0,255,255],[210,180,140,255],[255,0,0,255]])
     
     colors=np.array(colors,dtype='uint8')
     N=len(colors)
-    x0=np.linspace(0,1,N)
+    if x0 is None:x0=np.linspace(0,1,N)
     x=np.array(x)
     if x.min()<x0.min():
         print('Warning: x values less than min(x0) are set to min(x0)')
@@ -447,7 +448,7 @@ def hex_to_rgb(value):
     return [int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3)]  
 
 def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_opts=None,\
-                scene=None,x0=None,colors=[[255,255,0,255],[255,0,0,255]]):
+                scene=None,x0=None,marker=None,absval=True,colors=[[255,255,0,255],[255,0,0,255]]):
     """
     Opens an instance of chimera, displaying the current pdb (if no pdb exists
     in mol, it will also create the pdb). Atoms will be displayed in accordance
@@ -477,6 +478,7 @@ def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_o
     save_opts   :   Options for file saving
     colors      :   List of colors used for encoding
     x0          :   Values of x corresponding to each color
+    marker      :   Index of selection to color black (for example, for cc plots)
     
     run_chimera(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_opts=None,\
                 scene=None,x0=None,colors=[[0,0,255,255],[210,180,140,255],[255,0,0,255]])
@@ -520,11 +522,17 @@ def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_o
             x=np.array([x[id0[b0]==id0].mean() for b0 in b])
             clrs=color_calc(x=x,x0=x0,colors=colors)
             
+            i=ids!=-1
+            ids,x,clrs=ids[i],x[i],clrs[i]
+            
+            if marker:
+                id_mark=sel_indices(mol,disp_mode,mode='value')[marker]
+                py_print_npa(f,'id_mark',id_mark,format_str='d',dtype='uint32',nt=1)
             py_print_npa(f,'ids',ids,format_str='d',dtype='uint32',nt=1)
-            py_print_npa(f,'r',4*x+0.9,format_str='.6f',dtype='float',nt=1) #Scale up radius ??   
+            py_print_npa(f,'r',4*np.abs(x)+0.9,format_str='.6f',dtype='float',nt=1) #Scale up radius ??   
             py_print_npa(f,'clr',clrs,format_str='d',dtype='uint8',nt=1)
             
-        if scene is not None:
+        if scene:
 #            WrCC(f,'open '+scene,1)
             py_line(f,'mdl=session.open_command.open_data("{0}")[0]'.format(scene),1)
             py_line(f,'session.models.add(mdl)',1)
@@ -568,6 +576,8 @@ def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_o
             py_line(f,'r0[:]=.8',1)
             py_line(f,'r0[ids]=r',1)
             py_line(f,'clr0[ids]=clr',1)
+            if marker:
+                py_line(f,'clr0[id_mark]=[70,70,70,255]',1)
             py_line(f,'setattr(atoms,"radii",r0)',1)
             py_line(f,'setattr(atoms,"colors",clr0)',1)
 
@@ -590,6 +600,8 @@ def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_o
     copyfile(full_path,full_path[:-9]+'.py')
 
     os.spawnl(os.P_NOWAIT,chimera_path(),chimera_path(),full_path)
+#    import subprocess
+#    subprocess.Popen([chimera_path(),'--start shell',full_path])
 
 def molecule_only(mol,disp_mode=None):
     """
@@ -847,19 +859,18 @@ def draw_tensors(A,mol=None,sc=2.09,tstep=0,disp_mode=None,index=None,scene=None
 
             
     
-def uni2pdb_index(index,pdb_index):
+def uni2pdb_index(index,pdb_index,report_err=False):
     "Converts the universe index to the index for a stored pdb"
     "The stored pdb is in molecule.pdb, and the index is in molecule.pdb_in"
     
     index=np.atleast_1d(index)
     
-    i=np.zeros(np.size(index))
+    i=-np.ones(np.size(index),dtype=int)
     for k,ind in enumerate(index):
-        try:
-            i[k]=np.argwhere(ind==pdb_index).squeeze()
-        except:
-            print(ind)
-            print(pdb_index)
+        if np.any(ind==pdb_index):
+            i[k]=np.argwhere(ind==pdb_index)[0,0]
+        elif report_err:
+            print('Index: {0} not found in pdb_index'.format(ind))
     return i.astype(int)
 
 

@@ -406,7 +406,7 @@ class data(object):
                 Rin=np.concatenate((self.Rin,np.atleast_2d(self.S2in).T),1)
                 Rin_std=np.concatenate((self.Rin_std,np.atleast_2d(self.S2in_std).T),1)
                 Rc=np.concatenate((self.Rc,np.atleast_2d(self.S2c).T),1)
-                info0=info[0]
+                info0=info[0].copy()
                 for a,b in info0.items():
                     info0[a]='' if isinstance(b,str) else 0
                 info0['Type']='S2'
@@ -419,78 +419,123 @@ class data(object):
             ax=pf.plot_fit(self.label,Rin,Rc,Rin_std,info,index,exp_index,fig)
         
         return ax
-                
-    def draw_cc3D(self,bond,det_num=None,chain=None,fileout=None,scaling=None,norm='y',**kwargs):
-        "bond is the user-defined label! Not the absolute index..."
-
+    
+    def draw_cc3D(self,bond,det_num=None,index=None,scaling=1,norm=True,absval=True,\
+                   disp_mode=None,chimera_cmds=None,fileout=None,save_opts=None,\
+                   scene=None,x0=None,colors=None):
+        
         if self.label is None:
             print('User has not defined any bond labels, bond will now refer to the absolute index')
-            index=bond
-        elif any(np.atleast_1d(self.label)==bond):
-            index=np.where(np.array(self.label)==bond)[0][0]
+            assert bond<self.R.shape[0],'Invalid bond selection (0<=bond<{0})'.format(self.R.shape[0])
+            i=bond
         else:
-            print('Invalid bond selection')
-            return
-            
-        if norm.lower()[0]=='y':
-            if det_num is None:
-                values=self.tot_cc_norm[index,:]
-            else:
-                values=self.Rcc_norm[det_num][index,:]
-        else:
-            if det_num is None:
-                values=self.tot_cc[index,:]
-            else:
-                values=self.Rcc[det_num][index,:]
+            assert np.any(bond==np.array(self.label)),'bond not found in self.label'
+            i=np.argwhere(bond==np.array(self.label))[0,0]
         
-        "Take absolute value- I'm not convinced about this yet..."
-        values=np.abs(values)
 
-        if scaling is None:
-#            "Default is to scale to the maximum of all correlations"
-#            scale0=0
-#            for k in range(0,np.shape(self.Rcc_norm)[0]):
-#                a=self.Rcc_norm[k]-np.eye(np.shape(self.Rcc_norm)[1])
-#                scale0=np.max([scale0,np.max(np.abs(a))])
-            if norm.lower()[0]=='y':
-#                if det_num is None:
-#                    scale0=np.max(np.abs(self.tot_cc_norm)-np.eye(np.shape(self.tot_cc_norm)[0]))
-#                else:
-#                    scale0=np.max(np.abs(self.Rcc_norm[det_num]-np.eye(np.shape(self.Rcc_norm)[1])))
-                scale0=1
-            else:
-                scale0=np.max(np.abs(values))
-            scaling=1/scale0
-
-        res1=self.sens.molecule.sel1.resids
-        chain1=self.sens.molecule.sel1.segids
-        res2=self.sens.molecule.sel2.resids
-        chain2=self.sens.molecule.sel2.segids
-
-        color_scheme=kwargs.pop('color_scheme') if 'color_scheme' in kwargs else 'blue'
-            
-        if np.all(self.sens.molecule.sel1.names=='N') or np.all(self.sens.molecule.sel2.names=='N') and\
-            np.all(res1==res2) and np.all(chain1==chain2):
-            style='pp'
-        else:
-            style='bond'
-
-        if style=='pp':
-            "Color the whole peptide plane one color"
-            resi=res1
-            chain=chain1
-            plt_cc3D(self.sens.molecule,resi,values,resi0=bond,chain=chain,chain0=chain[index],\
-                     fileout=fileout,scaling=scaling,color_scheme=color_scheme,style=style,**kwargs)
-        else:
-            "Color the individual bonds specified in the molecule selections"
-            "I'm not sure the indexing of resi0 is correct here!!!"
-            plt_cc3D(self.sens.molecule,None,values,resi0=index,scaling=scaling,color_scheme=color_scheme,style=style,**kwargs)
-            """I'm going in circles here for some reason. Just switched resi0=res[index]
-            to resi0=index. plot_cc in 'bond' mode expects the index found in molecule.sel1
-            and molecule.sel2. So this seems like it should be correct...but let's see
-            if it glitches again for lipids"""
-#            print('Selections over multiple residues/chains- not currently implemented')
+        x=(self.Rcc_norm[det_num][i] if det_num else self.tot_cc_norm[i]) if norm\
+            else (self.Rcc[det_num][i] if det_num else self.tot_cc[i])
         
+        if absval:
+            x=np.abs(x)
+        else:
+            x0=np.array([-np.max(np.abs(x)),np.max(np.abs(x))] if colors else [-np.max(np.abs(x)),0,np.max(np.abs(x))])
+        
+        if colors is None:
+#            colors=[[210,180,140,255],[255,100,0,255]] if absval else [[0,100,255,255],[210,180,140,255],[255,100,0,255]]
+            colors=[[210,180,140,255],get_default_colors(det_num) if det_num is not None else [255,100,0,255]]\
+                if absval else [[0,0,200,255],[210,180,140,255],[200,0,0,255]]
+                 
+        mol=self.sens.molecule
+        if index is not None:
+            index=np.unique(np.concatenate((index,[i]))) #Make sure bond is within index
+            if np.max(index)==1 and len(index)>2:
+                index=np.array(index,dtype=bool)
+            else:
+                index=np.array(index,dtype=int)
+            s1,s2=mol.sel1.copy(),mol.sel2.copy()
+            mol.sel1,mol.sel2=mol.sel1[index],mol.sel2[index]
+            x=x[index]
+            i=np.argwhere((self.label[index]==bond) if self.label is not None else (i==index))[0,0]
+
+        x*=scaling
+        
+        run_chimeraX(mol=mol,disp_mode=disp_mode,x=x,chimera_cmds=chimera_cmds,\
+                     fileout=fileout,save_opts=save_opts,scene=scene,x0=x0,
+                     colors=colors,marker=i)
+        if index is not None:mol.sel1,mol.sel2=s1,s2
+            
+#    def draw_cc3D(self,bond,det_num=None,chain=None,fileout=None,scaling=None,norm='y',**kwargs):
+#        "bond is the user-defined label! Not the absolute index..."
+#
+#        if self.label is None:
+#            print('User has not defined any bond labels, bond will now refer to the absolute index')
+#            index=bond
+#        elif any(np.atleast_1d(self.label)==bond):
+#            index=np.where(np.array(self.label)==bond)[0][0]
+#        else:
+#            print('Invalid bond selection')
+#            return
+#            
+#        if norm.lower()[0]=='y':
+#            if det_num is None:
+#                values=self.tot_cc_norm[index,:]
+#            else:
+#                values=self.Rcc_norm[det_num][index,:]
+#        else:
+#            if det_num is None:
+#                values=self.tot_cc[index,:]
+#            else:
+#                values=self.Rcc[det_num][index,:]
+#        
+#        "Take absolute value- I'm not convinced about this yet..."
+#        values=np.abs(values)
+#
+#        if scaling is None:
+##            "Default is to scale to the maximum of all correlations"
+##            scale0=0
+##            for k in range(0,np.shape(self.Rcc_norm)[0]):
+##                a=self.Rcc_norm[k]-np.eye(np.shape(self.Rcc_norm)[1])
+##                scale0=np.max([scale0,np.max(np.abs(a))])
+#            if norm.lower()[0]=='y':
+##                if det_num is None:
+##                    scale0=np.max(np.abs(self.tot_cc_norm)-np.eye(np.shape(self.tot_cc_norm)[0]))
+##                else:
+##                    scale0=np.max(np.abs(self.Rcc_norm[det_num]-np.eye(np.shape(self.Rcc_norm)[1])))
+#                scale0=1
+#            else:
+#                scale0=np.max(np.abs(values))
+#            scaling=1/scale0
+#
+#        res1=self.sens.molecule.sel1.resids
+#        chain1=self.sens.molecule.sel1.segids
+#        res2=self.sens.molecule.sel2.resids
+#        chain2=self.sens.molecule.sel2.segids
+#
+#        color_scheme=kwargs.pop('color_scheme') if 'color_scheme' in kwargs else 'blue'
+#            
+#        if np.all(self.sens.molecule.sel1.names=='N') or np.all(self.sens.molecule.sel2.names=='N') and\
+#            np.all(res1==res2) and np.all(chain1==chain2):
+#            style='pp'
+#        else:
+#            style='bond'
+#
+#        if style=='pp':
+#            "Color the whole peptide plane one color"
+#            resi=res1
+#            chain=chain1
+#            plt_cc3D(self.sens.molecule,resi,values,resi0=bond,chain=chain,chain0=chain[index],\
+#                     fileout=fileout,scaling=scaling,color_scheme=color_scheme,style=style,**kwargs)
+#        else:
+#            "Color the individual bonds specified in the molecule selections"
+#            "I'm not sure the indexing of resi0 is correct here!!!"
+#            plt_cc3D(self.sens.molecule,None,values,resi0=index,scaling=scaling,color_scheme=color_scheme,style=style,**kwargs)
+#            """I'm going in circles here for some reason. Just switched resi0=res[index]
+#            to resi0=index. plot_cc in 'bond' mode expects the index found in molecule.sel1
+#            and molecule.sel2. So this seems like it should be correct...but let's see
+#            if it glitches again for lipids"""
+##            print('Selections over multiple residues/chains- not currently implemented')
+#        
         
         
 #    def draw_rho3D(self,det_num=None,resi=None,fileout=None,scaling=None,**kwargs):
@@ -565,6 +610,7 @@ class data(object):
             x=x[index]
 
         x*=scaling
+        x[x<0]=0
         
         run_chimeraX(mol=mol,disp_mode=disp_mode,x=x,chimera_cmds=chimera_cmds,\
                      fileout=fileout,save_opts=save_opts,scene=scene,x0=x0,

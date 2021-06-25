@@ -351,7 +351,7 @@ class detect(mdl.model):
             self.__r_info(None,**kwargs)
 
 #%% Automatic generation of detectors from a set of sensitivities
-    def r_auto2(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
+    def r_auto(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
 
         assert n<=self.Rin().shape[0],'Number of detectors cannot be larger than the number of experiments'
         
@@ -656,7 +656,7 @@ class detect(mdl.model):
                     kwargs.pop('Normalization')
                 self.r_target(n,self.__rho[bond],bonds,Normalization=None,**kwargs)
                  
-    def r_auto(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
+    def r_auto2(self,n,Normalization='Max',inclS2=False,NegAllow=0.5,R2_ex_corr=False,bond=None,parallel=True,z0=None,**kwargs):
 
         assert n<=self.Rin().shape[0],'Number of detectors cannot be larger than the number of experiments'
         

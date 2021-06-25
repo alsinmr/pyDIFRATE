@@ -202,7 +202,7 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
         sel2=sel0.select_atoms('(name HA or name HA2) and around 1.5 name CA')
         print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
     elif Nuc[:3].lower()=='ivl' or Nuc.lower()=='ch3':
-        if Nuc[-1].lower()=='t':    #Truncated list- only one C per residue
+        if Nuc[-1].lower()=='t' or Nuc[-2].lower()=='t':    #Truncated list- only one C per residue
             sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG2) or \
                                          (resname ILE ile Ile and name CG2) or \
                                          (resname LEU leu Leu and name CD1)')
@@ -223,6 +223,10 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
         sel1=sel0[np.isin(sel0.ids,ids)]
         sel1=sel1[np.repeat([np.arange(sel1.n_atoms)],3,axis=1).reshape(sel1.n_atoms*3)]
         sel2=(sel1+sel0H).select_atoms('name H* and around 1.15 name C*')
+        
+        if Nuc[-1]=='1':
+            sel1=sel1[::3]
+            sel2=sel2[::3]
           
     return sel1,sel2
 
