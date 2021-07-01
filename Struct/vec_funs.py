@@ -41,12 +41,11 @@ def new_fun(Type,molecule,**kwargs):
     
     try:       
         fun=fun0(molecule,**kwargs)
+        fun()
     except:
         print_frame_info(Type)
         assert 0,'Frame definition failed'
         
-        return
-    
     return fun
 
 def return_frame_info(Type=None):

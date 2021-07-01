@@ -86,15 +86,14 @@ def bond(molecule,sel1=None,sel2=None,sel3=None,Nuc=None,resids=None,segids=None
                     bond responsible for relaxation, then frames may not 
                     function correctly if this is not provided. By default, sel3
                     is set to None and is omitted. However, if called from within
-                    mol.
+                    molecule.tensor_frame, then default is changed to sel3='auto'
     resids, segids, filter_str apply additional filters to sel1, sel2, and sel3
     if defined.
     """
     if Nuc is not None:
-        sel1,sel2=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+        sel2,sel1=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
     else:
-        sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
-        sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)
+        sel2,sel1=[selt.sel_simple(molecule,s,resids,segids,filter_str) for s in [sel1,sel2]]
         
     if isinstance(sel3,str) and sel3=='auto':
         uni=sel1.universe
@@ -301,11 +300,12 @@ def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
     selC1,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)  
     selC1=selC1[::3]    #Above line returns 3 copies of each carbon      
     
-    sel0=molecule.mda_object.atoms
-    sel0=sel0.residues[np.isin(sel0.residues.resids,selC1.resids)].atoms
-    
-    selC2=sum([sel0.select_atoms('not name H* and around 1.6 atom {0} {1} {2}'\
-                                 .format(s.segid,s.resid,s.name)) for s in selC1])
+    resids=molecule.mda_object.residues.resids
+    sel0=molecule.mda_object.residues[np.isin(resids,selC1.resids)].atoms
+    selC2=selt.find_bonded(selC1,sel0,n=1,sort='cchain')[0]
+#    
+#    selC2=sum([sel0.select_atoms('not name H* and around 1.6 atom {0} {1} {2}'\
+#                                 .format(s.segid,s.resid,s.name)) for s in selC1])
     
     def sub():
         box=molecule.mda_object.dimensions[:3]

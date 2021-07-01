@@ -28,6 +28,8 @@ def frames2data(mol=None,v=None,n=100,nr=10,tf=None,dt=None):
     
     
     out=ct2data(ct_out)
+    if out[0].R.shape[0]==len(mol.label):
+        for o in out:o.label=mol.label #Pass the molecule label
     if mol is not None:
         for d in out:
             d.sens.molecule=mol

@@ -104,14 +104,15 @@ class molecule(object):
             print_frame_info(Type)
         else:
             if self._vf is None: self._vf=list()
-            
-            self._vf.append(new_fun(Type,self,**kwargs))    #Append the new function
-            "Load an index for this frame"
-            if frame_index is None:
-                nb=np.shape(self._vf[-1]())[-1]
-                self._frame_info['frame_index'].append(np.arange(nb))
-            else:
-                self._frame_info['frame_index'].append(frame_index)
+            fun=new_fun(Type,self,**kwargs)
+            if fun is not None:
+                self._vf.append(new_fun(Type,self,**kwargs))    #Append the new function
+                "Load an index for this frame"
+                if frame_index is None:
+                    nb=np.shape(self._vf[-1]())[-1]
+                    self._frame_info['frame_index'].append(np.arange(nb))
+                else:
+                    self._frame_info['frame_index'].append(frame_index)
     
     def tensor_frame(self,Type='bond',label=None,**kwargs):
         """
