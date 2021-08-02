@@ -39,8 +39,10 @@ class Info(pd.DataFrame):
         out=super().T
         return Info(out)
     def copy(self,deep=True):
-        out=super().copy(deep)
-        return Info(out)
+        return Info(super().copy(deep))
+    def drop(self,*args,**kwargs):
+        "Make sure the result of drop yields an Info object"        
+        return Info(super().drop(*args,**kwargs))
     @property
     def Updated(self):
         "Returns True if the dataframe has been updated"
@@ -95,13 +97,12 @@ class Sens(mdl.Model):
         self.__RCSA=list()  #This is for separating sensitivities from a second contribution
                             #In NMR, this second contribution is a non-colinear CSA
         
-        "Add plotting functions"
-        if '_setup_plotting' in dir(self._funs):
-            plots=self._funs._setup_plotting()
+        "Add plotting/calling functions"
+        if '_setup_functions' in dir(self._funs):
+            plots=self._funs._setup_functions()
             for key,fun in plots.items():
                 setattr(self,key,MethodType(fun,self))
-                
-        
+       
         self.new_exp(Type,**kwargs)
 
 #%% Get information about available sensitivities

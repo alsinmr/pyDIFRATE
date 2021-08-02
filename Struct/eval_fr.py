@@ -16,19 +16,25 @@ from pyDIFRATE.iRED.fast_funs import get_count,printProgressBar
 from pyDIFRATE.data.data_class import data
 #os.chdir(curdir)
 
-def frames2data(mol=None,v=None,n=100,nr=10,tf=None,dt=None):
+
+#%% Output functions
+"This is the usual output– go from a molecule object to a data object"
+def frames2data(mol=None,v=None,mode='full',n=100,nr=10,tf=None,dt=None):
     """
     Calculates the correlation functions (frames2ct) and loads the result into
     data objects (ct2data)
     """
     
-    return_index=[True,False,False,False,True,False,True,True,True,True]
+    if mode=='full':
+        return_index=[True,False,False,False,True,False,True,True,True,True]
+    else:
+        return_index=[True,False,False,False,False,False,True,True,True,True]
     
-    ct_out=frames2ct(mol=mol,v=v,return_index=return_index,n=n,nr=nr,tf=tf,dt=dt)
+    ct_out=frames2ct(mol=mol,v=v,return_index=return_index,mode=mode,n=n,nr=nr,tf=tf,dt=dt)
     
     
     out=ct2data(ct_out)
-    if out[0].R.shape[0]==len(mol.label):
+    if mol is not None and out[0].R.shape[0]==len(mol.label):
         for o in out:o.label=mol.label #Pass the molecule label
     if mol is not None:
         for d in out:
@@ -47,6 +53,7 @@ def frames2tensors(mol=None,v=None,n=100,nr=10,tf=None,dt=None):
     
     return frames2ct(mol=mol,v=v,return_index=return_index,n=n,nr=nr,tf=tf,dt=dt)
 
+"Here we go from the output of frames2ct and load it into a data object"
 def ct2data(ct_out):
     """
     Takes the results of a frames2ct calculation (the ct_out dict) and loads 
@@ -94,6 +101,9 @@ def ct2data(ct_out):
 
     return out
 
+
+#%% Main calculations
+"Applies indices for frames"
 def apply_fr_index(v,squeeze=True):
     """
     Expands the output of mol2vec such that all frames have the same number of
@@ -181,7 +191,9 @@ def apply_fr_index(v,squeeze=True):
     
     return vZ,vXZ,nuZ,nuXZ,fiout
 
-def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
+
+"This function handles the organization of the output, determines which terms to calculate"
+def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,dt=None):
     """
     Calculates correlation functions for frames (f in F), for a list of frames.
     One may provide the molecule object, containing the frame functions, or
@@ -217,6 +229,14 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     those terms, and the directly calculated correlation function by default.
     
     frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,nf=None,dt=None)
+    
+    We may also take advantage of symmetry in the various motions. This option
+    is obtained by changing mode from 'full' to either 'sym' (assume all motions
+    result in symmetric residual tensors, A_0m_PASinF has eta=0), or we set mode
+    to 'auto', where a threshold on eta determines whether or not we treat the
+    residual tensor as symmetric. By default, the threshold is 0.2, but the user
+    may set the mode to autoXX, where XX means eta should be less than 0.XX (one
+    may use arbitrary precision, autoX, autoXX, autoXXX, etc.). 
     """
     
     
@@ -226,40 +246,41 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     elif v is None:
         v=mol2vec(mol,n,nr,tf,dt)
     
-    if return_index is None:return_index=[True,False,False,False,False,False,False,True,True,False]
+    if return_index is None:
+        return_index=[True,False,False,False,False,False,False,True,True,False]
     ri=np.array(return_index,dtype=bool)
 
     index=v['index']
     
     vZ,vXZ,nuZ,nuXZ,_=apply_fr_index(v)
     
-#    nu=[(v0,None) if len(v0)!=2 else v0 for v0 in v['v']]     #Make sure all frames have 2 elements
-#    vZ,vXZ=(v['vT'],np.ones(v['vT'].shape)*np.nan) if len(v['vT'])!=2 else (v['vT'][0],v['vT'][1])    #Bond vector (and XZ vector) in the lab frame
+
     nf=len(nuZ)
     nr,nt=vZ.shape[1:]
-#    
-#    
-#    fi=v['frame_index']
-#    nuZ=list()
-#    nuXZ=list()
-#    for k in range(nf):
-#        iF=np.isnan(fi[k])
-#        iT=np.logical_not(iF)
-#        nuZ.append(np.zeros([3,nr,nt]))
-#        nuXZ.append(np.zeros([3,nr,nt]))
-#        nuXZ[-1][:]=np.nan
-#        
-#        nuZ[-1][:,iT]=nu[k][0][:,fi[k][iT].astype(int)]
-#        nuZ[-1][:,iF]=vZ[:,iF] if k==0 else nuZ[k-1][:,iF]
-#        if nu[k][1] is not None:
-#            nuXZ[-1][:,iT]=nu[k][1][:,fi[k][iT].astype(int)]
-#        
-#        nuXZ[-1][:,iF]=vXZ[:,iF] if k==0 else nuXZ[k-1][:,iF]
+
+    "Initial calculations/settings required if using symmetry for calculations"
+    if mode.lower()=='sym' or 'auto' in mode.lower():
+        if np.any(ri[[2,3,4,5]]):
+            print(ri[[2,3,4,5]])
+            ri[[2,3,4,5]]=False
+            if mode.lower()=='sym':ri[1]=False
+            print('Warning: Individual components of the correlation functions or tensors will not be returned in auto or sym mode')
+        
+        A_0m_PASinf=list()
+        for k in range(nf):
+            vZ_inf=vft.applyFrame(vft.norm(vZ),nuZ_F=nuZ[k],nuXZ_F=nuXZ[k])
+            A_0m_PASinf.append(vft.D2vec(vZ_inf).mean(axis=-1))
+    else:
+        A_0m_PASinf=[None for _ in range(nf)]
     
-#    "Make sure vectors are normalized"
-#    vZ=vft.norm(vZ)
-#    nuZ=[vft.norm(nuz) for nuz in nuZ]
     
+    if mode=='sym':
+        threshold=1
+    elif 'auto' in mode.lower():
+        threshold=float(mode[4:])/10**(len(mode)-4) if len(mode)>4 else 0.2   #Set threshold for eta (default 0.2)
+    else:
+        threshold=0  
+        
     if ri[0] or ri[1] or ri[2] or ri[7]:
         "Calculate ct_m0_finF if requested, if ct_prod requested, if ct_finF requested, or if ct_0m_finF requested"
         ct_m0_finF=list()
@@ -268,9 +289,14 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
             if k==0:
                 a,b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],cmpt='m0',mode='both',index=index)
             elif k==nf:
-                a,b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_f=nuZ[k-1],nuXZ_f=nuXZ[k-1],cmpt='m0',mode='both',index=index)
+#                a,b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_f=nuZ[k-1],nuXZ_f=nuXZ[k-1],cmpt='m0',mode='both',index=index)
+                a,b=sym_full_swap(vZ=vZ,threshold=threshold,A_0m_PASinf=A_0m_PASinf[k-1],vXZ=vXZ,\
+                              nuZ_f=nuZ[k-1],nuXZ_f=nuXZ[k-1],cmpt='m0',mode='both',index=index)
             else:
-                a,b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_f=nuZ[k-1],nuXZ_f=nuXZ[k-1],nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],cmpt='m0',mode='both',index=index)
+#                a,b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_f=nuZ[k-1],nuXZ_f=nuXZ[k-1],nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],cmpt='m0',mode='both',index=index)
+                a,b=sym_full_swap(vZ=vZ,threshold=threshold,A_0m_PASinf=A_0m_PASinf[k-1],vXZ=vXZ,\
+                              nuZ_f=nuZ[k-1],nuXZ_f=nuXZ[k-1],nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],\
+                              cmpt='m0',mode='both',index=index)
             ct_m0_finF.append(a)
             A_m0_finF.append(b)
         ct_m0_finF=np.array(ct_m0_finF)
@@ -296,7 +322,8 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
         "A_0m_finF are just the conjugates of A_m0_finF"
         A_0m_finF=np.array([a0.conj() for a0 in A_m0_finF])
     
-    if ri[3]:
+    
+    if ri[3]:   #This option is deactivated for sym and auto modes
         "Calculate ct_0m_PASinF if requested"
         ct_0m_PASinF=list()
         A_0m_PASinF=list()
@@ -319,6 +346,7 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
                 b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],cmpt='0m',mode='D2',index=index)
             A_0m_PASinF.append(b)
         A_0m_PASinF=np.array(A_0m_PASinF)
+    
     if ri[0] or ri[7]:
         "Calculate ct_finF if requested, or if ct_prod requested"
         ct_finF=list()
@@ -368,7 +396,7 @@ def frames2ct(mol=None,v=None,return_index=None,n=100,nr=10,tf=None,dt=None):
     
     return out
 
-
+"This function extracts various frame vectors from trajectory"
 def mol2vec(mol,n=100,nr=10,tf=None,dt=None,index=None):
     """
     Extracts vectors describing from the frame functions found in the molecule
@@ -382,7 +410,8 @@ def mol2vec(mol,n=100,nr=10,tf=None,dt=None,index=None):
         index=trunc_t_axis(tf,n,nr)
     
     return ini_vec_load(traj,mol._vf,mol._vft,mol._frame_info['frame_index'],index=index,dt=dt)
-
+    
+"This function takes care of the bulk of the actual calculations"
 def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p',mode='both',index=None):
     """
     Calculates the correlation functions and their values at infinite time
@@ -571,6 +600,7 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
     else:                       #D2inf only
         return d2
 
+"Used in conjunction with loops to calculate the required terms for the correlation functions"
 def ct_prods(l,n):
     """
     Calculates the appropriate product (x,y,z components, etc.) for a given
@@ -612,7 +642,7 @@ def ct_prods(l,n):
         
         
         
-    
+"Generator object to loop over when calculating correlation functions/residual tensors"  
 def loops(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,calc=None):
     """
     Generator that calculates the elements required for the loop over components
@@ -692,7 +722,7 @@ def loops(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,calc=None):
                         yield out
     
 
-    
+"Swap indices, using appropriate symmetry relationships"
 def m_mp_swap(X,mpi=0,mi=0,mpf=0,mf=0): 
     """
     Performs the appropriate sign changes to switch between components
@@ -731,6 +761,98 @@ def m_mp_swap(X,mpi=0,mi=0,mpf=0,mf=0):
     return X
     
 
+#%% Calculations in case of symmetry axis in motion
+def sym_full_swap(vZ,threshold=0,A_0m_PASinf=None,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p',mode='both',index=None):
+    """
+    Swaps between calculating all components of the correlation function or
+    assuming the correlation function is symmetric
+    
+    sym_full_swap(vZ,threshold=0,A_0m_PASinf=None,vXZ=None,nuZ_F=None,nuXZ_F=None,\
+                  nuZ_f=None,nuXZ_f=None,cmpt='0p',mode='both',index=None)
+    
+    Setting the threshold to 0 will force a full calculation, and setting the 
+    threshold to 1 will force a symmetric calculation. In case threshold is set
+    to 0, A_0m_PASinf is not required.
+    """
+    if A_0m_PASinf is None or threshold==0:
+        ct=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,cmpt=cmpt,mode='ct',index=index)
+    elif threshold==1:
+        ct0=Ctsym(A_0m_PASinf,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F,index=index)
+        ct=np.zeros([5,ct0.shape[0],ct0.shape[1]],dtype=complex)
+        ct[2]=ct0
+    else:
+        sym=vft.Spher2pars(A_0m_PASinf)[1]<threshold   #Returns eta for the residual tensor
+        nsym=np.logical_not(sym)
+        sym_args={'A_0m_PASinf':A_0m_PASinf,'nuZ_f':nuZ_f,'nuXZ_f':nuXZ_f,'nuZ_F':nuZ_F,'nuXZ_F':nuXZ_F}
+        full_args={'vZ':vZ,'vXZ':vXZ,'nuZ_f':nuZ_f,'nuXZ_f':nuXZ_f,'nuZ_F':nuZ_F,'nuXZ_F':nuXZ_F}
+        
+        for k,v in sym_args.items():
+            sym_args[k]=None if v is None else v[:,sym]
+        for k,v in full_args.items():
+            full_args[k]=None if v is None else v[:,nsym]
+        if np.any(sym):
+            print('Using symmetric calculation for {0} correlation functions'.format(sym.sum()))
+            out_sym=Ctsym(**sym_args,index=index)
+        if np.any(nsym):
+            print('Using full calculation for {0} correlation functions'.format(nsym.sum()))
+            out_full=Ct_D2inf(**full_args,cmpt=cmpt,mode='ct',index=index)
+        ct=np.zeros([5,sym.shape[0],index[-1]+1],dtype=complex)
+        if np.any(sym):ct[2,sym]=out_sym
+        if np.any(nsym):ct[:,nsym]=out_full
+
+    return ct,None if mode.lower()=='both' else ct  #If d2 requested, just return None for d2
+            
+
+def sym_nuZ_f(A_0m_PASinf,nuZ_f,nuXZ_f=None,nuZ_F=None,nuXZ_F=None):
+    """
+    Assuming motion within frame f is symmetric, this function returns a 
+    vector that moves with frame f, and points in the direction of the residual
+    tensor resulting from motion within frame f. If nuZ_F (optionally nuXZ_F),
+    then motion of frame f will have motion of frame F removed.
+    
+    Note that A_0m_PASinf is the residual tensor of motion within frame f (not 
+    frame F)
+    
+    sym_nuZ_f(A_0m_PASinf,nuZ_f,nuXZ_f=None,nuZ_F=None,nuXZ_F=None)
+    
+    Note that the results from this calculation could, in principle, be used in 
+    the iRED analysis
+    """
+    
+    _,_,*euler=vft.Spher2pars(A_0m_PASinf)
+    vZ=vft.R(np.array([0,0,1]),*euler)  #Direction of residual tensor in frame f
+    nuZ_f,nuXZ_f=vft.applyFrame(nuZ_f,nuXZ_f,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F)
+    sc=[sc0.T for sc0 in vft.getFrame(nuZ_f,nuXZ_f)]   
+    out=vft.R(vZ,*sc)
+    if out.ndim==3:
+        return out.swapaxes(1,2)
+    else:
+        return out
+
+def Ctsym(A_0m_PASinf,nuZ_f,nuXZ_f=None,nuZ_F=None,nuXZ_F=None,index=None):
+    """
+    Calculates the correlation function of the motion of a frame, assuming that
+    motion within that frame has a symmetry axis. This is achieved by providing
+    the residual tensor of motion within frame f, obtained by calculating:
+        
+        A_PASinf=Ct_D2inf(vZ,vXZ,nuZ_F=nuZ_f,nuXZ_F=nuXZ_f,mode='d2')
+    
+    Note that we calculate the correlation function of motion due to motion of 
+    frame f within frame F. Then, for the above call, the alignment frame is 
+    defined by nuZ_f, but needs to be assigned to nuZ_F.
+    
+    This result can then be used to obtain the correlation function of motion for
+    f in F. Note that this correlation function only has a (0,0) component, so
+    the result is just a numpy array
+    
+    Ct=Ctsym(A_PASinf,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F,index=index)
+    """
+    
+    nuZ_fsym=sym_nuZ_f(A_0m_PASinf=A_0m_PASinf,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F)
+    return Ct_D2inf(nuZ_fsym,cmpt='00',mode='ct',index=index)
+
+
+#%% Some functions for calculating correlation functions quickly
 def FT(x,index=None):
     """
     Performs a zero-filled Fourier transform (doubling the size). If an index

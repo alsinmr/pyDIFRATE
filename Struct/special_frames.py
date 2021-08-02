@@ -61,6 +61,101 @@ import pyDIFRATE.Struct.vf_tools as vft
 import pyDIFRATE.Struct.select_tools as selt
 
 
+def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
+               Nuc=None,resids=None,segids=None,filter_str=None,ntest=1000):
+    """
+    Determines contributions to motion due to 120 degree hops across three sites. 
+    Motion within this frame will be all motion not involving a hop itself. Motion
+    of the frame will be three site hoping plus any outer motion (ideally removed
+    with a methylCC frame)
+    
+    sel1 and sel2 determine the bond of the interaction. sel2 and sel3 determine
+    the rotation axis, and sel3/sel4 keep the axis aligned.
+    
+    sel1-sel4 may all be automatically determined if instead providing some of
+    the usual selection options (Nuc, resids, segids, filter_str)
+    
+    First step is to use sel2/sel3 as a z-axis and project the bond onto the x/y
+    plane for a series of time points. We then rotate around z to find an 
+    orientation that best explains the sel1/sel2 projection as a 3 site hop.
+    
+    Second step is to project sel1/sel2 vector onto the z-axis and determine the
+    angle of the bond relative to the z-axis.
+    
+    Then, this frame will only return vectors that match this angle to the z-axis
+    and are defined by the 3-site hop.
+    
+    Setup requires a sampling of the trajectory. We use 1000 points by default
+    (ntest). This frame will take more time than most to set up because of this
+    setup.
+    
+    hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,ntest=1000)
+    """
+    
+    
+    if sel1:sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
+    if sel2:sel1=selt.sel_simple(molecule,sel2,resids,segids,filter_str)     
+    if sel3:sel1=selt.sel_simple(molecule,sel3,resids,segids,filter_str)
+    if sel4:sel1=selt.sel_simple(molecule,sel4,resids,segids,filter_str)
+    
+    if not(sel1) and not(sel2):sel2,sel1=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+    if not(sel2):_,sel2=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+    if not(sel1):sel1,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+
+    "Get all atoms in the residues included in the initial selection"
+    uni=molecule.mda_object
+    resids=np.unique(np.concatenate([sel1.resids,sel2.resids]))
+    sel0=uni.residues[np.isin(uni.residues.resids,resids)].atoms
+    
+    if not(sel3):
+        sel3=selt.find_bonded(sel2,sel0,exclude=sel1,n=1,sort='cchain',d=1.65)[0]
+    if not(sel4):
+        sel4=selt.find_bonded(sel3,sel0,exclude=sel2,n=1,sort='cchain',d=1.65)[0]
+        
+    v12,v23,v34=list(),list(),list()
+    traj=uni.trajectory
+    step=np.floor(traj.n_frames/ntest).astype(int)
+    box=molecule.mda_object.dimensions
+    
+    for _ in traj[::step]:
+        v12.append(vft.pbc_corr((sel1.positions-sel2.positions).T,box[:3]))
+        v23.append(vft.pbc_corr((sel2.positions-sel3.positions).T,box[:3]))
+        v34.append(vft.pbc_corr((sel3.positions-sel4.positions).T,box[:3]))
+        
+    v12,v23,v34=[np.moveaxis(np.array(v),0,-1) for v in [v12,v23,v34]]
+    
+    v12a=vft.applyFrame(v12,nuZ_F=v23,nuXZ_F=v34) #Rotate so that 23 is on z-axis, 34 in XY-plane
+    
+    v0z=vft.norm(np.array([np.sqrt(v12a[0]**2+v12a[1]**2).mean(axis=-1),\
+                           np.zeros(v12a.shape[1]),v12a[2].mean(axis=-1)]))    #Mean projection onto xz
+    
+    v12a[2]=0               #Project v12 onto xy-plane
+    v12a=vft.norm(v12a)
+    i=np.logical_and(v12a[0]<.5,v12a[1]>0)          #For bonds not between -60 and 60 degrees
+    v12a[:,i]=vft.Rz(v12a[:,i],-.5,-np.sqrt(3)/2)    #we rotate +/- 120 degrees to align them all
+    i=np.logical_and(v12a[0]<.5,v12a[1]<=0)
+    v12a[:,i]=vft.Rz(v12a[:,i],-.5,np.sqrt(3)/2)
+    
+    v0xy=vft.norm(v12a.mean(-1))    #This is the average direction of v12a (in xy-plane)
+    theta=np.arctan2(v0xy[1],v0xy[0])
+    """The direction of the frame follows sel2-sel3, sel3-sel4, but sel1-sel2 
+    is forced to align with a vector in vr"""
+    vr=np.array([vft.Rz(v0z,k) for k in [0,2*np.pi/3,4*np.pi/3]])  #Reference vectors (separated by 120 degrees)
+    "axis=1 of vr is x,y,z"
+    
+    box=uni.dimensions
+    def sub():
+        v12s,v23s,v34s=[vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
+                     for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
+        v12s=vft.norm(v12s)
+        sc=vft.getFrame(v23s,v34s)
+        v12s=vft.R(v12s,*vft.pass2act(*sc))    #Into frame defined by v23,v34
+        i=np.argmax((v12s*vr).sum(axis=1),axis=0)   #Index of best fit to reference vectors (product is cosine, which has max at nearest value)
+        v12s=vr[i,:,np.arange(v12s.shape[1])] #Replace v12 with one of the three reference vectors
+        return vft.R(v12s.T,*sc)  #Rotate back into original frame
+    
+    return sub
+    
 def membrane_grid(molecule,grid_pts,sigma=25,sel0=None,sel='type P',resids=None,segids=None,filter_str=None):
     """
     Calculates motion of the membrane normal, defined by a grid of points spread about

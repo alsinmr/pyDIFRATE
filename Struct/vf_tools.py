@@ -259,7 +259,7 @@ def Rz(v0,c,s=None):
     X,Y,Z=v0.copy()
     
     X,Y=c*X-s*Y,s*X+c*Y
-    Z=np.ones(c.shape)*Z
+    Z=np.ones(X.shape)*Z
     
     return np.array([X,Y,Z])
 

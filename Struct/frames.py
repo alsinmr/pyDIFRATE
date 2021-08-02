@@ -292,10 +292,8 @@ def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
     
     Note- we only return one copy of the C–C bond, so a frame index is necessary
     """            
-    if not(Nuc.lower()=='ivl' or Nuc.lower()=='ivla' or Nuc.lower()=='ch3'):
-        print('Nuc must be ivl, ivla, or ch3 for the methylCC frame')
-        return
-    elif Nuc is None:
+    
+    if Nuc is None:
         Nuc='ch3'
     selC1,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)  
     selC1=selC1[::3]    #Above line returns 3 copies of each carbon      
@@ -303,15 +301,16 @@ def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
     resids=molecule.mda_object.residues.resids
     sel0=molecule.mda_object.residues[np.isin(resids,selC1.resids)].atoms
     selC2=selt.find_bonded(selC1,sel0,n=1,sort='cchain')[0]
+    selC3=selt.find_bonded(selC2,sel0,exclude=selC1,n=1,sort='cchain')[0]
 #    
 #    selC2=sum([sel0.select_atoms('not name H* and around 1.6 atom {0} {1} {2}'\
 #                                 .format(s.segid,s.resid,s.name)) for s in selC1])
     
     def sub():
         box=molecule.mda_object.dimensions[:3]
-        v=selC1.positions-selC2.positions
-        v=vft.pbc_corr(v.T,box)
-        return v
+        v1,v2=selC1.positions-selC2.positions,selC2.positions-selC3.positions
+        v1,v2=[vft.pbc_corr(v.T,box) for v in [v1,v2]]
+        return v1,v2
     return sub
 
 def librations(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None,full=True):

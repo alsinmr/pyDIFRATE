@@ -130,8 +130,8 @@ object types. Might vary, for example, for a correlation function. However, firs
 argument should be the 'self' argument in all instances (here called obj)
 """
 
-def _setup_plotting():
-    "Defines the plotting functions for the NMR sensitivity object"    
+def _setup_functions():
+    "Defines the functions to be added to the NMR sensitivity object"    
     def plot_R(self,exp_num=None,norm=False,ax=None,**kwargs):
         """
         Plots the sensitivites of the experiments. Default plots all experiments 
@@ -146,9 +146,11 @@ def _setup_plotting():
         ax.set_ylabel(r'$R / s^{-1}$')
         ax.set_title('Experimental Sensitivities')
         return hdl
-    
-    return {'plot_R':plot_R}
-        
+        "Defines functions for calling sensitivities of the NMR type"
+    def R(self):
+        return self._rho()     
+    return {'plot_R':plot_R,'R':R}
+
 
 #%% Functions for calculation of relaxation
 def J(tc,v0):
@@ -174,8 +176,8 @@ def R1(tc,Nuc,v0,Nuc1=None,CSA=0,dXY=0,eta=0,vr=0,CSoff=0,QC=0,etaQ=0):
     All provided contributions will be included in the total rate constant.
     """
 
-    v0=np.array(v0)*1e6     #1H resonance frequency (here convert to Hz)
-    vr=np.array(vr)*1e3
+    v0=np.array(v0)*1e6     #1H resonance frequency (convert MHz to Hz)
+    vr=np.array(vr)*1e3     #MAS frequency (convert kHz to Hz)
     dXY=np.atleast_1d(dXY)
     Nuc1=np.atleast_1d(Nuc1)
     assert Nuc1.size==dXY.size,"Nuc1 and dXY must have the same size"
@@ -196,7 +198,7 @@ def R1(tc,Nuc,v0,Nuc1=None,CSA=0,dXY=0,eta=0,vr=0,CSoff=0,QC=0,etaQ=0):
             else:       #Heteronuclear
                 R+=sc*(np.pi*dXY1/2)**2*(J(tc,vX-vY)+3*J(tc,vX)+6*J(tc,vY+vX))
     
-    
+    print(R)
     "Quadrupole Relaxation"
     """
     Note that we calculate the orientationally averaged, initial relaxation
@@ -209,11 +211,8 @@ def R1(tc,Nuc,v0,Nuc1=None,CSA=0,dXY=0,eta=0,vr=0,CSoff=0,QC=0,etaQ=0):
     S=NucInfo(Nuc,'spin')     
     if S>=1:      
         deltaQ=1/(2*S*(2*S-1))*QC*2*np.pi
-        C=(deltaQ/2)**2*(1+etaQ**2/3) #Constant that scales the relaxation
-        
-        if S==0.5:
-            pass
-        elif S==1:
+        C=(deltaQ/2)**2*(1+etaQ**2/3) #Constant that scales the relaxation        
+        if S==1:
             R+=C*(3*J(tc,vX)+12*J(tc,2*vX))
         elif S==1.5:
             R+=C*(36/5*J(tc,vX)+144/5*J(tc,2*vX))
@@ -221,23 +220,21 @@ def R1(tc,Nuc,v0,Nuc1=None,CSA=0,dXY=0,eta=0,vr=0,CSoff=0,QC=0,etaQ=0):
             R+=C*(96/5*J(tc,vX)+384/5*J(tc,2*vX))
         else:
             print('Spin={0} not implemented for quadrupolar relaxation'.format(S))
-        
     "CSA relaxation"
-    R+=3/4*(2*np.pi*CSA)**2**(1+eta**2/3)*J(tc,vX)
-
+    R+=3/4*(2*np.pi*CSA)**2*(1+eta**2/3)*J(tc,vX)
     return R
 
-    def plot_R(self,exp_num=None,norm=False,ax=None,**kwargs):
-        """
-        Plots the sensitivites of the experiments. Default plots all experiments 
-        without normalization. Set norm=True to normalize all experiments to 1. 
-        Specify exp_num to only plot selected experiments. Set ax to specify the
-        axis on which to plot
-        
-        plot_R(exp_num=None,norm=False,ax=None,**kwargs)
-        """
-        hdl=plot_rhoz(self,index=exp_num,norm=norm,ax=ax,**kwargs)
-        ax=hdl[0].axes
-        ax.set_ylabel(r'$R / s^{-1}$')
-        ax.set_title('Experimental Sensitivities')
-        return hdl
+def plot_R(self,exp_num=None,norm=False,ax=None,**kwargs):
+    """
+    Plots the sensitivites of the experiments. Default plots all experiments 
+    without normalization. Set norm=True to normalize all experiments to 1. 
+    Specify exp_num to only plot selected experiments. Set ax to specify the
+    axis on which to plot
+    
+    plot_R(exp_num=None,norm=False,ax=None,**kwargs)
+    """
+    hdl=plot_rhoz(self,index=exp_num,norm=norm,ax=ax,**kwargs)
+    ax=hdl[0].axes
+    ax.set_ylabel(r'$R / s^{-1}$')
+    ax.set_title('Experimental Sensitivities')
+    return hdl

@@ -114,6 +114,7 @@ class Ct(mdl.model):
             vec=1/np.sqrt(np.arange(nt,0,-1))
             stdev=vec/vec[-1]
             stdev[0]=1e-6
+        
         a.update({'stdev' : stdev})
         
         if 'median_val' in kwargs:
@@ -124,7 +125,8 @@ class Ct(mdl.model):
             median_val=np.ones(nt)
         a.update({'median_val' : median_val})
         
-        self.info=pd.DataFrame.from_dict(a).T        
+        self.info=pd.DataFrame.from_dict(a).T  
+        
         
         if 'S2' in kwargs:
 #            self.__R=np.exp(-1e-9*np.dot(np.atleast_2d(self.__t).T,1/np.atleast_2d(self.__tc)))\
@@ -141,9 +143,6 @@ class Ct(mdl.model):
         self.__exper=['t','stdev']
         "Names of the spin system variables that are available"
         self.__spinsys=[]
-    
-        
-        
        
         super().__init__()
         
