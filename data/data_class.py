@@ -222,6 +222,9 @@ class data(object):
             for m in index:
                 self.del_data_pt(m)
         else:
+            if index>=self.R.shape[0]:
+                print('Warning: index of {0} is greater than or equal to the number of data points ({1})'.format(index,self.R.shape[0]))
+                return
             attr=['R','R_l','R_u','R_std','Rc','Rin','Rin_std','label',\
                   'S2','S2_std','S2c','S2in','S2in_std']
             for at in attr:
