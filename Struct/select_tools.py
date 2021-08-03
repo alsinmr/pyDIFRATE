@@ -206,6 +206,11 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
             sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG2) or \
                                          (resname ILE ile Ile and name CG2) or \
                                          (resname LEU leu Leu and name CD1)')
+        if Nuc[-1].lower()=='r' or Nuc[-1].lower()=='l':
+            sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG{0}) or \
+                                         (resname ILE ile Ile and name CG2) or \
+                                         (resname LEU leu Leu and name CD{0})'\
+                                            .format('2' if Nuc[-1].lower()=='l' else '1'))
             
         if Nuc[:4].lower()=='ivla':
             sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name C*')

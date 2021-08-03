@@ -69,8 +69,9 @@ def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
     of the frame will be three site hoping plus any outer motion (ideally removed
     with a methylCC frame)
     
-    sel1 and sel2 determine the bond of the interaction. sel2 and sel3 determine
-    the rotation axis, and sel3/sel4 keep the axis aligned.
+    sel1 and sel2 determine the bond of the interaction (sel2 should be the 
+    carbon). sel2 and sel3 determine the rotation axis, and sel3/sel4 keep the
+    axis aligned.
     
     sel1-sel4 may all be automatically determined if instead providing some of
     the usual selection options (Nuc, resids, segids, filter_str)
@@ -94,13 +95,13 @@ def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
     
     
     if sel1:sel1=selt.sel_simple(molecule,sel1,resids,segids,filter_str)
-    if sel2:sel1=selt.sel_simple(molecule,sel2,resids,segids,filter_str)     
-    if sel3:sel1=selt.sel_simple(molecule,sel3,resids,segids,filter_str)
-    if sel4:sel1=selt.sel_simple(molecule,sel4,resids,segids,filter_str)
+    if sel2:sel2=selt.sel_simple(molecule,sel2,resids,segids,filter_str)     
+    if sel3:sel3=selt.sel_simple(molecule,sel3,resids,segids,filter_str)
+    if sel4:sel4=selt.sel_simple(molecule,sel4,resids,segids,filter_str)
     
     if not(sel1) and not(sel2):sel2,sel1=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
-    if not(sel2):_,sel2=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
-    if not(sel1):sel1,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+
+    if 'H' in sel2[0].name:sel1,sel2=sel2,sel1
 
     "Get all atoms in the residues included in the initial selection"
     uni=molecule.mda_object
