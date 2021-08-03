@@ -14,6 +14,66 @@ import MDAnalysis as mda
 import numpy as np
 import numbers
 
+def search_methyl_groups(residue):
+  if not len(residue.universe.bonds):
+    get_by_dist = True  #check if bond information of the universe is available, see 'get_bonded'
+  def search(atom, exclude=[]):
+    '''searching a path from a methyl group of a residue down to the C-alpha of the residue
+    returns a list of atoms (MDA.Atom) beginning with the Hydrogens of the methyl group and continuing
+    with the carbons of the side chain
+    returns empty list if atom is not a methyl carbon'''
+    def get_bonded():
+      '''it happens, that pdb files do not contain bond information, in that case, we switch to selection
+      by string parsing'''
+      if not get_by_dist:
+        return atom.bonded_atoms
+      return residue.atoms.select_atoms("around 1.7 name "+atom.name)
+      
+    if "CA" in atom.name and len(exclude):
+      return [atom]
+    elif atom.name == "N" or atom.name == "C":
+      return []
+    connected_atoms = []
+    bonded = get_bonded()
+    if len(exclude)==0:
+      if np.sum(np.fromiter(["H" in a.name for a in bonded],dtype=bool)) == 3:
+        for a in bonded:
+          if "H" in a.name:
+            connected_atoms.append(a)
+        if not "C" in atom.name:
+          return []
+      else:
+        return []
+    connected_atoms.append(atom)
+    exclude.append(atom)
+    for a in bonded:
+      if not a in exclude:
+        next = search(a,exclude)
+        for b in next:
+           connected_atoms.append(b)
+    if len(connected_atoms)>1:
+      return connected_atoms
+    else:
+      return []
+
+  methyl_groups = []
+  for atom in residue.atoms:
+    chain = search(atom,[])
+    if len(chain):
+      #for atom in chain:
+       #print(atom)
+      #print() 
+      methyl_groups.append(chain)
+
+  #print("Im Residue",residue.resname,"wurden",len(methyl_groups),"Methylgruppen gefunden")
+  #TODO
+  #in case of two methyl groups, like in val, ile, leu, somehow decide which one should be taken
+  #for ile it might be the terminal one, so the one with the longer chain
+  #for val: check dihedrals between HA,CA,CB,CG*/HB
+  #    leu: check dihedrals between CA,CB,CG,CD*/HG1
+  #      then go the rotation way right and 'normalize' and select first or second methyl group
+  return methyl_groups
+
 def sel0_filter(mol,resids=None,segids=None,filter_str=None):
     """
     Performs initial filtering of all atoms in an MDA Universe. Filtering may
