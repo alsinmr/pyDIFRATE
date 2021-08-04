@@ -202,15 +202,17 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
         sel2=sel0.select_atoms('(name HA or name HA2) and around 1.5 name CA')
         print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
     elif Nuc[:3].lower()=='ivl' or Nuc[:3].lower()=='ch3':
-        
-        
         if Nuc[:4].lower()=='ivla':
             filter_str='resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala'
+            Nuc0=Nuc[4:]
         elif Nuc[:3].lower()=='ivl':
             filter_str='resname ILE Ile ile VAL val Val LEU Leu leu'
+            Nuc0=Nuc[3:]
+        else:
+            Nuc0=Nuc[3:]
         select=None
-        if 't' in Nuc.lower() or 'l' in Nuc.lower():select='l'
-        if 'r' in Nuc.lower():select='r'
+        if 't' in Nuc0.lower() or 'l' in Nuc0.lower():select='l'
+        if 'r' in Nuc0.lower():select='r'
         
         sel1,sel2=find_methyl(mol,resids,segids,filter_str,select=select)
         
@@ -259,10 +261,12 @@ def find_methyl(mol,resids=None,segids=None,filter_str=None,select=None):
     
     To just get rid of the gamma methyl on isoleucine, set select to 'ile_d'
     """
-    
+    mol.mda_object.trajectory[0]
     sel0=sel0_filter(mol,resids,segids,filter_str)
-    selC0,selH0=sel0.select_atoms('type C'),sel0.select_atoms('type H')
-    index=np.all([b.types=='H' for b in find_bonded(selC0,selH0,n=3,d=1.5)],axis=0)
+    selC0,selH0=sel0.select_atoms('name C*'),sel0.select_atoms('name H*')
+    index=np.array([all(b0 in selH0 for b0 in b)\
+           for b in np.array(find_bonded(selC0,selH0,n=3,d=1.5,sort='massi')).T])
+#    index=np.all([b.names[0]=='H' for b in find_bonded(selC0,selH0,n=3,d=1.5)],axis=0)
     selH=find_bonded(selC0[index],sel0=selH0,n=3,d=1.5)
 
     selH=np.array(selH).T
@@ -273,31 +277,34 @@ def find_methyl(mol,resids=None,segids=None,filter_str=None,select=None):
         ile=[s.resname.lower()=='ile' for s in selC] #Find the isoleucines
         exclude=[s.sum() for s in selH[ile]]
         nxt=find_bonded(selC[ile],sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
-        keep=np.sum([b.types=='H' for b in find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2)],axis=0)==2
+        keep=np.array([np.sum([b0.name[0]=='H' for b0 in b])==2 \
+                for b in np.array(find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2,sort='massi')).T])
+#        keep=np.sum([b.types=='H' for b in find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2)],axis=0)==2
         index=np.ones(len(selC),dtype=bool)
         index[ile]=keep
         selC,selH=selC[index],selH[index]
     
-    if select[0].lower() in ['l','r']:
+    if select is not None and (select[0].lower() in ['l','r']):
         val_leu=[s.resname.lower()=='val' or s.resname.lower()=='leu' for s in selC]
-        exclude=[s.sum() for s in selH[val_leu][::2]]
-        nxt0=find_bonded(selC[val_leu][::2],sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
-        exclude=np.array([selC[val_leu][::2],selC[val_leu][1::2]]).T
-        exclude=[e.sum() for e in exclude]
-        nxt1=find_bonded(nxt0,sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
-        nxtH=find_bonded(nxt0,sel0=sel0,exclude=exclude,n=1,sort='massi')[0]
-        
-        cross=np.cross(nxtH.positions-nxt0.positions,nxt1.positions-nxt0.positions)
-        dot0=(cross*selC[val_leu][::2].positions).sum(1)
-        dot1=(cross*selC[val_leu][1::2].positions).sum(1)
-        keep=np.zeros(np.sum(val_leu),dtype=bool)
-        keep[::2]=dot0>=dot1
-        keep[1::2]=dot0<dot1
-        if select[0].lower()=='l':keep=np.logical_not(keep)
-        
-        index=np.ones(len(selC),dtype=bool)
-        index[val_leu]=keep
-        selC,selH=selC[index],selH[index]
+        if any(val_leu):
+            exclude=[s.sum() for s in selH[val_leu][::2]]
+            nxt0=find_bonded(selC[val_leu][::2],sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
+            exclude=np.array([selC[val_leu][::2],selC[val_leu][1::2]]).T
+            exclude=[e.sum() for e in exclude]
+            nxt1=find_bonded(nxt0,sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
+            nxtH=find_bonded(nxt0,sel0=sel0,exclude=exclude,n=1,sort='massi')[0]
+            
+            cross=np.cross(nxtH.positions-nxt0.positions,nxt1.positions-nxt0.positions)
+            dot0=(cross*selC[val_leu][::2].positions).sum(1)
+            dot1=(cross*selC[val_leu][1::2].positions).sum(1)
+            keep=np.zeros(np.sum(val_leu),dtype=bool)
+            keep[::2]=dot0>=dot1
+            keep[1::2]=dot0<dot1
+            if select[0].lower()=='l':keep=np.logical_not(keep)
+            
+            index=np.ones(len(selC),dtype=bool)
+            index[val_leu]=keep
+            selC,selH=selC[index],selH[index]
         
     selH=np.concatenate(selH).sum()
     selC=np.sum(np.repeat(selC,3))    
@@ -341,7 +348,8 @@ def find_bonded(sel,sel0=None,exclude=None,n=3,sort='dist',d=1.65):
         if sort[0].lower()=='d':
             i=np.argsort(((sel01.positions-s.position)**2).sum(axis=1))
         elif sort[0].lower()=='c':
-            C=sel01.types=='C'
+            C=np.array([s.name[0]=='C' for s in sel01])
+#            C=sel01.type=='C'
             nC=np.logical_not(C)
             i1=np.argsort(sel01[nC].masses)[::-1]
             C=np.argwhere(C)[:,0]
@@ -429,7 +437,7 @@ def peptide_plane(mol,resids=None,segids=None,filter_str=None,full=True):
         return selN,selCm1,selOm1
     
 
-def get_chain(sel0,atom,exclude=None):
+def get_chain(atom,sel0,exclude=None):
     if exclude is None:exclude=[]
     '''searching a path from a methyl group of a residue down to the C-alpha of the residue
     returns a list of atoms (MDA.Atom) beginning with the Hydrogens of the methyl group and continuing
@@ -440,18 +448,20 @@ def get_chain(sel0,atom,exclude=None):
         by string parsing'''
         return np.sum(find_bonded([atom],sel0,n=4,d=1.7))
     
-    if 'c'==atom.name.lower() and len(exclude):
+    a_name=atom.name.lower()
+    a_type=atom.name[0].lower()
+    if 'c'==a_name and len(exclude):
       return [atom]
-    elif atom.name == "N":
+    elif a_name == "n":
       return []
     connected_atoms = []
     bonded = get_bonded()
     if len(exclude)==0:
-      if np.sum(np.fromiter(["H" in a.name for a in bonded],dtype=bool)) == 3:
+      if np.sum(np.fromiter(["h"==a.type.lower() for a in bonded],dtype=bool)) == 3:
         for a in bonded:
-          if "H" in a.name:
+          if "h"==a.name[0].lower():
             connected_atoms.append(a)
-        if not "C" in atom.name:
+        if not "c"==a_type:
           return []
       else:
         return []
@@ -459,7 +469,7 @@ def get_chain(sel0,atom,exclude=None):
     exclude.append(atom)
     for a in bonded:
       if not a in exclude:
-        nxt = get_chain(sel0,a,exclude)
+        nxt = get_chain(a,sel0,exclude)
         for b in nxt:
            connected_atoms.append(b)
     if len(connected_atoms)>1:
@@ -470,7 +480,7 @@ def get_chain(sel0,atom,exclude=None):
 def search_methyl_groups(residue):
     methyl_groups = []
     for atom in residue.atoms:
-        chain = get_chain(residue,atom,[])
+        chain = get_chain(atom,residue,[])
         if len(chain):
             methyl_groups.append(chain)
     return methyl_groups

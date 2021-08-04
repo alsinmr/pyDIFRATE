@@ -122,7 +122,9 @@ def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
         v12.append(vft.pbc_corr((sel1.positions-sel2.positions).T,box[:3]))
         v23.append(vft.pbc_corr((sel2.positions-sel3.positions).T,box[:3]))
         v34.append(vft.pbc_corr((sel3.positions-sel4.positions).T,box[:3]))
-        
+
+    molecule.mda_object.trajectory[0] #Sometimes, leaving the trajectory at the end can create other errors...
+    
     v12,v23,v34=[np.moveaxis(np.array(v),0,-1) for v in [v12,v23,v34]]
     
     v12a=vft.applyFrame(v12,nuZ_F=v23,nuXZ_F=v34) #Rotate so that 23 is on z-axis, 34 in XY-plane

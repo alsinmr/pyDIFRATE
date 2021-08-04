@@ -17,7 +17,7 @@ fr=[user_frames,special_frames,frames]
 def new_fun(Type,molecule,**kwargs):
     """
     Creates a function to calculate a particular vector(s) from the MD trajectory.
-    Mainly responsible for searching the vec_funs file for available functions and
+    Mainly responsible for searching the vec_funs files for available functions and
     returning the appropriate function if found (Type determines which function to use)
     
     Required arguments are Type (string specifying the function to be used) and
@@ -46,7 +46,7 @@ def new_fun(Type,molecule,**kwargs):
         fun()
     except:
         print_frame_info(Type)
-        assert 0,'Frame definition failed'
+        assert 0,'Frame definition failed (frame function fails to run)'
         
     return fun,frame_index
 

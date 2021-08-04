@@ -339,7 +339,7 @@ def side_chain_chi(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_st
     sel1,sel2,sel3=None,None,None
     k=0
     for s in selC:
-        chain=selt.get_chain(s.residue.atoms,s)[3+n_bonds:6+n_bonds]
+        chain=selt.get_chain(s,s.residue.atoms)[3+n_bonds:6+n_bonds]
         if len(chain)==3:
             frame_index.extend([k,k,k])
             k+=1
