@@ -50,8 +50,8 @@ mol.tensor_frame(sel1=1,sel2=2)
 mol.new_frame(Type='hops_3site',Nuc='ivla',segids='B')
 mol.new_frame(Type='methylCC',Nuc='ivla',segids='B')
 #mol.new_frame(Type='side_chain_chi',Nuc='ivla',segids='B',n_bonds=0)
-#mol.new_frame(Type='side_chain_chi',Nuc='ivla',segids='B',n_bonds=1)
-#mol.new_frame(Type='side_chain_chi',Nuc='ivla',segids='B',n_bonds=2)
+mol.new_frame(Type='side_chain_chi',Nuc='ivla',segids='B',n_bonds=1)
+mol.new_frame(Type='side_chain_chi',Nuc='ivla',segids='B',n_bonds=2)
 
 
 frames=DR.frames.frames2data(mol,n=-1,tf=2000,mode='auto')
@@ -82,7 +82,7 @@ mol.new_frame(Type='methylCC',Nuc='ivlat',resids=resids,segids='B',frame_index=f
 mol.new_frame(Type='bond',sel1=cg1,sel2=cb,sel3=ca,frame_index=frame_index)
 mol.new_frame(Type='bond',sel1=cb,sel2=ca,sel3=co,frame_index=frame_index)
 
-frames=DR.frames.frames2data(mol,n=-1,mode='auto')
+frames=DR.frames.frames2data(mol,n=-1,tf=2000,mode='auto')
 t=frames[0].sens.info.loc['t'].to_numpy()
 #stdev=np.diff(np.log10(t))
 #stdev[0]=1e-6

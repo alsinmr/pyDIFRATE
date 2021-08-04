@@ -203,13 +203,16 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
         print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
     elif Nuc[:3].lower()=='ivl' or Nuc[:3].lower()=='ch3':
         if Nuc[:4].lower()=='ivla':
-            filter_str='resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala'
+            fs0='resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala'
             Nuc0=Nuc[4:]
         elif Nuc[:3].lower()=='ivl':
-            filter_str='resname ILE Ile ile VAL val Val LEU Leu leu'
+            fs0='resname ILE Ile ile VAL val Val LEU Leu leu'
             Nuc0=Nuc[3:]
         else:
+            fs0=None
             Nuc0=Nuc[3:]
+        filter_str=filter_str if fs0 is None else (fs0 if filter_str is None else \
+                            '('+filter_str+') and ('+fs0+')')
         select=None
         if 't' in Nuc0.lower() or 'l' in Nuc0.lower():select='l'
         if 'r' in Nuc0.lower():select='r'
