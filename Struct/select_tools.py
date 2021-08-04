@@ -446,6 +446,7 @@ def get_chain(atom,sel0,exclude=None):
     returns a list of atoms (MDA.Atom) beginning with the Hydrogens of the methyl group and continuing
     with the carbons of the side chain
     returns empty list if atom is not a methyl carbon'''
+    final=False
     def get_bonded():
         '''it happens, that pdb files do not contain bond information, in that case, we switch to selection
         by string parsing'''
@@ -461,6 +462,7 @@ def get_chain(atom,sel0,exclude=None):
     bonded = get_bonded()
     if len(exclude)==0:
       if np.sum(np.fromiter(["h"==a.type.lower() for a in bonded],dtype=bool)) == 3:
+        final=True  
         for a in bonded:
           if "h"==a.name[0].lower():
             connected_atoms.append(a)
@@ -476,7 +478,10 @@ def get_chain(atom,sel0,exclude=None):
         for b in nxt:
            connected_atoms.append(b)
     if len(connected_atoms)>1:
-      return connected_atoms
+      if final:
+          return np.sum(connected_atoms)
+      else:
+          return connected_atoms
     else:
       return []
 

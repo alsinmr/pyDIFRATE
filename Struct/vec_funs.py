@@ -10,6 +10,7 @@ Created on Wed Aug 21 13:21:49 2019
 import pyDIFRATE.Struct.frames as frames
 import pyDIFRATE.Struct.user_frames as user_frames
 import pyDIFRATE.Struct.special_frames as special_frames
+import sys
 
 fr=[user_frames,special_frames,frames]
 
@@ -41,13 +42,20 @@ def new_fun(Type,molecule,**kwargs):
     
     try:       
         fun=fun0(molecule,**kwargs)
-        frame_index=None
-        if hasattr(fun,'__len__') and len(fun)==2:fun,frame_index=fun
-        fun()
     except:
         print_frame_info(Type)
-        assert 0,'Frame definition failed (frame function fails to run)'
-        
+        assert 0,'Frame definition failed (frame function could not be created),\n'+\
+            'Error:{0}, {1}'.format(*sys.exc_info()[:2]) 
+    
+    frame_index=None
+    if hasattr(fun,'__len__') and len(fun)==2:fun,frame_index=fun
+    
+    try:
+        fun()
+    except:
+        assert 0,'Frame function failed to run, ,\n'+\
+            'Error:{0}, {1}'.format(*sys.exc_info()[:2])     
+    
     return fun,frame_index
 
 def return_frame_info(Type=None):

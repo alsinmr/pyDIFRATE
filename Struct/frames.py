@@ -344,7 +344,7 @@ def side_chain_chi(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_st
             frame_index.extend([k,k,k])
             k+=1
             if sel1 is None:
-                sel1,sel2,sel3=chain
+                sel1,sel2,sel3=chain[0:1],chain[1:2],chain[2:3]
             else:
                 sel1=sel1+chain[0]
                 sel2=sel2+chain[1]
@@ -353,7 +353,7 @@ def side_chain_chi(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_st
             frame_index.extend([np.nan,np.nan,np.nan])
     frame_index=np.array(frame_index)
     uni=molecule.mda_object
-            
+        
     def sub():
         box=uni.dimensions[0:3]
         vZ=sel1.positions-sel2.positions
