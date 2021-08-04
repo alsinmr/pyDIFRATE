@@ -47,22 +47,22 @@ class molecule(object):
     def load_struct(self,*args,**kwargs):   
         self.mda_object=mda.Universe(*args,**kwargs)
         
-    def vec_special(self,Type,**kwargs):
-        """
-        Allows user defined vectors to be created, from a function defined in
-        vec_vuns.py (a function handle should be returned, where that function
-        returns a value dependent on the current position in the md analysis
-        trajectory. The function should return x,y,z components at the given time)
-        """
-#        if self._vf is None:
-#            self._vf=list()
-#            
-#        self._vf.append(new_fun(Type,self,**kwargs))
-        
-        """I'm joining the vec_special and frames functionality.
-        vec_special as its own attribute will eventually be removed
-        """
-        self.new_frame(Type,**kwargs)   
+#    def vec_special(self,Type,**kwargs):
+#        """
+#        Allows user defined vectors to be created, from a function defined in
+#        vec_vuns.py (a function handle should be returned, where that function
+#        returns a value dependent on the current position in the md analysis
+#        trajectory. The function should return x,y,z components at the given time)
+#        """
+##        if self._vf is None:
+##            self._vf=list()
+##            
+##        self._vf.append(new_fun(Type,self,**kwargs))
+#        
+#        """I'm joining the vec_special and frames functionality.
+#        vec_special as its own attribute will eventually be removed
+#        """
+#        self.new_frame(Type,**kwargs)   
         
     def clear_vec_special(self):
         self._vf=None
@@ -103,16 +103,25 @@ class molecule(object):
         elif len(kwargs)==0:
             print_frame_info(Type)
         else:
+            assert self._vft is not None,'Define the tensor frame first (run mol.tensor_frame)'
+            vft=self._vft()
+            nb=vft[0].shape[1] if len(vft)==2 else vft.shape[1] #Number of bonds in the tensor frame
             if self._vf is None: self._vf=list()
-            fun=new_fun(Type,self,**kwargs)
+            fun,fi=new_fun(Type,self,**kwargs)
+            if frame_index is None:frame_index=fi #Assign fi to frame_index if frame_index not provided
+            f=fun()    #Output of the vector function (test its behavior)
+            nf=f[0].shape[1] if len(f)==2 else f.shape[1]
             if fun is not None:
-                self._vf.append(new_fun(Type,self,**kwargs))    #Append the new function
-                "Load an index for this frame"
-                if frame_index is None:
-                    nb=np.shape(self._vf[-1]())[-1]
-                    self._frame_info['frame_index'].append(np.arange(nb))
-                else:
+                "Run some checks on the validity of the frame before storing it"
+                if frame_index is not None:
+                    assert frame_index.size==nb,'frame_index size does not match the size of the tensor_fun output'
+                    assert frame_index[np.logical_not(np.isnan(frame_index))].max()<nf,'frame_index contains values that exceed the number of frames'
                     self._frame_info['frame_index'].append(frame_index)
+                else:
+                    assert nf==nb,'No frame_index was provided, but the size of the tensor_fun and the frame_fun do not match'
+                    self._frame_info['frame_index'].append(np.arange(nb))
+                self._vf.append(fun)    #Append the new function
+                    
     
     def tensor_frame(self,Type='bond',label=None,**kwargs):
         """
@@ -130,16 +139,13 @@ class molecule(object):
             if Type=='bond' and 'sel3' not in kwargs:
                 kwargs['sel3']='auto'     #Define sel3 for the bond frame (define vXZ)
             
-            self._vft=new_fun(Type,self,**kwargs) #New tensor function
+            self._vft,_=new_fun(Type,self,**kwargs) #New tensor function
             if len(self._vft())!=2:
                 print('Warning: This frame only defines vZ, and not vXZ;')
                 print('In this case, correlation functions may not be properly defined')
             if label is not None:
                 self._frame_info['label']=label
-                
-            
-            
-        
+                  
     
     def clear_frames(self):
         "Clears out all informatin about frames"

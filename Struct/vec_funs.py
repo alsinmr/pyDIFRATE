@@ -41,12 +41,14 @@ def new_fun(Type,molecule,**kwargs):
     
     try:       
         fun=fun0(molecule,**kwargs)
+        frame_index=None
+        if hasattr(fun,'__len__') and len(fun)==2:fun,frame_index=fun
         fun()
     except:
         print_frame_info(Type)
         assert 0,'Frame definition failed'
         
-    return fun
+    return fun,frame_index
 
 def return_frame_info(Type=None):
     """

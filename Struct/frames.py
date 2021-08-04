@@ -296,7 +296,7 @@ def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
     if Nuc is None:
         Nuc='ch3'
     selC1,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)  
-    selC1=selC1[::3]    #Above line returns 3 copies of each carbon      
+    selC1=selC1[::3]    #Above line returns 3 copies of each carbon. Just take 1 copy     
     
     resids=molecule.mda_object.residues.resids
     sel0=molecule.mda_object.residues[np.isin(resids,selC1.resids)].atoms
@@ -311,7 +311,58 @@ def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
         v1,v2=selC1.positions-selC2.positions,selC2.positions-selC3.positions
         v1,v2=[vft.pbc_corr(v.T,box) for v in [v1,v2]]
         return v1,v2
-    return sub
+    frame_index=np.arange(len(selC1)).repeat(3)
+    return sub,frame_index
+
+def side_chain_chi(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None):
+    """
+    Returns a frame that accounts for motion arounda given bond in the side chain,
+    where we are interested in the total methyl dynamics.Ideally, the product of
+    all side chain rotations plus the backbone motion and methyl rotation yields
+    the total motion. One should provide the same selection arguments as used for
+    the methylCC frame, plus one additional argument, n_bonds, which determines
+    how many bonds away from the methyl group we define the frame. 
+    
+    Note that, due to different side chain lengths, some frames defined this way
+    will not be defined, because n_bonds is too large. For example, side_chain_chi
+    will never return a frame for an alanine group, and valine will only yield a
+    frame for n_bonds=1. This should not cause an error, but rather will result
+    in np.nan found in the returned frame index.
+    """
+    
+    if Nuc is None:
+        Nuc='ch3'
+    selC,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)  
+    selC=selC[::3]    #Above line returns 3 copies of each carbon. Just take 1 copy
+    
+    frame_index=list()
+    sel1,sel2,sel3=None,None,None
+    k=0
+    for s in selC:
+        chain=selt.get_chain(s.residue.atoms,s)[3+n_bonds:6+n_bonds]
+        if len(chain)==3:
+            frame_index.extend([k,k,k])
+            k+=1
+            if sel1 is None:
+                sel1,sel2,sel3=chain
+            else:
+                sel1=sel1+chain[0]
+                sel2=sel2+chain[1]
+                sel3=sel3+chain[2]
+        else:
+            frame_index.extend([np.nan,np.nan,np.nan])
+    frame_index=np.array(frame_index)
+    uni=molecule.mda_object
+            
+    def sub():
+        box=uni.dimensions[0:3]
+        vZ=sel1.positions-sel2.positions
+        vXZ=sel3.positions-sel2.positions
+        vZ=vft.pbc_corr(vZ.T,box)
+        vXZ=vft.pbc_corr(vXZ.T,box)
+        return vZ,vXZ
+    
+    return sub,frame_index
 
 def librations(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None,full=True):
     """

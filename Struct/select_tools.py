@@ -13,67 +13,7 @@ function calculation, frame definition, etc.
 import MDAnalysis as mda
 import numpy as np
 import numbers
-
-def search_methyl_groups(residue):
-  if not len(residue.universe.bonds):
-    get_by_dist = True  #check if bond information of the universe is available, see 'get_bonded'
-  def search(atom, exclude=[]):
-    '''searching a path from a methyl group of a residue down to the C-alpha of the residue
-    returns a list of atoms (MDA.Atom) beginning with the Hydrogens of the methyl group and continuing
-    with the carbons of the side chain
-    returns empty list if atom is not a methyl carbon'''
-    def get_bonded():
-      '''it happens, that pdb files do not contain bond information, in that case, we switch to selection
-      by string parsing'''
-      if not get_by_dist:
-        return atom.bonded_atoms
-      return residue.atoms.select_atoms("around 1.7 name "+atom.name)
-      
-    if "CA" in atom.name and len(exclude):
-      return [atom]
-    elif atom.name == "N" or atom.name == "C":
-      return []
-    connected_atoms = []
-    bonded = get_bonded()
-    if len(exclude)==0:
-      if np.sum(np.fromiter(["H" in a.name for a in bonded],dtype=bool)) == 3:
-        for a in bonded:
-          if "H" in a.name:
-            connected_atoms.append(a)
-        if not "C" in atom.name:
-          return []
-      else:
-        return []
-    connected_atoms.append(atom)
-    exclude.append(atom)
-    for a in bonded:
-      if not a in exclude:
-        next = search(a,exclude)
-        for b in next:
-           connected_atoms.append(b)
-    if len(connected_atoms)>1:
-      return connected_atoms
-    else:
-      return []
-
-  methyl_groups = []
-  for atom in residue.atoms:
-    chain = search(atom,[])
-    if len(chain):
-      #for atom in chain:
-       #print(atom)
-      #print() 
-      methyl_groups.append(chain)
-
-  #print("Im Residue",residue.resname,"wurden",len(methyl_groups),"Methylgruppen gefunden")
-  #TODO
-  #in case of two methyl groups, like in val, ile, leu, somehow decide which one should be taken
-  #for ile it might be the terminal one, so the one with the longer chain
-  #for val: check dihedrals between HA,CA,CB,CG*/HB
-  #    leu: check dihedrals between CA,CB,CG,CD*/HG1
-  #      then go the rotation way right and 'normalize' and select first or second methyl group
-  return methyl_groups
-
+  
 def sel0_filter(mol,resids=None,segids=None,filter_str=None):
     """
     Performs initial filtering of all atoms in an MDA Universe. Filtering may
@@ -261,39 +201,110 @@ def protein_defaults(Nuc,mol,resids=None,segids=None,filter_str=None):
         sel1=sel0.select_atoms('name CA and around 1.5 (name HA or name HA2)')
         sel2=sel0.select_atoms('(name HA or name HA2) and around 1.5 name CA')
         print('Warning: selecting HA2 for glycines. Use manual selection to get HA1 or both bonds')
-    elif Nuc[:3].lower()=='ivl' or Nuc.lower()=='ch3':
-        if Nuc[-1].lower()=='t' or Nuc[-2].lower()=='t':    #Truncated list- only one C per residue
-            sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG2) or \
-                                         (resname ILE ile Ile and name CG2) or \
-                                         (resname LEU leu Leu and name CD1)')
-        if Nuc[-1].lower()=='r' or Nuc[-1].lower()=='l':
-            sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG{0}) or \
-                                         (resname ILE ile Ile and name CG2) or \
-                                         (resname LEU leu Leu and name CD{0})'\
-                                            .format('2' if Nuc[-1].lower()=='l' else '1'))
-            
-        if Nuc[:4].lower()=='ivla':
-            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name C*')
-            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name H*')
-        elif Nuc[:3].lower()=='ivl':
-            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name C*')
-            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name H*')
-        else:
-            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name C*')
-            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name H*')
-        ids=list()
-        for s in sel0C:
-            if (sel0H+sel0C).select_atoms('name H* and around 1.15 atom {0} {1} {2}'.format(s.segid,s.resid,s.name)).n_atoms==3:
-                ids.append(s.id)
-        sel1=sel0[np.isin(sel0.ids,ids)]
-        sel1=sel1[np.repeat([np.arange(sel1.n_atoms)],3,axis=1).reshape(sel1.n_atoms*3)]
-        sel2=(sel1+sel0H).select_atoms('name H* and around 1.15 name C*')
+    elif Nuc[:3].lower()=='ivl' or Nuc[:3].lower()=='ch3':
         
-        if Nuc[-1]=='1':
+        
+        if Nuc[:4].lower()=='ivla':
+            filter_str='resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala'
+        elif Nuc[:3].lower()=='ivl':
+            filter_str='resname ILE Ile ile VAL val Val LEU Leu leu'
+        select=None
+        if 't' in Nuc.lower() or 'l' in Nuc.lower():select='l'
+        if 'r' in Nuc.lower():select='r'
+        
+        sel1,sel2=find_methyl(mol,resids,segids,filter_str,select=select)
+        
+#        
+#        if Nuc[-1].lower()=='t' or Nuc[-2].lower()=='t':    #Truncated list- only one C per residue
+#            sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG2) or \
+#                                         (resname ILE ile Ile and name CG2) or \
+#                                         (resname LEU leu Leu and name CD1)')
+#        if Nuc[-1].lower()=='r' or Nuc[-1].lower()=='l':
+#            sel0=sel0-sel0.select_atoms('(resname VAL val Val and name CG{0}) or \
+#                                         (resname ILE ile Ile and name CG2) or \
+#                                         (resname LEU leu Leu and name CD{0})'\
+#                                            .format('2' if Nuc[-1].lower()=='l' else '1'))
+#            
+#        if Nuc[:4].lower()=='ivla':
+#            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name C*')
+#            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala and name H*')
+#        elif Nuc[:3].lower()=='ivl':
+#            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name C*')
+#            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu and name H*')
+#        else:
+#            sel0C=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name C*')
+#            sel0H=sel0.select_atoms('resname ILE Ile ile VAL val Val LEU Leu leu ALA Ala ala MET Met met THR Thr thr and name H*')
+#        ids=list()
+#        for s in sel0C:
+#            if (sel0H+sel0C).select_atoms('name H* and around 1.15 atom {0} {1} {2}'.format(s.segid,s.resid,s.name)).n_atoms==3:
+#                ids.append(s.id)
+#        sel1=sel0[np.isin(sel0.ids,ids)]
+#        sel1=sel1[np.repeat([np.arange(sel1.n_atoms)],3,axis=1).reshape(sel1.n_atoms*3)]
+#        sel2=(sel1+sel0H).select_atoms('name H* and around 1.15 name C*')
+        
+        if '1' in Nuc:
             sel1=sel1[::3]
             sel2=sel2[::3]
           
     return sel1,sel2
+
+def find_methyl(mol,resids=None,segids=None,filter_str=None,select=None):
+    """
+    Finds methyl groups in a protein for a list of residues. Standard selection
+    options are used. 
+    
+    select may be set to 'l' or 'r' (left or right), which will select one of the
+    two methyl groups on valine or leucine, depending on their stereochemistry. In
+    this mode, only the terminal isoleucine methyl group will be returned.
+    
+    To just get rid of the gamma methyl on isoleucine, set select to 'ile_d'
+    """
+    
+    sel0=sel0_filter(mol,resids,segids,filter_str)
+    selC0,selH0=sel0.select_atoms('type C'),sel0.select_atoms('type H')
+    index=np.all([b.types=='H' for b in find_bonded(selC0,selH0,n=3,d=1.5)],axis=0)
+    selH=find_bonded(selC0[index],sel0=selH0,n=3,d=1.5)
+
+    selH=np.array(selH).T
+    selC=selC0[index]
+    
+    "First, we delete the gamma of isoleucine if present"
+    if select is not None:
+        ile=[s.resname.lower()=='ile' for s in selC] #Find the isoleucines
+        exclude=[s.sum() for s in selH[ile]]
+        nxt=find_bonded(selC[ile],sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
+        keep=np.sum([b.types=='H' for b in find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2)],axis=0)==2
+        index=np.ones(len(selC),dtype=bool)
+        index[ile]=keep
+        selC,selH=selC[index],selH[index]
+    
+    if select[0].lower() in ['l','r']:
+        val_leu=[s.resname.lower()=='val' or s.resname.lower()=='leu' for s in selC]
+        exclude=[s.sum() for s in selH[val_leu][::2]]
+        nxt0=find_bonded(selC[val_leu][::2],sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
+        exclude=np.array([selC[val_leu][::2],selC[val_leu][1::2]]).T
+        exclude=[e.sum() for e in exclude]
+        nxt1=find_bonded(nxt0,sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
+        nxtH=find_bonded(nxt0,sel0=sel0,exclude=exclude,n=1,sort='massi')[0]
+        
+        cross=np.cross(nxtH.positions-nxt0.positions,nxt1.positions-nxt0.positions)
+        dot0=(cross*selC[val_leu][::2].positions).sum(1)
+        dot1=(cross*selC[val_leu][1::2].positions).sum(1)
+        keep=np.zeros(np.sum(val_leu),dtype=bool)
+        keep[::2]=dot0>=dot1
+        keep[1::2]=dot0<dot1
+        if select[0].lower()=='l':keep=np.logical_not(keep)
+        
+        index=np.ones(len(selC),dtype=bool)
+        index[val_leu]=keep
+        selC,selH=selC[index],selH[index]
+        
+    selH=np.concatenate(selH).sum()
+    selC=np.sum(np.repeat(selC,3))    
+    
+    return selC,selH
+    
+    
 
 def find_bonded(sel,sel0=None,exclude=None,n=3,sort='dist',d=1.65):
     """
@@ -417,4 +428,49 @@ def peptide_plane(mol,resids=None,segids=None,filter_str=None,full=True):
     else:
         return selN,selCm1,selOm1
     
-        
+
+def get_chain(sel0,atom,exclude=None):
+    if exclude is None:exclude=[]
+    '''searching a path from a methyl group of a residue down to the C-alpha of the residue
+    returns a list of atoms (MDA.Atom) beginning with the Hydrogens of the methyl group and continuing
+    with the carbons of the side chain
+    returns empty list if atom is not a methyl carbon'''
+    def get_bonded():
+        '''it happens, that pdb files do not contain bond information, in that case, we switch to selection
+        by string parsing'''
+        return np.sum(find_bonded([atom],sel0,n=4,d=1.7))
+    
+    if 'c'==atom.name.lower() and len(exclude):
+      return [atom]
+    elif atom.name == "N":
+      return []
+    connected_atoms = []
+    bonded = get_bonded()
+    if len(exclude)==0:
+      if np.sum(np.fromiter(["H" in a.name for a in bonded],dtype=bool)) == 3:
+        for a in bonded:
+          if "H" in a.name:
+            connected_atoms.append(a)
+        if not "C" in atom.name:
+          return []
+      else:
+        return []
+    connected_atoms.append(atom)
+    exclude.append(atom)
+    for a in bonded:
+      if not a in exclude:
+        nxt = get_chain(sel0,a,exclude)
+        for b in nxt:
+           connected_atoms.append(b)
+    if len(connected_atoms)>1:
+      return connected_atoms
+    else:
+      return []
+
+def search_methyl_groups(residue):
+    methyl_groups = []
+    for atom in residue.atoms:
+        chain = get_chain(residue,atom,[])
+        if len(chain):
+            methyl_groups.append(chain)
+    return methyl_groups
