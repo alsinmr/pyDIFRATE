@@ -4,17 +4,17 @@ try:
 	import os
 	import numpy as np
 
-	di=np.array([2308,2310,2312,2314,2318,2321,2322,2323,2324,2325,\
-		2326]).astype("uint32")
+	di=np.array([2652,2654,2656,2658,2662,2665,2666,2667,2668,2669,\
+		2670]).astype("uint32")
 
-	ids=np.array([2321,2322,2323,2324]).astype("uint32")
+	ids=np.array([2665,2666,2667,2668]).astype("uint32")
 
-	r=np.array([3.898907,3.898907,3.898907,3.898907]).astype("float")
+	r=np.array([0.901248,0.901248,0.901248,0.901248]).astype("float")
 
-	clr=np.array([[157,109,91,255],
-		[157,109,91,255],
-		[157,109,91,255],
-		[157,109,91,255]]).astype("uint8")
+	clr=np.array([[209,179,139,255],
+		[209,179,139,255],
+		[209,179,139,255],
+		[209,179,139,255]]).astype("uint8")
 	mdl=session.open_command.open_data("/Users/albertsmith/Documents/Dynamics/MF_MD_theory/Figures/python/ILE.cxs")[0]
 	session.models.add(mdl)
 	rc(session,"~display")
@@ -39,10 +39,10 @@ try:
 	clr0[ids]=clr
 	setattr(atoms,"radii",r0)
 	setattr(atoms,"colors",clr0)
-	rc(session,"")
-	rc(session,"save /Users/albertsmith/Documents/Dynamics/MF_MD_theory/Figures/methyl_rot/fr4_det5.png width 600 height 500 supersample 2 transparentBackground true")
+	rc(session,"transparency ~@CD,HD1,HD2,HD3 70 atoms")
+	rc(session,"save /Users/albertsmith/Documents/Dynamics/MF_MD_theory/Figures/methyl_rot/fr0_det2.png width 600 height 500 supersample 2 transparentBackground true")
 except:
 	pass
 finally:
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script651731.py")
+	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script879884.py")
 	rc(session,"exit")

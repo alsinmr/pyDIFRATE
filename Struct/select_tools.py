@@ -278,14 +278,15 @@ def find_methyl(mol,resids=None,segids=None,filter_str=None,select=None):
     "First, we delete the gamma of isoleucine if present"
     if select is not None:
         ile=[s.resname.lower()=='ile' for s in selC] #Find the isoleucines
-        exclude=[s.sum() for s in selH[ile]]
-        nxt=find_bonded(selC[ile],sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
-        keep=np.array([np.sum([b0.name[0]=='H' for b0 in b])==2 \
-                for b in np.array(find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2,sort='massi')).T])
-#        keep=np.sum([b.types=='H' for b in find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2)],axis=0)==2
-        index=np.ones(len(selC),dtype=bool)
-        index[ile]=keep
-        selC,selH=selC[index],selH[index]
+        if any(ile):
+            exclude=[s.sum() for s in selH[ile]]
+            nxt=find_bonded(selC[ile],sel0=sel0,exclude=exclude,n=1,sort='cchain')[0]
+            keep=np.array([np.sum([b0.name[0]=='H' for b0 in b])==2 \
+                    for b in np.array(find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2,sort='massi')).T])
+    #        keep=np.sum([b.types=='H' for b in find_bonded(nxt,sel0=sel0,exclude=selC[ile],n=2)],axis=0)==2
+            index=np.ones(len(selC),dtype=bool)
+            index[ile]=keep
+            selC,selH=selC[index],selH[index]
     
     if select is not None and (select[0].lower() in ['l','r']):
         val_leu=[s.resname.lower()=='val' or s.resname.lower()=='leu' for s in selC]

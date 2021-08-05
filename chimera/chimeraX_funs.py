@@ -263,7 +263,7 @@ def sel_indices(mol,disp_mode,mode='all'):
             for s1,s2 in zip(mol.sel1,mol.sel2):
                 s=s1 if s1.type=='C' else s2
                 sel0=uni.residues[s.resindex].atoms
-                sel=selt.find_bonded(s,sel0=sel0,sort='massi',n=4)
+                sel=selt.find_bonded(s,sel0=sel0,sort='massi',n=3)
                 ids.append([uni2pdb_index(s.id,mol.pdb_id)[0]])
                 ids[-1].extend(uni2pdb_index([s1[0].id for s1 in sel],mol.pdb_id))
         elif disp_mode.lower()=='equiv':

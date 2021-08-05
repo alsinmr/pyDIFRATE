@@ -261,7 +261,6 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
     "Initial calculations/settings required if using symmetry for calculations"
     if mode.lower()=='sym' or 'auto' in mode.lower():
         if np.any(ri[[2,3,4,5]]):
-            print(ri[[2,3,4,5]])
             ri[[2,3,4,5]]=False
             if mode.lower()=='sym':ri[1]=False
             print('Warning: Individual components of the correlation functions or tensors will not be returned in auto or sym mode')
@@ -796,7 +795,8 @@ def sym_full_swap(vZ,threshold=0,A_0m_PASinf=None,vXZ=None,nuZ_F=None,nuXZ_F=Non
         if np.any(nsym):
             print('Using full calculation for {0} correlation functions'.format(nsym.sum()))
             out_full=Ct_D2inf(**full_args,cmpt=cmpt,mode='ct',index=index)
-        ct=np.zeros([5,sym.shape[0],index[-1]+1],dtype=complex)
+        nt=out_sym.shape[-1] if np.any(sym) else out_full.shape[-1]
+        ct=np.zeros([5,sym.shape[0],nt],dtype=complex)
         if np.any(sym):ct[2,sym]=out_sym
         if np.any(nsym):ct[:,nsym]=out_full
 

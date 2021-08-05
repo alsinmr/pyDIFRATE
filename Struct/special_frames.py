@@ -60,6 +60,102 @@ import numpy as np
 import pyDIFRATE.Struct.vf_tools as vft
 import pyDIFRATE.Struct.select_tools as selt
 
+def hop_setup(uni,sel1,sel2,sel3,sel4,ntest=1000):
+    """
+    Function that determines where the energy minima for a set of bonds can be
+    found. Use for chi_hop and hop_3site.
+    """
+    v12,v23,v34=list(),list(),list()
+    box=uni.dimensions
+    traj=uni.trajectory
+    step=np.floor(traj.n_frames/ntest).astype(int)
+    
+    for _ in traj[::step]:
+        v12.append(vft.pbc_corr((sel1.positions-sel2.positions).T,box[:3]))
+        v23.append(vft.pbc_corr((sel2.positions-sel3.positions).T,box[:3]))
+        v34.append(vft.pbc_corr((sel3.positions-sel4.positions).T,box[:3]))
+    
+    traj[0] #Sometimes, leaving the trajectory at the end can create other errors...
+    
+    v12,v23,v34=[np.moveaxis(np.array(v),0,-1) for v in [v12,v23,v34]]
+
+    v12a=vft.applyFrame(v12,nuZ_F=v23,nuXZ_F=v34) #Rotate so that 23 is on z-axis, 34 in XY-plane
+    
+    v0z=vft.norm(np.array([np.sqrt(v12a[0]**2+v12a[1]**2).mean(axis=-1),\
+                           np.zeros(v12a.shape[1]),v12a[2].mean(axis=-1)]))    #Mean projection onto xz
+    
+    v12a[2]=0               #Project v12 onto xy-plane
+    v12a=vft.norm(v12a)
+    i=np.logical_and(v12a[0]<.5,v12a[1]>0)          #For bonds not between -60 and 60 degrees
+    v12a[:,i]=vft.Rz(v12a[:,i],-.5,-np.sqrt(3)/2)    #we rotate +/- 120 degrees to align them all
+    i=np.logical_and(v12a[0]<.5,v12a[1]<=0)
+    v12a[:,i]=vft.Rz(v12a[:,i],-.5,np.sqrt(3)/2)
+    
+    v0xy=vft.norm(v12a.mean(-1))    #This is the average direction of v12a (in xy-plane)
+    theta=np.arctan2(v0xy[1],v0xy[0])
+    """The direction of the frame follows sel2-sel3, sel3-sel4, but sel1-sel2 
+    is forced to align with a vector in vr"""
+    vr=np.array([vft.Rz(v0z,k+theta) for k in [0,2*np.pi/3,4*np.pi/3]])  #Reference vectors (separated by 120 degrees)
+    "axis=1 of vr is x,y,z"    
+    
+    return vr
+
+def chi_hop(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None,ntest=1000):
+    """
+    Determines contributions to motion due to 120 degree hops across three sites
+    for some bond within a side chain. Motion of the frame will be the three site
+    hoping plus any outer motion (could be removed with additional frames), and
+    motion within the frame will be all rotation around the bond excluding 
+    hopping.
+    
+    One provides the same arguments as side_chain_chi, where we specify the
+    nucleus of interest (ch3,ivl,ivla,ivlr,ivll, etc.), plus any other desired
+    filters. We also provide n_bonds, which will determine how many bonds away
+    from the methyl group (only methyl currently implemented) we want to observe
+    the motion (usually 1 or 2). 
+    """
+
+    "First we get the selections, and simultaneously determine the frame_index"    
+    if Nuc is None:
+        Nuc='ch3'
+    selC,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)  
+    selC=selC[::3]    #Above line returns 3 copies of each carbon. Just take 1 copy
+    
+    frame_index=list()
+    sel1,sel2,sel3=None,None,None
+    k=0
+    for s in selC:
+        chain=selt.get_chain(s,s.residue.atoms)[2+n_bonds:6+n_bonds]
+        if len(chain)==4:
+            frame_index.extend([k,k,k])
+            k+=1
+            if sel1 is None:
+                sel1,sel2,sel3,sel4=chain[0:1],chain[1:2],chain[2:3],chain[3:4]
+            else:
+                sel1=sel1+chain[0]
+                sel2=sel2+chain[1]
+                sel3=sel3+chain[2]
+                sel4=sel4+chain[4]
+        else:
+            frame_index.extend([np.nan,np.nan,np.nan])
+    frame_index=np.array(frame_index)
+    
+    "Next, we sample the trajectory to get an estimate of the energy minima of the hopping"
+    #Note that we are assuming that minima are always separated by 120 degrees
+    
+    vr=hop_setup(molecule.mda_object,sel1,sel2,sel3,sel4,ntest)
+    
+    box=molecule.mda_object.dimensions
+    def sub():
+        v12s,v23s,v34s=[vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
+                     for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
+        v12s=vft.norm(v12s)
+        sc=vft.getFrame(v23s,v34s)
+        v12s=vft.R(v12s,*vft.pass2act(*sc))    #Into frame defined by v23,v34
+        i=np.argmax((v12s*vr).sum(axis=1),axis=0)   #Index of best fit to reference vectors (product is cosine, which has max at nearest value)
+        v12s=vr[i,:,np.arange(v12s.shape[1])] #Replace v12 with one of the three reference vectors
+        return vft.R(v12s.T,*sc),v23s  #Rotate back into original frame
+    return sub,frame_index
 
 def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
                Nuc=None,resids=None,segids=None,filter_str=None,ntest=1000):
@@ -113,38 +209,7 @@ def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
     if not(sel4):
         sel4=selt.find_bonded(sel3,sel0,exclude=sel2,n=1,sort='cchain',d=1.65)[0]
         
-    v12,v23,v34=list(),list(),list()
-    traj=uni.trajectory
-    step=np.floor(traj.n_frames/ntest).astype(int)
-    box=molecule.mda_object.dimensions
-    
-    for _ in traj[::step]:
-        v12.append(vft.pbc_corr((sel1.positions-sel2.positions).T,box[:3]))
-        v23.append(vft.pbc_corr((sel2.positions-sel3.positions).T,box[:3]))
-        v34.append(vft.pbc_corr((sel3.positions-sel4.positions).T,box[:3]))
-
-    molecule.mda_object.trajectory[0] #Sometimes, leaving the trajectory at the end can create other errors...
-    
-    v12,v23,v34=[np.moveaxis(np.array(v),0,-1) for v in [v12,v23,v34]]
-    
-    v12a=vft.applyFrame(v12,nuZ_F=v23,nuXZ_F=v34) #Rotate so that 23 is on z-axis, 34 in XY-plane
-    
-    v0z=vft.norm(np.array([np.sqrt(v12a[0]**2+v12a[1]**2).mean(axis=-1),\
-                           np.zeros(v12a.shape[1]),v12a[2].mean(axis=-1)]))    #Mean projection onto xz
-    
-    v12a[2]=0               #Project v12 onto xy-plane
-    v12a=vft.norm(v12a)
-    i=np.logical_and(v12a[0]<.5,v12a[1]>0)          #For bonds not between -60 and 60 degrees
-    v12a[:,i]=vft.Rz(v12a[:,i],-.5,-np.sqrt(3)/2)    #we rotate +/- 120 degrees to align them all
-    i=np.logical_and(v12a[0]<.5,v12a[1]<=0)
-    v12a[:,i]=vft.Rz(v12a[:,i],-.5,np.sqrt(3)/2)
-    
-    v0xy=vft.norm(v12a.mean(-1))    #This is the average direction of v12a (in xy-plane)
-    theta=np.arctan2(v0xy[1],v0xy[0])
-    """The direction of the frame follows sel2-sel3, sel3-sel4, but sel1-sel2 
-    is forced to align with a vector in vr"""
-    vr=np.array([vft.Rz(v0z,k) for k in [0,2*np.pi/3,4*np.pi/3]])  #Reference vectors (separated by 120 degrees)
-    "axis=1 of vr is x,y,z"
+    vr=hop_setup(molecule.mda_object,sel1,sel2,sel3,sel4,ntest)
     
     box=uni.dimensions
     def sub():
@@ -155,7 +220,7 @@ def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
         v12s=vft.R(v12s,*vft.pass2act(*sc))    #Into frame defined by v23,v34
         i=np.argmax((v12s*vr).sum(axis=1),axis=0)   #Index of best fit to reference vectors (product is cosine, which has max at nearest value)
         v12s=vr[i,:,np.arange(v12s.shape[1])] #Replace v12 with one of the three reference vectors
-        return vft.R(v12s.T,*sc)  #Rotate back into original frame
+        return vft.R(v12s.T,*sc),v23s  #Rotate back into original frame
     
     return sub
     
