@@ -136,7 +136,8 @@ class FrameObj():
     
     @property
     def description_of_terms(self):
-        out="""        ct_finF:
+        out="""n=number of frames, nr=number of residues, nt=number of time points
+        ct_finF:
               n x nr x nt array of the real correlation functions for each
               motion (after scaling by residual tensor of previous motion)
               ct_m0_finF:
@@ -263,7 +264,9 @@ class FrameObj():
         if mode=='auto':self.return_index.set2auto()
         if mode=='sym':self.return_index.set2sym()
         
-        include=np.arange(len(self.vf),dtype=int) if include is None else np.argwhere(include,dtype=bool).squeeze()
+        assert include is  None or len(include)==len(self.vf),\
+        "include index must have the same length ({0}) as the number of frames({1})".format(len(include),len(self.vf))
+        include=np.ones(len(self.vf),dtype=bool) if include is None else np.array(include,dtype=bool)
         return_index=ReturnIndex(return_index) if return_index else self.return_index
         self.return_index=return_index
         
@@ -275,18 +278,16 @@ class FrameObj():
             for k in range(10):
                 if return_index[k]!=self.__return_index[k]:run=True        
         
-        assert len(include)==len(self.vf),"include index must have the same length as the number of frames"
-        
         if run:
             self.__return_index=return_index.copy()
             "Here, we take out frames that aren't used"
             vecs=self.vecs.copy()
             vecs['frame_index']=self.vecs['frame_index'].copy()
-            for k,v in enumerate(include):
-                if not(v):
-                    vecs['frame_index'][k]=vecs['frame_index'][k].astype('float64')
-                    vecs['frame_index'][k][:]=np.nan
-            
+            vecs['v']=self.vecs['v'].copy()
+            for k,v in zip(range(len(include)-1,-1,-1),include[::-1]):
+                if v:
+                    vecs['frame_index'].pop(k)
+                    vecs['v'].pop(k)
             out=frames2ct(v=vecs,return_index=return_index,mode=mode)
             self.mode=mode
             self.include=include
