@@ -559,6 +559,7 @@ class detect(mdl.model):
                     
                     
                     if rhoz[k,0]>0.95*np.max(rhoz[k,:]):
+                    
                         "Calculation for the first detection vector"
     
                         if np.size(maxi)>=2 & np.size(mini)>=2:
@@ -609,7 +610,6 @@ class detect(mdl.model):
             except:
                 pass
 
-   
         "Save the results into the detect object"
 #        self.r0=self.__r
         if bond is None:
