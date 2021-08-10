@@ -6,16 +6,322 @@ Created on Tue Oct  6 10:46:10 2020
 @author: albertsmith
 """
 
-#import os
-#curdir=os.getcwd()
+
 import numpy as np
 import pyDIFRATE.Struct.vf_tools as vft
 from pyDIFRATE.iRED.fast_index import trunc_t_axis
 from pyDIFRATE.iRED.fast_funs import get_count,printProgressBar
-#os.chdir('../data')
 from pyDIFRATE.data.data_class import data
-#os.chdir(curdir)
+from pyDIFRATE.Struct.vec_funs import new_fun,print_frame_info
 
+
+class ReturnIndex():
+    flags={'ct_finF':True,'ct_m0_finF':False,'ct_0m_finF':False,'ct_0m_PASinF':False,\
+            'A_m0_finF':False,'A_0m_finF':False,'A_0m_PASinF':False,\
+            'ct_prod':True,'ct':True,'S2':True}
+    for k in flags.keys():
+        locals()[k]=property(lambda self,k=k:self.flags[k]) #Dynamically set these properties
+    
+    def __init__(self,ret_in=None,**kwargs):
+        flags=self.flags
+                
+
+        if ret_in is not None:
+            if hasattr(ret_in,'return_index') and len(ret_in.return_index)==10:
+                self=ret_in
+            else:
+                assert isinstance(ret_in,list) and len(ret_in)==10,'ret_in must be a list of 10 elements'
+                for k,v in zip(flags.keys(),ret_in):
+                    flags[k]=bool(v)
+                
+        for k,v in kwargs.items():
+            if k in flags.keys():
+                flags[k]=v
+        
+        self.flags=flags.copy() #This makes the class and instance values independent
+    
+    def __getitem__(self,k):
+        if isinstance(k,int):
+            return [v for v in self.flags.values()][k]
+        else:
+            return self.flags[k]
+    
+    def __repr__(self):
+        out=''
+        for k,v in self.flags.items():
+            out+=k+': {0}'.format(v)+'\n'
+        return out
+    def __str__(self):
+        return self.__repr__()
+    
+    def copy(self):
+        return ReturnIndex(**self.flags)
+        
+    @property            
+    def return_index(self):
+        """
+        Returns an array of logicals determining which terms to calculate
+        """
+        return np.array([v for v in self.flags.values()],dtype=bool)
+    
+    @property
+    def calc_ct_m0_finF(self):
+        "Determines if we should calculate ct_m0_finF"
+        if self.ct_finF or self.ct_m0_finF or self.ct_0mPASinF or self.ct_prod:return True
+        return False
+    @property
+    def calc_A_m0_finF(self):
+        "Determines if we should calculate A_m0_finF"
+        if self.A_m0_finF or self.A_0m_finF:return True
+        return False
+    @property
+    def calc_A_0m_PASinF(self):
+        "Determines if we should calculate A_m0_PASinF"
+        if self.ct_finF or self.ct_prod or self.A_0m_PASinF:return True
+        return False
+    @property
+    def calc_ct_finF(self):
+        "Determines if we should calculate ct_finF"
+        if self.ct_finF or self.ct_prod:return True
+        return False
+    @property
+    def calc_any_ct(self):
+        "Determines if any correlation functions should be calculated"
+        if self.ct_finF or self.ct_m0_finF or self.ct_0m_finF or self.ct_0m_PASinF or \
+            self.ct_prod or self.ct:return True
+        return False
+    
+    def set2sym(self):
+        "De-activates the storage of terms that cannot by calculated in symmetric mode"  
+        self.set2auto()
+        self.flags['ct_m0_finF']=False
+    
+    def set2auto(self):
+        "De-activates the storage of terms that cannot by calculated in auto mode"
+        if self.ct_0m_finF or self.ct_0m_PASinF or self.A_m0_finF or self.A_m0_finF:
+            print('Warning: Individual components of the correlation functions or tensors will not be returned in auto or sym mode')
+        self.flags.update({'ct_0m_finF':False,'ct_0m_PASinF':False,\
+                           'A_m0_finF':False,'A_0m_finF':False})           
+        
+        
+
+class FrameObj():
+    def __init__(self,molecule):
+        self.molecule=molecule
+        self.vft=None
+        self.vf=list()
+        self.frame_info={'frame_index':list(),'label':None}
+        self.defaults={'t0':0,'tf':-1,'dt':None,'n':10,'nr':10,'mode':'auto',\
+                       'squeeze':True}
+        self.terms={'ct_finF':True,'ct_m0_finF':False,'ct_0mPASinF':False,\
+                    'A_m0_finF':True,'A_0m_finF':True,'A_0m_PASinF':True,\
+                    'ct_prod':True,'ct':True,'S2':True}
+        self.__frames_loaded=False #Flag to check if frames currently loaded
+        self.include=None #Record of which frames were included in calculation
+        self.mode=self.defaults['mode']
+        
+        self.return_index=ReturnIndex(**self.terms)   
+        self.t=None
+        self.Ct={}
+        self.A={}
+        self.S2=None
+    
+    "I'd like to get rid of these in a later iteration. These were hidden as part of the molecule object..."
+    @property
+    def _vft(self):return self.vft
+    @property
+    def _vf(self):return self.vf
+    @property
+    def _frame_info(self):return self.frame_info
+    
+    @property
+    def description_of_terms(self):
+        out="""        ct_finF:
+              n x nr x nt array of the real correlation functions for each
+              motion (after scaling by residual tensor of previous motion)
+              ct_m0_finF:
+              5 x n x nr x nt array, with the individual components of each
+              motion (f in F)
+        ct_0m_finF:
+              5 x n x nr x nt array, with the individual components of each
+              motion (f in F)
+        ct_0m_PASinF:
+              5 x n x nr x nt array, with the individual components of each
+              motion (PAS in F)
+        A_m0_finF:
+              Value at infinite time of ct_m0_finF
+        A_0m_finF:
+              Value at infinite time of ct_0m_finF
+        A_0m_PASinF:
+              Value at infinite time of ct_0m_PASinF 
+        ct_prod:
+              nr x nt array, product of the elements ct_finF
+        ct:
+              Directly calculated correlation function of the total motion
+        S2:
+              Final value of ct
+        """
+        print(out)
+    
+    
+    def new_frame(self,Type=None,frame_index=None,**kwargs):
+        """
+        Create a new frame, where possible frame types are found in vec_funs.
+        Note that if the frame function produces a different number of reference
+        frames than there are bonds (that is, vectors produced by the tensor 
+        frame), then a frame_index is required, to map the frame to the appropriate
+        bond. The length of the frame_index should be equal to the number of 
+        vectors produced by the tensor frame, and those elements should have 
+        values ranging from 0 to one minus the number of frames defined by this
+        frame. 
+        
+        To get a list of all implemented frames and their arguments, call this
+        function without any arguments. To get arguments for a particular frame,
+        call this function with only Type defined.
+        """
+        mol=self.molecule
+        if Type is None:
+            print_frame_info()
+        elif len(kwargs)==0:
+            print_frame_info(Type)
+        else:
+            assert self.vft is not None,'Define the tensor frame first (run mol.tensor_frame)'
+            vft=self.vft()
+            nb=vft[0].shape[1] if len(vft)==2 else vft.shape[1] #Number of bonds in the tensor frame
+            fun,fi=new_fun(Type,mol,**kwargs)
+            if frame_index is None:frame_index=fi #Assign fi to frame_index if frame_index not provided
+            f=fun()    #Output of the vector function (test its behavior)
+            nf=f[0].shape[1] if len(f)==2 else f.shape[1]
+            if fun is not None:
+                "Run some checks on the validity of the frame before storing it"
+                if frame_index is not None:
+                    assert frame_index.size==nb,'frame_index size does not match the size of the tensor_fun output'
+                    assert frame_index[np.logical_not(np.isnan(frame_index))].max()<nf,'frame_index contains values that exceed the number of frames'
+                    self.frame_info['frame_index'].append(frame_index)
+                else:
+                    assert nf==nb,'No frame_index was provided, but the size of the tensor_fun and the frame_fun do not match'
+                    self.frame_info['frame_index'].append(np.arange(nb))
+                self._vf.append(fun)    #Append the new function
+                self.__frames_loaded=False
+                self.__return_index=None    #This is the return index that was actually used
+    
+    def tensor_frame(self,Type='bond',label=None,**kwargs):
+        """
+        Creates a frame that defines the NMR tensor orientation. Usually, this
+        is the 'bond' frame (default Type). However, other frames may be used
+        in case a dipole coupling is not the relevant interaction. The chosen
+        frame should return vectors defining both a z-axis and the xz-plane. A
+        warning will be returned if this is not the case.
+        """
+        mol=self.molecule
+        if Type is None:
+            print_frame_info()
+        elif len(kwargs)==0:
+            print_frame_info(Type)
+        else:
+            if Type=='bond' and 'sel3' not in kwargs:
+                kwargs['sel3']='auto'     #Define sel3 for the bond frame (define vXZ)
+            
+            self.vft,_=new_fun(Type,mol,**kwargs) #New tensor function
+            if len(self.vft())!=2:
+                print('Warning: This frame only defines vZ, and not vXZ;')
+                print('In this case, correlation functions may not be properly defined')
+            if label is not None:
+                self.frame_info['label']=label
+            self.__frames_loaded=False
+    
+    def clear_frames(self):
+        """
+        Deletes all stored frame functions
+        """
+        self.vft=None
+        self.vf=list()
+        self.frame_info={'frame_index':list(),'label':None}
+    
+    def load_frames(self,t0=0,tf=-1,n=10,nr=10,dt=None,index=None):
+        """
+        Sweeps through the trajectory and loads all frame and tensor vectors, 
+        storing the result in vecs
+        """
+        tf=self.molecule.mda_object.trajectory.n_frames if tf==-1 or tf is None else tf
+        index=trunc_t_axis(tf-t0,n,nr)+t0
+        if self.__frames_loaded:
+            if np.all(self.vecs['index']==index):return
+        self.vecs=mol2vec(self,dt=dt,index=index)
+        self.__frames_loaded=True
+        self.include=None   #If new frames loaded, we should re-set what frames used for correlation functions
+        
+    def frames2ct(self,mode='auto',return_index=None,include=None):
+        """
+        Converts vectors loaded by load_frames into correlation functions and
+        tensors. One may specify the use of only specific frames by setting the
+        variable 'include', which should be a list of logicals the same length
+        as the number of frames (length of self.vf)
+        """
+        if not(self.__frames_loaded):self.load_frames() #Load the frames if not already done
+        
+        if mode=='auto':self.return_index.set2auto()
+        if mode=='sym':self.return_index.set2sym()
+        
+        include=np.arange(len(self.vf),dtype=int) if include is None else np.argwhere(include,dtype=bool).squeeze()
+        return_index=ReturnIndex(return_index) if return_index else self.return_index
+        self.return_index=return_index
+        
+        "In the next lines, we determine whether the function needs to be run"
+        run=False
+        if self.include is None or np.logical_not(np.all(include==self.include)):run=True #Not run before/new frames loaded/different frames used
+        if not(self.mode==mode):run=True
+        if self.__return_index is not None:
+            for k in range(10):
+                if return_index[k]!=self.__return_index[k]:run=True        
+        
+        assert len(include)==len(self.vf),"include index must have the same length as the number of frames"
+        
+        if run:
+            self.__return_index=return_index.copy()
+            "Here, we take out frames that aren't used"
+            vecs=self.vecs.copy()
+            vecs['frame_index']=self.vecs['frame_index'].copy()
+            for k,v in enumerate(include):
+                if not(v):
+                    vecs['frame_index'][k]=vecs['frame_index'][k].astype('float64')
+                    vecs['frame_index'][k][:]=np.nan
+            
+            out=frames2ct(v=vecs,return_index=return_index,mode=mode)
+            self.mode=mode
+            self.include=include
+            
+            self.ct_out=out
+            self.Ct={}
+            self.A={}
+            self.t=None
+            self.S2=None
+            for k in out.keys():
+                if k[:2]=='ct':self.Ct[k]=out[k]
+                elif k[:1]=='A':self.A[k]=out[k]
+                elif k=='t':self.t=out[k]
+                elif k=='S2':self.S2=out[k]
+                
+    def frames2data(self,mode='auto',return_index=None,include=None):
+        """
+        Transfers the frames results to a list of data objects
+        """
+        self.frames2ct(mode=mode,return_index=return_index,include=include)
+        if self.frame_info['label'] is not None:
+            label=self.frame_info['label']
+        elif self.molecule.label is not None and len(self.molecule.label)==self.ct_out['ct'].shape[0]:
+            label=self.molecule.label
+        else:
+            label=np.arange(self.ct_out['ct'].shape[0])
+        out=ct2data(self.ct_out)
+        for o in out:
+            o.label=label
+            o.sens.molecule=self.molecule
+            o.detect.molecule=self.molecule
+                
+        return out
+        
+    
 
 #%% Output functions
 "This is the usual output– go from a molecule object to a data object"
@@ -193,7 +499,7 @@ def apply_fr_index(v,squeeze=True):
 
 
 "This function handles the organization of the output, determines which terms to calculate"
-def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,dt=None):
+def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,t0=0,tf=None,dt=None):
     """
     Calculates correlation functions for frames (f in F), for a list of frames.
     One may provide the molecule object, containing the frame functions, or
@@ -244,12 +550,13 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
         print('mol or v must be given')
         return
     elif v is None:
-        v=mol2vec(mol,n,nr,tf,dt)
+        v=mol2vec(mol,n=n,nr=nr,t0=t0,tf=tf,dt=dt)
     
-    if return_index is None:
-        return_index=[True,False,False,False,False,False,False,True,True,False]
-    ri=np.array(return_index,dtype=bool)
-
+#    if return_index is None:
+#        return_index=[True,False,False,False,False,False,False,True,True,False]
+#    ri=np.array(return_index,dtype=bool)
+    ri=ReturnIndex(return_index)
+    
     index=v['index']
     
     vZ,vXZ,nuZ,nuXZ,_=apply_fr_index(v)
@@ -260,10 +567,13 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
 
     "Initial calculations/settings required if using symmetry for calculations"
     if mode.lower()=='sym' or 'auto' in mode.lower():
-        if np.any(ri[[2,3,4,5]]):
-            ri[[2,3,4,5]]=False
-            if mode.lower()=='sym':ri[1]=False
-            print('Warning: Individual components of the correlation functions or tensors will not be returned in auto or sym mode')
+#        if np.any(ri[[2,3,4,5]]):
+#            ri[[2,3,4,5]]=False
+#            if mode.lower()=='sym':ri[1]=False
+#            print('Warning: Individual components of the correlation functions or tensors will not be returned in auto or sym mode')
+#        
+        if mode.lower()=='sym':ri.set2sym()
+        if mode.lower()=='auto':ri.set2auto()
         
         A_0m_PASinf=list()
         for k in range(nf):
@@ -280,7 +590,8 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
     else:
         threshold=0  
         
-    if ri[0] or ri[1] or ri[2] or ri[7]:
+#    if ri[0] or ri[1] or ri[2] or ri[7]:
+    if ri.calc_ct_m0_finF:
         "Calculate ct_m0_finF if requested, if ct_prod requested, if ct_finF requested, or if ct_0m_finF requested"
         ct_m0_finF=list()
         A_m0_finF=list()
@@ -300,7 +611,8 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
             A_m0_finF.append(b)
         ct_m0_finF=np.array(ct_m0_finF)
         A_m0_finF=np.array(A_m0_finF)
-    elif ri[4] or ri[5]:
+#    elif ri[4] or ri[5]:
+    elif ri.calc_A_m0_finF:
         "Calculate A_m0_finF if requested, or A_0m_finF requested"
         A_m0_finF=list()
         for k in range(nf+1):
@@ -312,17 +624,19 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
                 b=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_f=nuZ[k-1],nuXZ_f=nuXZ[k-1],nuZ_F=nuZ[k],nuXZ_F=nuXZ[k],cmpt='m0',mode='d2',index=index)
             A_m0_finF.append(b)
         A_m0_finF=np.array(A_m0_finF)
-    
-    if ri[2]:
+#    if ri[2]:
+    if ri.ct_0m_finF:
         "ct_0m_finF are just the conjugates of ct_m0_finF"
         ct_0m_finF=np.array([ct0.conj() for ct0 in ct_m0_finF])
     
-    if ri[5]:
+#    if ri[5]:
+    if ri.A_0m_finF:
         "A_0m_finF are just the conjugates of A_m0_finF"
         A_0m_finF=np.array([a0.conj() for a0 in A_m0_finF])
     
     
-    if ri[3]:   #This option is deactivated for sym and auto modes
+#    if ri[3]:   #This option is deactivated for sym and auto modes
+    if ri.ct_0m_PASinF:
         "Calculate ct_0m_PASinF if requested"
         ct_0m_PASinF=list()
         A_0m_PASinF=list()
@@ -335,7 +649,8 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
             A_0m_PASinF.append(b)
         ct_0m_PASinF=np.array(ct_0m_PASinF)
         A_0m_PASinF=np.array(A_0m_PASinF)
-    elif ri[0] or ri[6] or ri[7]:
+#    elif ri[0] or ri[6] or ri[7]:
+    elif ri.calc_A_0m_PASinF:
         "Calculate A_0m_PASinF if requested, if ct_prod requested, or if ct_finF requested"
         A_0m_PASinF=list()
         for k in range(nf+1):
@@ -346,7 +661,8 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
             A_0m_PASinF.append(b)
         A_0m_PASinF=np.array(A_0m_PASinF)
     
-    if ri[0] or ri[7]:
+#    if ri[0] or ri[7]:
+    if ri.calc_ct_finF:
         "Calculate ct_finF if requested, or if ct_prod requested"
         ct_finF=list()
         for k in range(nf+1):
@@ -355,33 +671,39 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
             else:
                 ct_finF.append((np.moveaxis(ct_m0_finF[k],-1,0)*A_0m_PASinF[k-1]/A_0m_PASinF[k-1][2].real).sum(1).real.T)
         ct_finF=np.array(ct_finF)
-    if ri[7]:
+#    if ri[7]:
+    if ri.ct_prod:
         "Calculate ct_prod"
         ct_prod=ct_finF.prod(0)
         
-    if ri[8]:
+#    if ri[8]:
+    if ri.ct:
         "Calculate ct if requested"
         ct,S2=Ct_D2inf(vZ,cmpt='00',mode='both',index=index)
         ct=ct.real
         S2=S2.real
-    elif ri[9]:
+#    elif ri[9]:
+    elif ri.S2:
         "Calculate S2 if requested"
         S2=Ct_D2inf(vZ,cmpt='00',mode='d2',index=index)
         S2=S2.real
     
     out=dict()
-    if ri[0]:out['ct_finF']=ct_finF
-    if ri[1]:out['ct_m0_finF']=ct_m0_finF
-    if ri[2]:out['ct_0m_finF']=ct_0m_finF
-    if ri[3]:out['ct_0m_PASinF']=ct_0m_PASinF
-    if ri[4]:out['A_m0_finF']=A_m0_finF
-    if ri[5]:out['A_0m_finF']=A_0m_finF
-    if ri[6]:out['A_0m_PASinF']=A_0m_PASinF
-    if ri[7]:out['ct_prod']=ct_prod
-    if ri[8]:out['ct']=ct
-    if ri[9]:out['S2']=S2
+    for k in ri.flags.keys():
+        if getattr(ri,k):out[k]=locals()[k]
+#    if ri[0]:out['ct_finF']=ct_finF
+#    if ri[1]:out['ct_m0_finF']=ct_m0_finF
+#    if ri[2]:out['ct_0m_finF']=ct_0m_finF
+#    if ri[3]:out['ct_0m_PASinF']=ct_0m_PASinF
+#    if ri[4]:out['A_m0_finF']=A_m0_finF
+#    if ri[5]:out['A_0m_finF']=A_0m_finF
+#    if ri[6]:out['A_0m_PASinF']=A_0m_PASinF
+#    if ri[7]:out['ct_prod']=ct_prod
+#    if ri[8]:out['ct']=ct
+#    if ri[9]:out['S2']=S2
     
-    if ri[0] or ri[1] or ri[2] or ri[3] or ri[7] or ri[8] or ri[9]:
+#    if ri[0] or ri[1] or ri[2] or ri[3] or ri[7] or ri[8] or ri[9]:
+    if ri.calc_any_ct:
         if index is None:
             index=np.arange(v['vT'].shape[-1])
         out['index']=index
@@ -396,17 +718,17 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,tf=None,
     return out
 
 "This function extracts various frame vectors from trajectory"
-def mol2vec(mol,n=100,nr=10,tf=None,dt=None,index=None):
+def mol2vec(mol,n=100,nr=10,t0=0,tf=-1,dt=None,index=None):
     """
     Extracts vectors describing from the frame functions found in the molecule
     object. Arguments are mol, the molecule object, n and nr, which are parameters
     specifying sparse sampling, and dt, which overrides dt found in the trajectory
     """
-    
-    traj=mol.mda_object.trajectory
-    if tf is None:tf=traj.n_frames
+        
+    traj=(mol if hasattr(mol,'mda_object') else mol.molecule).mda_object.trajectory
+    if tf is None or tf==-1:tf=traj.n_frames
     if index is None:
-        index=trunc_t_axis(tf,n,nr)
+        index=trunc_t_axis(tf-t0,n,nr)+t0
     
     return ini_vec_load(traj,mol._vf,mol._vft,mol._frame_info['frame_index'],index=index,dt=dt)
     
@@ -773,8 +1095,9 @@ def sym_full_swap(vZ,threshold=0,A_0m_PASinf=None,vXZ=None,nuZ_F=None,nuXZ_F=Non
     threshold to 1 will force a symmetric calculation. In case threshold is set
     to 0, A_0m_PASinf is not required.
     """
+    A=None
     if A_0m_PASinf is None or threshold==0:
-        ct=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,cmpt=cmpt,mode='ct',index=index)
+        ct,A=Ct_D2inf(vZ=vZ,vXZ=vXZ,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,cmpt=cmpt,mode=mode,index=index)
     elif threshold==1:
         ct0=Ctsym(A_0m_PASinf,nuZ_f=nuZ_f,nuXZ_f=nuXZ_f,nuZ_F=nuZ_F,nuXZ_F=nuXZ_F,index=index)
         ct=np.zeros([5,ct0.shape[0],ct0.shape[1]],dtype=complex)
@@ -800,7 +1123,7 @@ def sym_full_swap(vZ,threshold=0,A_0m_PASinf=None,vXZ=None,nuZ_F=None,nuXZ_F=Non
         if np.any(sym):ct[2,sym]=out_sym
         if np.any(nsym):ct[:,nsym]=out_full
 
-    return ct,None if mode.lower()=='both' else ct  #If d2 requested, just return None for d2
+    return ct,A if mode.lower()=='both' else ct  
             
 
 def sym_nuZ_f(A_0m_PASinf,nuZ_f,nuXZ_f=None,nuZ_F=None,nuXZ_F=None):

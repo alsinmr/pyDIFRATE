@@ -1306,6 +1306,7 @@ class detect(mdl.model):
 #        self.MdlPar_in=None
         if self.info_in.shape[1]>100000: #We cleared because the info_in is huge for MD data
             self.info_in=None #Commenting this. Why did we clear these? 
+            #Still, the question remains, why would we ever want to keep info_in?
 
         self.norm=None
         

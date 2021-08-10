@@ -9,12 +9,12 @@ try:
 
 	ids=np.array([2321,2322,2323,2324]).astype("uint32")
 
-	r=np.array([3.898907,3.898907,3.898907,3.898907]).astype("float")
+	r=np.array([4.753146,4.753146,4.753146,4.753146]).astype("float")
 
-	clr=np.array([[157,109,91,255],
-		[157,109,91,255],
-		[157,109,91,255],
-		[157,109,91,255]]).astype("uint8")
+	clr=np.array([[142,89,77,255],
+		[142,89,77,255],
+		[142,89,77,255],
+		[142,89,77,255]]).astype("uint8")
 	mdl=session.open_command.open_data("/Users/albertsmith/Documents/Dynamics/MF_MD_theory/Figures/python/ILE.cxs")[0]
 	session.models.add(mdl)
 	rc(session,"~display")
@@ -44,5 +44,5 @@ try:
 except:
 	pass
 finally:
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script651731.py")
+	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script727095.py")
 	rc(session,"exit")
