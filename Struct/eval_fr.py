@@ -285,9 +285,10 @@ class FrameObj():
             vecs['frame_index']=self.vecs['frame_index'].copy()
             vecs['v']=self.vecs['v'].copy()
             for k,v in zip(range(len(include)-1,-1,-1),include[::-1]):
-                if v:
+                if not(v):
                     vecs['frame_index'].pop(k)
                     vecs['v'].pop(k)
+
             out=frames2ct(v=vecs,return_index=return_index,mode=mode)
             self.mode=mode
             self.include=include
@@ -302,6 +303,8 @@ class FrameObj():
                 elif k[:1]=='A':self.A[k]=out[k]
                 elif k=='t':self.t=out[k]
                 elif k=='S2':self.S2=out[k]
+            
+        return self.ct_out
                 
     def frames2data(self,mode='auto',return_index=None,include=None):
         """

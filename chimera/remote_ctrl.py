@@ -5,6 +5,11 @@ Created on Tue Aug 10 17:11:14 2021
 
 @author: albertsmith
 """
+
+"""
+Reference:
+https://www.cgl.ucsf.edu/chimerax/docs/user/commands/remotecontrol.html
+"""
 import numpy as np
 import os
 from pyDIFRATE.chimera.chimeraX_funs import get_path,py_line,WrCC,chimera_path,run_command
@@ -25,7 +30,7 @@ class CMXRemote():
             cls.closed.append(True)
             cls.ports.append(cls.port0+ID) 
             
-        full_path=get_path('chimera_script{0:02d}.py'.format(ID))     #Location to write out chimera script
+        full_path=get_path('chimera_script{0:06d}.py'.format(ID))     #Location to write out chimera script
         with open(full_path,'w') as f:
             py_line(f,run_command())
             WrCC(f,'remotecontrol rest start port {0}'.format(cls.ports[ID]))
