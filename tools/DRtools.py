@@ -525,14 +525,14 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
     If points in x fall outside of points in x0, we will use the two end points
     to calculate a slope and extrapolate from there.
     
-    x0 must be sorted in ascending order. x does not need to be sorted.
+    x0 must be sorted in ascending or descending order. x does not need to be sorted.
     
     If values of x fall outside of the range of x0, by default, we will take the
     slope at the ends of the given range. Alternatively, set mode to 'last_value'
     to just take the last value in x0
     """
     
-#    assert all(np.diff(x0)>=0),"x0 is not sorted in ascending order"
+    assert all(np.diff(x0)>=0) or all(np.diff(x0)<=0),"x0 is not sorted in ascending/descending order"
     
     
     
@@ -551,9 +551,10 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
     "Swap dimensions of I0"
     I0=I0.swapaxes(0,dim)
     if np.any(np.diff(x0)<0):
-        i=np.argwhere(np.diff(x0)<0)[0,0]    
-        x0=x0[:i]
-        I0=I0[:i]    
+#        i=np.argwhere(np.diff(x0)<0)[0,0]    
+#        x0=x0[:i]
+#        I0=I0[:i]    
+        x0,I0=x0[::-1],I0[::-1]
     
     "Deal with x being extend beyond x0 limits"
     if x.min()<=x0[0]:
