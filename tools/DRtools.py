@@ -532,7 +532,9 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
     to just take the last value in x0
     """
     
-    assert all(np.diff(x0)>=0),"x0 is not sorted in ascending order"
+#    assert all(np.diff(x0)>=0),"x0 is not sorted in ascending order"
+    
+    
     
     x0=np.array(x0)
     I0=np.array(I0)
@@ -544,19 +546,23 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
         i=np.argwhere(x0.size==np.array(I0.shape)).squeeze()
         assert i.size!=0,"No dimensions of I0 match the size of x0"
         dim=i if i.ndim==0 else i[0]
-        
+    
+
     "Swap dimensions of I0"
     I0=I0.swapaxes(0,dim)
-    
+    if np.any(np.diff(x0)<0):
+        i=np.argwhere(np.diff(x0)<0)[0,0]    
+        x0=x0[:i]
+        I0=I0[:i]    
     
     "Deal with x being extend beyond x0 limits"
     if x.min()<=x0[0]:
         I0=np.insert(I0,0,np.zeros(I0.shape[1:]),axis=0)
         x0=np.concatenate(([x.min()-1],x0),axis=0)
         if mode.lower()=='last_slope':
-            run=x0[1]-x0[0]
-            rise=I0[1]-I0[0]
-            slope=rise/run           
+            run=x0[2]-x0[1]
+            rise=I0[2]-I0[1]
+            slope=rise/run 
             I0[0]=I0[1]-slope*(x0[1]-x0[0])
         else:
             I0[0]=I0[1]
@@ -564,8 +570,8 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
         I0=np.concatenate((I0,[np.zeros(I0.shape[1:])]),axis=0)
         x0=np.concatenate((x0,[x.max()+1]),axis=0)
         if mode.lower()=='last_slope':
-            run=x0[-2]-x0[-1]
-            rise=I0[-2]-I0[-1]
+            run=x0[-3]-x0[-2]
+            rise=I0[-3]-I0[-2]
             slope=rise/run
             I0[-1]=I0[-2]-slope*(x0[-2]-x0[-1])
         else:
