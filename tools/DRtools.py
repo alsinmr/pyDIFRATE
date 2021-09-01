@@ -590,7 +590,122 @@ def linear_ex(x0,I0,x,dim=None,mode='last_slope'):
     
     
         
+#%% Some classes for making nice labels with units and unit prefixes   
         
+class Default2Parent(object):
+    def __init__(self,varname):
+        self.value=list()
+        self.varname=varname
+    def __get__(self,instance,owner):
+        if not(self.varname in instance.index):
+            instance.index[self.varname]=len(self.value)
+            self.value.append(None)
+        i=instance.index[self.varname]
+        if self.value[i] is not None:return self.value[i]
+        return getattr(instance.parent,self.varname)
+    def __set__(self,instance,value):
+        i=instance.index[self.varname]
+        self.value[i]=value
+    def __repr__(self):
+        return str(self.__get__())
+    
+    unit=Default2Parent('unit')
+    include_space=Default2Parent('include_space')
+    no_prefix=Default2Parent('no_prefix')
+    
+    def __init__(self,value,parent):
+        self.value=value
+        self.parent=parent
+        self.range=False
+        self.index={}
+        
+        self.unit
+        self.include_space
+        self.no_prefix
+        
+    def __get__(self):
+        return self.value
+    def __set__(self,value):
+        self.value=value    
+    def __repr__(self):
+        return self.__get__()
+
+    def prefix(self,value):
+        if value==0:
+            return '',0,1    
+        pwr=np.log10(np.abs(value))
+        x=np.concatenate((np.arange(-15,18,3),[np.inf]))
+        pre=['a','f','p','n',r'$\mu$','m','','k','M','G','T']
+        for x0,pre0 in zip(x,pre):
+            if pwr<x0:return '' if self.no_prefix else pre0,value*10**(-x0+3),10**(-x0+3)
+            
+    def format(self,*args,**kwargs):        
+        string=self.value
+        count=0
+        space=' ' if self.parent.include_space else ''
+        unit=self.unit if self.unit else ''
+        parity=True
+        while ':q' in string and count<10:
+            parity=not(parity)
+            count+=1
+            
+            #Find the 'q' tagged formating strings
+            i=string.find(':q')
+            #Extract the correct value from args and kwargs
+            if string[i-1]=='{':
+                v=args[0]
+                start=i-1
+            else:
+                i1=string[:i].rfind('{')
+                start=i1
+                try:
+                    v=args[int(string[i1+1:i])]
+                except:
+                    v=kwargs[string[i1+1:i]]
+            #If we are specifying ranges, we only put units on every other number (fairly restricted implementation)
+            if self.range and parity:  #Second steps only
+                i1=string[i:].find('}')+i
+                end=i1+1
+                bd=1 if v==0 else np.floor(np.log10(np.abs(v))).astype(int)+1
+                dec=np.max([prec-bd,0])
+                if dec==0:v=np.round(v,prec-bd)
+                v*=scaling #Use the same scaling as the previous step               
+            else:
+
+                if string[i+2]=='}':
+                    prec=2
+                    end=i+3
+                else:
+                    i1=string[i:].find('}')+i
+                    end=i1+1
+                    prec=int(string[i+2:i1])
+                
+                pre,v,scaling=self.prefix(v)
+                
+                bd=1 if v==0 else np.floor(np.log10(np.abs(v))).astype(int)+1
+                dec=np.max([prec-bd,0])
+                if dec==0:v=np.round(v,prec-bd)
+                
+            if not(self.range) or parity: #Second steps
+                string=string[:start]+('0' if v==0 else '{{:.{}f}}'.format(dec).format(v))+space+pre+unit+string[end:]
+            else: #First steps only
+                string=string[:start]+('0' if v==0 else '{{:.{}f}}'.format(dec).format(v))+string[end:]  
+
+        return string.format(*args,**kwargs)
+        
+
+
+
+class Strings(object):
+    def __init__(self,unit=None,include_space=True,no_prefix=False):
+        self.unit=unit
+        self.include_space=include_space
+        self.no_prefix=False
+    def __setattr__(self,name,value):
+        if name=='unit' or name=='include_space' or name=='no_prefix':
+            super().__setattr__(name,value)
+        else:
+            super().__setattr__(name,NiceStr(value,self))
 
 
 
