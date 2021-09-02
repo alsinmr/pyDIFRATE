@@ -604,6 +604,9 @@ class Default2Parent(object):
         if self.value[i] is not None:return self.value[i]
         return getattr(instance.parent,self.varname)
     def __set__(self,instance,value):
+        if not(self.varname in instance.index):
+            instance.index[self.varname]=len(self.value)
+            self.value.append(None)
         i=instance.index[self.varname]
         self.value[i]=value
     def __repr__(self):
@@ -620,16 +623,12 @@ class NiceStr():
         self.range=False
         self.index={}
         
-        self.unit
-        self.include_space
-        self.no_prefix
-        
-    def __get__(self):
-        return self.value
-    def __set__(self,value):
-        self.value=value    
+#        self.unit
+#        self.include_space
+#        self.no_prefix
+ 
     def __repr__(self):
-        return self.__get__()
+        return self.value
 
     def prefix(self,value):
         if value==0:
@@ -637,6 +636,7 @@ class NiceStr():
         pwr=np.log10(np.abs(value))
         x=np.concatenate((np.arange(-15,18,3),[np.inf]))
         pre=['a','f','p','n',r'$\mu$','m','','k','M','G','T']
+        #Probably the mu doesn't work
         for x0,pre0 in zip(x,pre):
             if pwr<x0:return '' if self.no_prefix else pre0,value*10**(-x0+3),10**(-x0+3)
             
