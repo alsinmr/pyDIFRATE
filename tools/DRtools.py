@@ -609,6 +609,7 @@ class Default2Parent(object):
     def __repr__(self):
         return str(self.__get__())
     
+class NiceStr():
     unit=Default2Parent('unit')
     include_space=Default2Parent('include_space')
     no_prefix=Default2Parent('no_prefix')
