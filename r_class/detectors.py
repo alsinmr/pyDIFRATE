@@ -23,6 +23,8 @@ import warnings
 #os.chdir('../plotting')
 import pyDIFRATE.plots.plotting_funs as pf
 #os.chdir(cwd)
+import cvxpy
+import platform
 
 warnings.filterwarnings("ignore",r"Ill-conditioned matrix*")
 warnings.filterwarnings("ignore",r"Solving system with option*")
@@ -460,24 +462,32 @@ class detect(mdl.model):
                     break
             return biggest
 
-                
-        
-        def det_opt(Vt,k,target=None):
+        def det_opt(Vt, k, target=None):
             """Performs the optimization of a detectors having a value of 1 at the kth
             correlation time, and minimized elsewhere. Target is the minimum allowed
             value for the detector as a function of correlation time. Default is zeros
             everywhere.
-            
-            Returns the optimized detector and the location of the maximum of that 
+
+            Returns the optimized detector and the location of the maximum of that
             detector
             """
-            ntc=Vt.shape[1]
-            target=target if target else np.zeros(ntc)
-            x=linprog(Vt.sum(1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),\
-                      method='interior-point',options={'disp':False})
-            rhoz=(Vt.T@x['x']).T
-            maxi=np.argmax(np.abs(rhoz))
-            return rhoz,x['x'],maxi
+            if "Darwin" in platform.system():
+                ntc = Vt.shape[1]
+                target = target if target else np.zeros(ntc)
+                x = linprog(Vt.sum(1), -Vt.T, -target, [Vt[:, k]], 1, bounds=(-500, 500), \
+                            method='interior-point', options={'disp': False})
+                x = x['x']
+            elif "Linux" in platform.system():
+                '''for some reasons the scipy linprog takes ages for calculation on my system. using cvxpy instead solves
+                it for me, while it obviously causes problems on Mac. Guess this here might be a good solution, but one should
+                check if the results are always correct -K'''
+                x = cvxpy.Variable(Vt[:, k].shape)
+                prob = cvxpy.Problem(cvxpy.Minimize(np.sum(Vt, axis=1) @ x),
+                                     [-Vt.T @ x <= -np.zeros(np.shape(Vt)[1]), Vt[:, k] @ x == 1])
+                prob.solve(verbose=False)
+                x = x.value
+            rhoz = (Vt.T @ x).T
+            return rhoz, x, np.argmax(np.abs(rhoz))
     
         #Locate where the Vt are sufficiently large to have maxima
         i0=np.nonzero(np.any(np.abs(Vt.T)>(np.abs(Vt).max(1)*.75),1))[0]
