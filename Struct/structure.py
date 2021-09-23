@@ -107,7 +107,7 @@ class molecule(object):
             vft=self._vft()
             nb=vft[0].shape[1] if len(vft)==2 else vft.shape[1] #Number of bonds in the tensor frame
             if self._vf is None: self._vf=list()
-            fun,fi=new_fun(Type,self,**kwargs)
+            fun,fi,*_=new_fun(Type,self,**kwargs)
             if frame_index is None:frame_index=fi #Assign fi to frame_index if frame_index not provided
             f=fun()    #Output of the vector function (test its behavior)
             nf=f[0].shape[1] if len(f)==2 else f.shape[1]
@@ -139,7 +139,7 @@ class molecule(object):
             if Type=='bond' and 'sel3' not in kwargs:
                 kwargs['sel3']='auto'     #Define sel3 for the bond frame (define vXZ)
             
-            self._vft,_=new_fun(Type,self,**kwargs) #New tensor function
+            self._vft,*_=new_fun(Type,self,**kwargs) #New tensor function
             if len(self._vft())!=2:
                 print('Warning: This frame only defines vZ, and not vXZ;')
                 print('In this case, correlation functions may not be properly defined')

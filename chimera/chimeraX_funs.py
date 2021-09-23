@@ -665,7 +665,7 @@ def draw_tensors(A,mol=None,sc=2.09,tstep=0,disp_mode=None,index=None,scene=None
                  fileout=None,save_opts=None,chimera_cmds=None,\
                  colors=[[255,100,100,255],[100,100,255,255]],marker=None,\
                  marker_color=[[100,255,100,255],[255,255,100,255]],deabg=False,\
-                 pos=None,frame='inter'):
+                 pos=None,frame='inter',vft=None):
     """
     Plots tensors onto bonds of a molecule. One must provide the tensors, A, which
     are plotted onto a molecule (if molecule object provided), the molecule
@@ -775,7 +775,7 @@ def draw_tensors(A,mol=None,sc=2.09,tstep=0,disp_mode=None,index=None,scene=None
             pos[0]=np.arange(len(A[0]))*3
     else:
         if frame[0].lower()!='l':
-            vZ,vXZ=mol._vft()   #Get bond directions
+            vZ,vXZ=mol._vft() if vft is None else vft()   #Get bond directions
             scF=getFrame(vZ[:,index],vXZ[:,index]) #Get frame of bond, apply index
             A=Rspher(A,*scF)     #Apply frame to tensors
             
@@ -832,13 +832,14 @@ def draw_tensors(A,mol=None,sc=2.09,tstep=0,disp_mode=None,index=None,scene=None
                 +'marker_pos_color={6},marker_neg_color={7})')\
             .format(tensor_file,sc,50,25,positive_color,negative_color,pc,nc),1)
     
-
+        WrCC(f,'display',1)
+        
         if chimera_cmds is not None:
             if isinstance(chimera_cmds,str):chimera_cmds=[chimera_cmds]
             for cmd in chimera_cmds:
                 WrCC(f,cmd,1)
     
-        WrCC(f,'display',1)
+        
         
         if fileout is not None:
             if len(fileout)<=4 or fileout[-4]!='.':fileout=fileout+'.png'

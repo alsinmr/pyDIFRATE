@@ -48,7 +48,9 @@ def new_fun(Type,molecule,**kwargs):
             'Error:{0}, {1}'.format(*sys.exc_info()[:2]) 
     
     frame_index=None
+    info={}
     if hasattr(fun,'__len__') and len(fun)==2:fun,frame_index=fun
+    if hasattr(fun,'__len__') and len(fun)==3:fun,frame_index,info=fun
     
     try:
         fun()
@@ -56,7 +58,7 @@ def new_fun(Type,molecule,**kwargs):
         assert 0,'Frame function failed to run, ,\n'+\
             'Error:{0}, {1}'.format(*sys.exc_info()[:2])     
     
-    return fun,frame_index
+    return fun,frame_index,info
 
 def return_frame_info(Type=None):
     """

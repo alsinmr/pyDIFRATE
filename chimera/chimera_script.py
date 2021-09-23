@@ -1,284 +1,277 @@
+import os
+import numpy as np
+from chimerax.core.commands import run as rc
+
+"""
+Everything after these lines is printed into the chimeraX script, so don't add
+anything below that you don't need in chimeraX
+"""
+def sphere_triangles(theta_steps=100,phi_steps=50):
+    """
+    Creates arrays of theta and phi angles for plotting spherical tensors in ChimeraX.
+    Also returns the corresponding triangles for creating the surfaces
+    """
+    
+    theta=np.linspace(0,2*np.pi,theta_steps,endpoint=False).repeat(phi_steps)
+    phi=np.repeat([np.linspace(0,np.pi,phi_steps,endpoint=True)],theta_steps,axis=0).reshape(theta_steps*phi_steps)
+    
+    triangles = []
+    for t in range(theta_steps):
+        for p in range(phi_steps-1):
+            i = t*phi_steps + p
+            t1 = (t+1)%theta_steps
+            i1 = t1*phi_steps + p
+            triangles.append((i,i+1,i1+1))
+            triangles.append((i,i1+1,i1))
+    
+    return theta,phi,triangles
+    
+def spherical_surface(delta,eta=None,euler=None,pos=None,sc=2.09,
+                      theta_steps = 100,
+                      phi_steps = 50,
+                      positive_color = (255,100,100,255), # red, green, blue, alpha, 0-255 
+                      negative_color = (100,100,255,255)):
+    """
+    Function for generating a surface in ChimeraX. delta, eta, and euler angles
+    should be provided, as well positions for each tensor (length of all arrays
+    should be the same, that is (N,), (N,), (3,N), (3,N) respectively.
+    
+    Returns arrays with the vertices positions (Nx3), the triangles definitions
+    (list of index triples, Nx3), and a list of colors (Nx4)
+    
+    xyz,tri,colors=spherical_surface(delta,eta=None,euler=None,pos=None,
+                                     theta_steps=100,phi_steps=50,
+                                     positive_color=(255,100,100,255),
+                                     negative_color=(100,100,255,255))
+    """
+    # Compute vertices and vertex colors
+    a,b,triangles=sphere_triangles(theta_steps,phi_steps)
+    
+    if euler is None:euler=[0,0,0]
+    if pos is None:pos=[0,0,0]
+    if eta is None:eta=0
+    
+    # Compute r for each set of angles
+    sc=np.sqrt(2/3)*sc
+    
+    A=[-1/2*delta*eta,0,np.sqrt(3/2)*delta,0,-1/2*delta*eta]   #Components in PAS
+    
+    #0 component after rotation by a and b
+    A0=np.array([A[mp+2]*d2(b,m=0,mp=mp)*np.exp(1j*mp*a) for mp in range(-2,3)]).sum(axis=0).real
+    
+    #Coordinates before rotation by alpha, beta, gamma
+    x0=np.cos(a)*np.sin(b)*np.abs(A0)*sc/2
+    y0=np.sin(a)*np.sin(b)*np.abs(A0)*sc/2
+    z0=np.cos(b)*np.abs(A0)*sc/2
+
+    alpha,beta,gamma=euler
+    #Rotate by alpha
+    x1,y1,z1=x0*np.cos(alpha)+y0*np.sin(alpha),-x0*np.sin(alpha)+y0*np.cos(alpha),z0
+    #Rotate by beta
+    x2,y2,z2=x1*np.cos(beta)-z1*np.sin(beta),y1,np.sin(beta)*x1+np.cos(beta)*z1
+    #Rotate by gamma
+    x,y,z=x2*np.cos(gamma)+y2*np.sin(gamma),-x2*np.sin(gamma)+y2*np.cos(gamma),z2
+
+    x=x+pos[0]
+    y=y+pos[1]
+    z=z+pos[2]
+    
+#    xyz=[[x0,y0,z0] for x0,y0,z0 in zip(x,y,z)]
+    #Determine colors
+    colors=np.zeros([A0.size,4],np.uint8)
+    colors[A0>=0]=positive_color
+    colors[A0<0]=negative_color
+    
+
+    # Create numpy arrays
+#    xyz = np.array(xyz, np.float32)
+    xyz=np.ascontiguousarray(np.array([x,y,z]).T,np.float32)       #ascontiguousarray forces a transpose in memory- not just editing the stride
+    colors = np.array(colors, np.uint8)
+    tri = np.array(triangles, np.int32)
+
+    return xyz,tri,colors
+ 
+
+def load_tensor(filename):
+    """
+    Reads in a tab-separated file with delta, eta, alpha,beta, gamma, and x,y,z
+    for a set of tensors. 
+    
+    delta,eta,euler,pos=load_tensor(filename)
+    """
+    delta=list()
+    eta=list()
+    alpha=list()
+    beta=list()
+    gamma=list()
+    x=list()
+    y=list()
+    z=list()
+    marker=list()
+    with open(filename,'r') as f:
+        for line in f:
+            out=line.strip().split('\t')
+            out=[np.array(o,float) for o in out]
+            delta.append(out[0])
+            eta.append(out[1])
+            alpha.append(out[2])
+            beta.append(out[3])
+            gamma.append(out[4])
+            x.append(out[5])
+            y.append(out[6])
+            z.append(out[7])
+            marker.append(out[8])
+
+    delta=np.array(delta)
+    eta=np.array(eta)
+    euler=np.array([alpha,beta,gamma]).T
+    pos=np.array([x,y,z]).T
+    marker=np.array(marker)
+
+    return delta,eta,euler,pos,marker            
+        
+    
+
+def load_surface(session,tensor_file,sc=2.09,theta_steps=100,phi_steps=50,
+                 positive_color=(255,100,100,255),negative_color=(100,100,255,255),
+                 marker_pos_color=(100,255,100,255),marker_neg_color=(255,255,100,255)):
+    
+    Delta,Eta,Euler,Pos,Marker=load_tensor(tensor_file)
+    
+    from chimerax.core.models import Surface
+    from chimerax.surface import calculate_vertex_normals,combine_geometry_vntc
+    
+    geom=list()
+    
+    for k,(delta,eta,euler,pos,marker) in enumerate(zip(Delta,Eta,Euler,Pos,Marker)):
+        if marker==1:
+            pc=marker_pos_color
+            nc=marker_neg_color
+        else:
+            pc=positive_color
+            nc=negative_color
+        xyz,tri,colors=spherical_surface(\
+                                         delta=delta,eta=eta,euler=euler,pos=pos,\
+                                         sc=sc,theta_steps=theta_steps,\
+                                         phi_steps=phi_steps,\
+                                         positive_color=pc,\
+                                         negative_color=nc)
+
+        norm_vecs=calculate_vertex_normals(xyz,tri)
+        
+        geom.append((xyz,norm_vecs,tri,colors))    
+        
+    xyz,norm_vecs,tri,colors=combine_geometry_vntc(geom)    
+    s = Surface('surface',session)
+    s.set_geometry(xyz,norm_vecs,tri)
+    s.vertex_colors = colors
+    session.models.add([s])
+
+    return s
+
+
+def d2(c=0,s=None,m=None,mp=0):
+    """
+    Calculates components of the d2 matrix. By default only calculates the components
+    starting at m=0 and returns five components, from -2,-1,0,1,2. One may also
+    edit the starting component and select a specific final component 
+    (mp=None returns all components, whereas mp may be specified between -2 and 2)
+    
+    d2_m_mp=d2(m,mp,c,s)  #c and s are the cosine and sine of the desired beta angle
+    
+        or
+        
+    d2_m_mp=d2(m,mp,beta) #Give the angle directly
+    
+    Setting mp to None will return all values for mp in a 2D array
+    
+    (Note that m is the final index)
+    """
+    
+    if s is None:
+        c,s=np.cos(c),np.sin(c)
+    
+    """
+    Here we define each of the components as functions. We'll collect these into
+    an array, and then call them out with the m and mp indices
+    """
+    "First, for m=-2"
+    
+    if m is None or mp is None:
+        if m is None and mp is None:
+            print('m or mp must be specified')
+            return
+        elif m is None:
+            if mp==-2:
+                index=range(0,5)
+            elif mp==-1:
+                index=range(5,10)
+            elif mp==0:
+                index=range(10,15)
+            elif mp==1:
+                index=range(15,20)
+            elif mp==2:
+                index=range(20,25)
+        elif mp is None:
+            if m==-2:
+                index=range(0,25,5)
+            elif m==-1:
+                index=range(1,25,5)
+            elif m==0:
+                index=range(2,25,5)
+            elif m==1:
+                index=range(3,25,5)
+            elif m==2:
+                index=range(4,25,5)
+    else:
+        index=[(mp+2)*5+(m+2)]
+    
+    out=list()    
+    for i in index:
+        #mp=-2
+        if i==0:x=0.25*(1+c)**2
+        if i==1:x=0.5*(1+c)*s
+        if i==2:x=np.sqrt(3/8)*s**2
+        if i==3:x=0.5*(1-c)*s
+        if i==4:x=0.25*(1-c)**2
+        #mp=-1
+        if i==5:x=-0.5*(1+c)*s
+        if i==6:x=c**2-0.5*(1-c)
+        if i==7:x=np.sqrt(3/8)*2*c*s
+        if i==8:x=0.5*(1+c)-c**2
+        if i==9:x=0.5*(1-c)*s
+        #mp=0
+        if i==10:x=np.sqrt(3/8)*s**2
+        if i==11:x=-np.sqrt(3/8)*2*s*c
+        if i==12:x=0.5*(3*c**2-1)
+        if i==13:x=np.sqrt(3/8)*2*s*c
+        if i==14:x=np.sqrt(3/8)*s**2
+        #mp=1
+        if i==15:x=-0.5*(1-c)*s
+        if i==16:x=0.5*(1+c)-c**2
+        if i==17:x=-np.sqrt(3/8)*2*s*c
+        if i==18:x=c**2-0.5*(1-c)
+        if i==19:x=0.5*(1+c)*s
+        #mp=2
+        if i==20:x=0.25*(1-c)**2
+        if i==21:x=-0.5*(1-c)*s
+        if i==22:x=np.sqrt(3/8)*s**2
+        if i==23:x=-0.5*(1+c)*s
+        if i==24:x=0.25*(1+c)**2
+        out.append(x)
+        
+    if m is None or mp is None:
+        return np.array(out)
+    else:
+        return out[0]
+
+
+
 try:
-	from chimerax.core.commands import run as rc
 
-	import os
-	import numpy as np
-
-	di=np.array([1202,1203,1204,1218,1219,1220,1240,1241,1242,1259,\
-		1260,1261,1271,1272,1273,1281,1282,1283,1300,1301,\
-		1302,1303,1316,1317,1318,1320,1323,1324,1325,1326,\
-		1347,1348,1349,1350,1355,1361,1362,1363,1364,1367,\
-		1372,1373,1374,1375,1377,1382,1383,1384,1385,1391,\
-		1404,1405,1406,1407,1412,1416,1417,1418,1419,1424,\
-		1435,1436,1437,1438,1446,1459,1460,1461,1462,1466,\
-		1473,1474,1475,1476,1482,1488,1489,1490,1491,1497,\
-		1503,1504,1505,1506,1514,1527,1528,1529,1530,1532,\
-		1537,1538,1539,1540,1548,1561,1562,1563,1564,1568,\
-		1577,1578,1579,1580,1586,1594,1595,1596,1597,1602,\
-		1613,1614,1615,1616,1617,1620,1621,1622,1623,1628,\
-		1634,1635,1636,1637,1641,1650,1651,1652,1653,1657,\
-		1666,1667,1668,1669,1673,1680,1681,1682,1683,1685,\
-		1690,1691,1692,1693,1695,1700,1701,1702,1705,1710,\
-		1711,1712,1729,1730,1731,1746,1747,1748,1753,1754,\
-		1755,1760,1761,1762,1779,1780,1781,1803,1804,1805,\
-		1822,1823,1824,1833,1834,1835,1845,1846,1847,1862,\
-		1863,1864,1865,1876,1877,1878,1879,1883,1890,1891,\
-		1892,1893,1898,1904,1905,1906,1907,1910,1915,1916,\
-		1917,1918,1922,1931,1932,1933,1934,1940,1946,1947,\
-		1948,1949,1953,1960,1961,1962,1963,1967,1976,1977,\
-		1978,1979,1983,1992,1993,1994,1995,1996,1999,2000,\
-		2001,2002,2008,2021,2022,2023,2024,2025,2028,2029,\
-		2030,2031,2037,2043,2044,2045,2046,2049,2054,2055,\
-		2056,2057,2065,2078,2079,2080,2081,2085,2094,2095,\
-		2096,2097,2102,2113,2114,2115,2116,2121,2132,2133,\
-		2134,2135,2136,2139,2140,2141,2142,2147,2153,2154,\
-		2155,2156,2162,2168,2169,2170,2171,2180,2189,2190,\
-		2191,2192,2193,2196,2197,2198,2200,2203,2204,2205,\
-		2206,2225,2226,2227,2229,2232,2233,2234,2252,2253,\
-		2254,2276,2277,2278,2288,2289,2290,2302,2303,2304,\
-		2319,2320,2321,2336,2337,2338,2353,2354,2355,2370,\
-		2371,2372,2387,2388,2389]).astype("uint32")
-
-	ids=np.array([1302,1303,1316,1320,1325,1326,1347,1349,1350,1355,\
-		1361,1363,1364,1367,1372,1374,1375,1377,1382,1384,\
-		1385,1391,1404,1406,1407,1412,1416,1418,1419,1424,\
-		1435,1437,1438,1446,1459,1461,1462,1466,1473,1475,\
-		1476,1482,1488,1490,1491,1497,1503,1505,1506,1514,\
-		1527,1529,1530,1532,1537,1539,1540,1548,1561,1563,\
-		1564,1568,1577,1579,1580,1586,1594,1596,1597,1602,\
-		1613,1615,1616,1617,1620,1622,1623,1628,1634,1636,\
-		1637,1641,1650,1652,1653,1657,1666,1668,1669,1673,\
-		1680,1682,1683,1685,1690,1692,1693,1695,1700,1705,\
-		1864,1865,1876,1878,1879,1883,1890,1892,1893,1898,\
-		1904,1906,1907,1910,1915,1917,1918,1922,1931,1933,\
-		1934,1940,1946,1948,1949,1953,1960,1962,1963,1967,\
-		1976,1978,1979,1983,1992,1994,1995,1996,1999,2001,\
-		2002,2008,2021,2023,2024,2025,2028,2030,2031,2037,\
-		2043,2045,2046,2049,2054,2056,2057,2065,2078,2080,\
-		2081,2085,2094,2096,2097,2102,2113,2115,2116,2121,\
-		2132,2134,2135,2136,2139,2141,2142,2147,2153,2155,\
-		2156,2162,2168,2170,2171,2180,2189,2191,2192,2193,\
-		2196,2200,2205,2206,2225,2229]).astype("uint32")
-
-	r=np.array([1.541888,1.541888,1.541888,1.541888,2.043936,2.043936,2.043936,1.779232,1.779232,2.043936,\
-		1.779232,2.360928,2.360928,1.779232,2.360928,2.233280,2.233280,2.360928,2.233280,2.178208,\
-		2.178208,2.233280,2.178208,2.669216,2.669216,2.178208,2.669216,1.726560,1.726560,2.669216,\
-		1.726560,1.739584,1.739584,1.726560,1.739584,2.220512,2.220512,1.739584,2.220512,2.653056,\
-		2.653056,2.220512,2.653056,1.832928,1.832928,2.653056,1.832928,2.421824,2.421824,1.832928,\
-		2.421824,1.773728,1.773728,2.421824,1.773728,1.583968,1.583968,1.773728,1.583968,1.267232,\
-		1.267232,1.583968,1.267232,1.250208,1.250208,1.267232,1.250208,1.697952,1.697952,1.250208,\
-		1.697952,1.178349,1.178349,1.697952,1.178349,1.086736,1.086736,1.178349,1.086736,1.691648,\
-		1.691648,1.086736,1.691648,1.675552,1.675552,1.691648,1.675552,2.229344,2.229344,1.675552,\
-		2.229344,4.618080,4.618080,2.229344,4.618080,2.779552,2.779552,4.618080,2.779552,2.779552,\
-		1.899008,1.899008,1.899008,1.773952,1.773952,1.899008,1.773952,2.179360,2.179360,1.773952,\
-		2.179360,2.101856,2.101856,2.179360,2.101856,1.840896,1.840896,2.101856,1.840896,1.546624,\
-		1.546624,1.840896,1.546624,1.659168,1.659168,1.546624,1.659168,1.741440,1.741440,1.659168,\
-		1.741440,1.756064,1.756064,1.741440,1.756064,2.373280,2.373280,1.756064,2.373280,2.789280,\
-		2.789280,2.373280,2.789280,3.669216,3.669216,2.789280,3.669216,2.673184,2.673184,3.669216,\
-		2.673184,1.964896,1.964896,2.673184,1.964896,1.400384,1.400384,1.964896,1.400384,1.220352,\
-		1.220352,1.400384,1.220352,1.395808,1.395808,1.220352,1.395808,1.352384,1.352384,1.395808,\
-		1.352384,1.397952,1.397952,1.352384,1.397952,1.686144,1.686144,1.397952,1.686144,1.562656,\
-		1.562656,1.686144,1.562656,2.053216,2.053216,1.562656,2.053216,1.050602,1.050602,2.053216,\
-		1.050602,1.050602,4.212960,4.212960,4.212960,4.212960]).astype("float")
-
-	clr=np.array([[183,176,124,255],
-		[183,176,124,255],
-		[183,176,124,255],
-		[183,176,124,255],
-		[162,174,112,255],
-		[162,174,112,255],
-		[162,174,112,255],
-		[173,175,118,255],
-		[173,175,118,255],
-		[162,174,112,255],
-		[173,175,118,255],
-		[149,172,104,255],
-		[149,172,104,255],
-		[173,175,118,255],
-		[149,172,104,255],
-		[154,173,108,254],
-		[154,173,108,254],
-		[149,172,104,255],
-		[154,173,108,254],
-		[156,173,109,254],
-		[156,173,109,254],
-		[154,173,108,254],
-		[156,173,109,254],
-		[136,171,97,255],
-		[136,171,97,255],
-		[156,173,109,254],
-		[136,171,97,255],
-		[175,175,120,255],
-		[175,175,120,255],
-		[136,171,97,255],
-		[175,175,120,255],
-		[175,175,119,255],
-		[175,175,119,255],
-		[175,175,120,255],
-		[175,175,119,255],
-		[155,173,108,255],
-		[155,173,108,255],
-		[175,175,119,255],
-		[155,173,108,255],
-		[137,171,97,255],
-		[137,171,97,255],
-		[155,173,108,255],
-		[137,171,97,255],
-		[171,175,117,255],
-		[171,175,117,255],
-		[137,171,97,255],
-		[171,175,117,255],
-		[146,172,103,255],
-		[146,172,103,255],
-		[171,175,117,255],
-		[146,172,103,255],
-		[173,175,119,255],
-		[173,175,119,255],
-		[146,172,103,255],
-		[173,175,119,255],
-		[181,176,123,255],
-		[181,176,123,255],
-		[173,175,119,255],
-		[181,176,123,255],
-		[194,178,131,255],
-		[194,178,131,255],
-		[181,176,123,255],
-		[194,178,131,255],
-		[195,178,131,255],
-		[195,178,131,255],
-		[194,178,131,255],
-		[195,178,131,255],
-		[176,176,120,255],
-		[176,176,120,255],
-		[195,178,131,255],
-		[176,176,120,255],
-		[198,178,133,255],
-		[198,178,133,255],
-		[176,176,120,255],
-		[198,178,133,255],
-		[202,179,135,255],
-		[202,179,135,255],
-		[198,178,133,255],
-		[202,179,135,255],
-		[177,176,121,255],
-		[177,176,121,255],
-		[202,179,135,255],
-		[177,176,121,255],
-		[177,176,121,254],
-		[177,176,121,254],
-		[177,176,121,255],
-		[177,176,121,254],
-		[154,173,108,255],
-		[154,173,108,255],
-		[177,176,121,254],
-		[154,173,108,255],
-		[55,161,50,255],
-		[55,161,50,255],
-		[154,173,108,255],
-		[55,161,50,255],
-		[131,170,94,255],
-		[131,170,94,255],
-		[55,161,50,255],
-		[131,170,94,255],
-		[131,170,94,255],
-		[168,175,116,255],
-		[168,175,116,255],
-		[168,175,116,255],
-		[173,175,119,255],
-		[173,175,119,255],
-		[168,175,116,255],
-		[173,175,119,255],
-		[156,173,109,255],
-		[156,173,109,255],
-		[173,175,119,255],
-		[156,173,109,255],
-		[160,173,111,255],
-		[160,173,111,255],
-		[156,173,109,255],
-		[160,173,111,255],
-		[170,175,117,255],
-		[170,175,117,255],
-		[160,173,111,255],
-		[170,175,117,255],
-		[183,176,124,255],
-		[183,176,124,255],
-		[170,175,117,255],
-		[183,176,124,255],
-		[178,176,121,255],
-		[178,176,121,255],
-		[183,176,124,255],
-		[178,176,121,255],
-		[175,175,119,255],
-		[175,175,119,255],
-		[178,176,121,255],
-		[175,175,119,255],
-		[174,175,119,255],
-		[174,175,119,255],
-		[175,175,119,255],
-		[174,175,119,255],
-		[148,172,104,255],
-		[148,172,104,255],
-		[174,175,119,255],
-		[148,172,104,255],
-		[131,170,94,255],
-		[131,170,94,255],
-		[148,172,104,255],
-		[131,170,94,255],
-		[95,166,73,255],
-		[95,166,73,255],
-		[131,170,94,255],
-		[95,166,73,255],
-		[136,171,97,255],
-		[136,171,97,255],
-		[95,166,73,255],
-		[136,171,97,255],
-		[165,174,114,255],
-		[165,174,114,255],
-		[136,171,97,255],
-		[165,174,114,255],
-		[189,177,127,255],
-		[189,177,127,255],
-		[165,174,114,255],
-		[189,177,127,255],
-		[196,178,132,254],
-		[196,178,132,254],
-		[189,177,127,255],
-		[196,178,132,254],
-		[189,177,128,255],
-		[189,177,128,255],
-		[196,178,132,254],
-		[189,177,128,255],
-		[191,177,129,255],
-		[191,177,129,255],
-		[189,177,128,255],
-		[191,177,129,255],
-		[189,177,128,255],
-		[189,177,128,255],
-		[191,177,129,255],
-		[189,177,128,255],
-		[177,176,121,255],
-		[177,176,121,255],
-		[189,177,128,255],
-		[177,176,121,255],
-		[182,176,124,255],
-		[182,176,124,255],
-		[177,176,121,255],
-		[182,176,124,255],
-		[162,174,112,255],
-		[162,174,112,255],
-		[182,176,124,255],
-		[162,174,112,255],
-		[203,179,136,255],
-		[203,179,136,255],
-		[162,174,112,255],
-		[203,179,136,255],
-		[203,179,136,255],
-		[72,163,60,255],
-		[72,163,60,255],
-		[72,163,60,255],
-		[72,163,60,255]]).astype("uint8")
-	mdl=session.open_command.open_data("/Users/albertsmith/Documents/GitHub/pyDIFRATE/Struct/2kj3.pdb_10.pdb")[0]
-	session.models.add(mdl)
+	di=np.array([2652,2654,2656,2658,2662,2665,2666,2667,2668,2669,\
+		2670]).astype("uint32")
+	rc(session,"open /Users/albertsmith/Documents/GitHub/pyDIFRATE/Struct/HETs5_MET_4pw_cb10_anothertry.xtc_0.pdb")
 	rc(session,"~display")
 	rc(session,"~ribbon")
 	if len(session.models)>1:
@@ -291,17 +284,16 @@ try:
 	hide[:]=1
 	hide[di]=0
 	setattr(atoms,"hides",hide)
-	rc(session,"style ball")
-	rc(session,"size stickRadius 0.2")
-	rc(session,"color all tan")
-	r0=getattr(atoms,"radii").copy()
-	clr0=getattr(atoms,"colors").copy()
-	r0[:]=.8
-	r0[ids]=r
-	clr0[ids]=clr
-	setattr(atoms,"radii",r0)
-	setattr(atoms,"colors",clr0)
+	rc(session,"style stick")
+	load_surface(session,"/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/tensors_549330.txt",sc=3,theta_steps=50,phi_steps=25,positive_color=[255, 100, 100, 255],negative_color=[100, 100, 255, 255],marker_pos_color=[100, 255, 100, 255],marker_neg_color=[255, 255, 100, 255])
+	rc(session,"display")
+	rc(session,"~show")
+	rc(session,"show /B:254")
+	rc(session,"view")
+	rc(session,"color byAtom")
+	rc(session,"lighting soft")
 except:
 	pass
 finally:
-	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script217053.py")
+	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/chimera_script549330.py")
+	os.remove("/Users/albertsmith/Documents/GitHub/pyDIFRATE/chimera/tensors_549330.txt")

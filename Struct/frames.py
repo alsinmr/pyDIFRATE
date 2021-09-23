@@ -285,7 +285,7 @@ def chain_rotate(molecule,sel=None,Nuc=None,resids=None,segids=None,filter_str=N
     return sub
 
     
-def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
+def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None,sigma=0):
     """
     Superimposes the C-X bond attached to a methyl carbon, and can separate
     methyl rotation from re-orientation of the overall methyl group
@@ -312,9 +312,9 @@ def methylCC(molecule,Nuc=None,resids=None,segids=None,filter_str=None):
         v1,v2=[vft.pbc_corr(v.T,box) for v in [v1,v2]]
         return v1,v2
     frame_index=np.arange(len(selC1)).repeat(3)
-    return sub,frame_index
+    return sub,frame_index,{'PPfun':'AvgGauss','sigma':sigma}
 
-def side_chain_chi(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None):
+def side_chain_chi(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None,sigma=0):
     """
     Returns a frame that accounts for motion arounda given bond in the side chain,
     where we are interested in the total methyl dynamics.Ideally, the product of
@@ -362,7 +362,7 @@ def side_chain_chi(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_st
         vXZ=vft.pbc_corr(vXZ.T,box)
         return vZ,vXZ
     
-    return sub,frame_index
+    return sub,frame_index,{'PPfun':'AvgGauss','sigma':sigma}
 
 def librations(molecule,sel1=None,sel2=None,Nuc=None,resids=None,segids=None,filter_str=None,full=True):
     """

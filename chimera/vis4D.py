@@ -10,18 +10,25 @@ import os
 import cv2
 import MDAnalysis as mda
 import matplotlib.pyplot as plt
-curdir=os.getcwd()
+#curdir=os.getcwd()
 import numpy as np
-os.chdir('../Struct')
-from vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr
-import vf_tools as vft
-import eval_fr as ef
-import select_tools as selt
-os.chdir('../chimera')
-from chimeraX_funs import py_line,WrCC,chimera_path,run_command,copy_funs,write_tensor
-from chimeraX_funs import sel_indices,py_print_npa,guess_disp_mode
+#os.chdir('../Struct')
+#from vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr
+from pyDIFRATE.Struct.vf_tools import Spher2pars,norm,getFrame,Rspher,pbc_corr
+from pyDIFRATE.Struct import vf_tools as vft
+#import vf_tools as vft
+from pyDIFRATE import frames as ef
+#import eval_fr as ef
+from pyDIFRATE.Struct import select_tools as selt
+#import select_tools as selt
+#os.chdir('../chimera')
+from pyDIFRATE.chimera.chimeraX_funs import py_line,WrCC,chimera_path,run_command,copy_funs,write_tensor
+from pyDIFRATE.chimera.chimeraX_funs import sel_indices,py_print_npa,guess_disp_mode
+
+#from chimeraX_funs import py_line,WrCC,chimera_path,run_command,copy_funs,write_tensor
+#from chimeraX_funs import sel_indices,py_print_npa,guess_disp_mode
 from shutil import copyfile
-os.chdir(curdir)
+#os.chdir(curdir)
 
 def time_axis(nt0=1e5,nt=300,step='log',dt=0.005,fr=15,mode='time'):
     """

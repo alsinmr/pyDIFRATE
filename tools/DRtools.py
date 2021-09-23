@@ -702,12 +702,19 @@ class Strings(object):
         self.unit=unit
         self.include_space=include_space
         self.no_prefix=False
+        self._index=-1
+        print('updated')
     def __setattr__(self,name,value):
-        if name=='unit' or name=='include_space' or name=='no_prefix':
+        if name in ['unit','include_space','no_prefix','_index']:
             super().__setattr__(name,value)
         else:
             super().__setattr__(name,NiceStr(value,self))
+    def __call__(self,string):
+        self._index+=1
+        setattr(self,'_{}'.format(self._index),string)
+        return getattr(self,'_{}'.format(self._index))
 
 
+nice_str=Strings()
 
        

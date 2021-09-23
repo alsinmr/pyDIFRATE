@@ -100,7 +100,7 @@ def hop_setup(uni,sel1,sel2,sel3,sel4,ntest=1000):
     
     return vr
 
-def chi_hop(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None,ntest=1000):
+def chi_hop(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None,ntest=1000,sigma=0):
     """
     Determines contributions to motion due to 120 degree hops across three sites
     for some bond within a side chain. Motion of the frame will be the three site
@@ -135,7 +135,7 @@ def chi_hop(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None,
                 sel1=sel1+chain[0]
                 sel2=sel2+chain[1]
                 sel3=sel3+chain[2]
-                sel4=sel4+chain[4]
+                sel4=sel4+chain[3]
         else:
             frame_index.extend([np.nan,np.nan,np.nan])
     frame_index=np.array(frame_index)
@@ -146,19 +146,27 @@ def chi_hop(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None,
     vr=hop_setup(molecule.mda_object,sel1,sel2,sel3,sel4,ntest)
     
     box=molecule.mda_object.dimensions
-    def sub():
-        v12s,v23s,v34s=[vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
-                     for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
-        v12s=vft.norm(v12s)
-        sc=vft.getFrame(v23s,v34s)
-        v12s=vft.R(v12s,*vft.pass2act(*sc))    #Into frame defined by v23,v34
-        i=np.argmax((v12s*vr).sum(axis=1),axis=0)   #Index of best fit to reference vectors (product is cosine, which has max at nearest value)
-        v12s=vr[i,:,np.arange(v12s.shape[1])] #Replace v12 with one of the three reference vectors
-        return vft.R(v12s.T,*sc),v23s  #Rotate back into original frame
-    return sub,frame_index
+    if sigma!=0:
+        def sub():
+            return [vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
+                 for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
+        return sub,frame_index,{'PPfun':'AvgHop','vr':vr,'sigma':sigma}
+    else:
+            
+        def sub():
+            v12s,v23s,v34s=[vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
+                         for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
+            v12s=vft.norm(v12s)
+            sc=vft.getFrame(v23s,v34s)
+            v12s=vft.R(v12s,*vft.pass2act(*sc))    #Into frame defined by v23,v34
+            i=np.argmax((v12s*vr).sum(axis=1),axis=0)   #Index of best fit to reference vectors (product is cosine, which has max at nearest value)
+            v12s=vr[i,:,np.arange(v12s.shape[1])] #Replace v12 with one of the three reference vectors
+            return vft.R(v12s.T,*sc),v23s  #Rotate back into original frame        
+            
+        return sub,frame_index
 
 def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
-               Nuc=None,resids=None,segids=None,filter_str=None,ntest=1000):
+               Nuc=None,resids=None,segids=None,filter_str=None,ntest=1000,sigma=0):
     """
     Determines contributions to motion due to 120 degree hops across three sites. 
     Motion within this frame will be all motion not involving a hop itself. Motion
@@ -212,17 +220,24 @@ def hops_3site(molecule,sel1=None,sel2=None,sel3=None,sel4=None,\
     vr=hop_setup(molecule.mda_object,sel1,sel2,sel3,sel4,ntest)
     
     box=uni.dimensions
-    def sub():
-        v12s,v23s,v34s=[vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
-                     for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
-        v12s=vft.norm(v12s)
-        sc=vft.getFrame(v23s,v34s)
-        v12s=vft.R(v12s,*vft.pass2act(*sc))    #Into frame defined by v23,v34
-        i=np.argmax((v12s*vr).sum(axis=1),axis=0)   #Index of best fit to reference vectors (product is cosine, which has max at nearest value)
-        v12s=vr[i,:,np.arange(v12s.shape[1])] #Replace v12 with one of the three reference vectors
-        return vft.R(v12s.T,*sc),v23s  #Rotate back into original frame
+    if sigma!=0:
+        def sub():
+            return [vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
+                         for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
+        return sub,None,{'PPfun':'AvgHop','vr':vr,'sigma':sigma}
+    else:
+        def sub():
+            v12s,v23s,v34s=[vft.pbc_corr((s1.positions-s2.positions).T,box[:3]) \
+                         for s1,s2 in zip([sel1,sel2,sel3],[sel2,sel3,sel4])]
+            v12s=vft.norm(v12s)
+            sc=vft.getFrame(v23s,v34s)
+            v12s=vft.R(v12s,*vft.pass2act(*sc))    #Into frame defined by v23,v34
+            i=np.argmax((v12s*vr).sum(axis=1),axis=0)   #Index of best fit to reference vectors (product is cosine, which has max at nearest value)
+            v12s=vr[i,:,np.arange(v12s.shape[1])] #Replace v12 with one of the three reference vectors
+            return vft.R(v12s.T,*sc),v23s  #Rotate back into original frame
+        return sub
     
-    return sub
+
     
 def membrane_grid(molecule,grid_pts,sigma=25,sel0=None,sel='type P',resids=None,segids=None,filter_str=None):
     """

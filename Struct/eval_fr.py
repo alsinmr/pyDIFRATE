@@ -8,11 +8,14 @@ Created on Tue Oct  6 10:46:10 2020
 
 
 import numpy as np
+from copy import deepcopy
 import pyDIFRATE.Struct.vf_tools as vft
 from pyDIFRATE.iRED.fast_index import trunc_t_axis
 from pyDIFRATE.iRED.fast_funs import get_count,printProgressBar
 from pyDIFRATE.data.data_class import data
 from pyDIFRATE.Struct.vec_funs import new_fun,print_frame_info
+from pyDIFRATE.chimera.chimeraX_funs import draw_tensors
+from pyDIFRATE.Struct import FramesPostProc as FPP
 
 
 class ReturnIndex():
@@ -110,7 +113,7 @@ class FrameObj():
         self.molecule=molecule
         self.vft=None
         self.vf=list()
-        self.frame_info={'frame_index':list(),'label':None}
+        self.frame_info={'frame_index':list(),'label':None,'info':list()}
         self.defaults={'t0':0,'tf':-1,'dt':None,'n':10,'nr':10,'mode':'auto',\
                        'squeeze':True}
         self.terms={'ct_finF':True,'ct_m0_finF':False,'ct_0mPASinF':False,\
@@ -189,10 +192,10 @@ class FrameObj():
             assert self.vft is not None,'Define the tensor frame first (run mol.tensor_frame)'
             vft=self.vft()
             nb=vft[0].shape[1] if len(vft)==2 else vft.shape[1] #Number of bonds in the tensor frame
-            fun,fi=new_fun(Type,mol,**kwargs)
+            fun,fi,info=new_fun(Type,mol,**kwargs)
             if frame_index is None:frame_index=fi #Assign fi to frame_index if frame_index not provided
             f=fun()    #Output of the vector function (test its behavior)
-            nf=f[0].shape[1] if len(f)==2 else f.shape[1]
+            nf=f[0].shape[1] if len(f)>1 else f.shape[1]
             if fun is not None:
                 "Run some checks on the validity of the frame before storing it"
                 if frame_index is not None:
@@ -202,6 +205,7 @@ class FrameObj():
                 else:
                     assert nf==nb,'No frame_index was provided, but the size of the tensor_fun and the frame_fun do not match'
                     self.frame_info['frame_index'].append(np.arange(nb))
+                self.frame_info['info'].append(info)
                 self._vf.append(fun)    #Append the new function
                 self.__frames_loaded=False
                 self.__return_index=None    #This is the return index that was actually used
@@ -223,7 +227,7 @@ class FrameObj():
             if Type=='bond' and 'sel3' not in kwargs:
                 kwargs['sel3']='auto'     #Define sel3 for the bond frame (define vXZ)
             
-            self.vft,_=new_fun(Type,mol,**kwargs) #New tensor function
+            self.vft,*_=new_fun(Type,mol,**kwargs) #New tensor function
             if len(self.vft())!=2:
                 print('Warning: This frame only defines vZ, and not vXZ;')
                 print('In this case, correlation functions may not be properly defined')
@@ -237,7 +241,7 @@ class FrameObj():
         """
         self.vft=None
         self.vf=list()
-        self.frame_info={'frame_index':list(),'label':None}
+        self.frame_info={'frame_index':list(),'label':None,'info':list()}
     
     def load_frames(self,t0=0,tf=-1,n=10,nr=10,dt=None,index=None):
         """
@@ -324,6 +328,57 @@ class FrameObj():
             o.detect.molecule=self.molecule
                 
         return out
+        
+    def draw_tensors(self,fr_num,tensor_name='A_0m_PASinF',sc=2.09,tstep=0,disp_mode=None,index=None,scene=None,\
+                 fileout=None,save_opts=None,chimera_cmds=None,\
+                 colors=[[255,100,100,255],[100,100,255,255]],marker=None,\
+                 marker_color=[[100,255,100,255],[255,255,100,255]]):
+        
+        assert tensor_name in self.A.keys(),'Tensors not found, set tensor_name to one of {0}'.format(self.A.keys())
+        
+        draw_tensors(self.A[tensor_name][fr_num],mol=self.molecule,sc=sc,tstep=tstep,\
+                     disp_mode=disp_mode,index=index,scene=scene,fileout=fileout,\
+                     save_opts=save_opts,chimera_cmds=chimera_cmds,colors=colors,\
+                     marker=marker,marker_color=marker_color,vft=self.vft)
+        
+    def post_process(self,Type=None,*args,**kwargs):
+        if Type is None:            
+            if 'fr_ind' in kwargs:
+                k=kwargs['fr_ind']
+                info=self.frame_info['info'][k]
+                if 'PPfun' in info:
+                    print('Applying default post processing to frame {0}'.format(k))
+                    Type=info['PPfun']
+                    assert hasattr(FPP,Type),'Unknown post-processing method set in defaults'
+                    info_in=info.copy()
+                    info_in.pop('PPfun')
+                    self.post_process(Type=Type,fr_ind=k,**info_in)
+                else:
+                    print('Warning: No default post processing for frame {0}'.format(k))
+            else:
+                print('Applying default post processing (only active for frames that define their own post processing)')
+                for k,info in enumerate(self.frame_info['info']):
+                    if 'PPfun' in info:
+                        Type=info['PPfun']
+                        assert hasattr(FPP,Type),'Unknown post-processing method set in defaults'
+                        info_in=info.copy()
+                        info_in.pop('PPfun')
+                        self.post_process(Type=Type,fr_ind=k,**info_in)
+        else:
+            assert hasattr(self,'vecs'),'No frames have been loaded (load frames before post processing)'
+            assert hasattr(FPP,Type),'Unknown post-processing method'
+            if not(hasattr(self,'_vecs')):
+                self._vecs=deepcopy(self.vecs)
+            getattr(FPP,Type)(self.vecs,*args,**kwargs)
+            self.include=None
+
+    
+    def remove_post_process(self):
+        if hasattr(self,'_vecs'):
+            self.vecs=self._vecs
+            delattr(self,'_vecs')
+            self.include=None
+        
         
     
 
@@ -734,7 +789,7 @@ def mol2vec(mol,n=100,nr=10,t0=0,tf=-1,dt=None,index=None):
     if index is None:
         index=trunc_t_axis(tf-t0,n,nr)+t0
     
-    return ini_vec_load(traj,mol._vf,mol._vft,mol._frame_info['frame_index'],index=index,dt=dt)
+    return ini_vec_load(traj,mol._vf,mol._vft,mol._frame_info['frame_index'],index=index,dt=dt,info=mol._frame_info['info'])
     
 "This function takes care of the bulk of the actual calculations"
 def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p',mode='both',index=None):
@@ -1264,7 +1319,7 @@ def Ct_similar(ct0,A,m=None):
     return ct
 
 
-def ini_vec_load(traj,frame_funs,tensor_fun,frame_index=None,index=None,dt=None):
+def ini_vec_load(traj,frame_funs,tensor_fun,frame_index=None,index=None,dt=None,info=None):
     """
     Loads vectors corresponding to each frame, defined in a list of frame functions.
     Each element of frame_funs should be a function, which returns one or two
@@ -1309,9 +1364,7 @@ def ini_vec_load(traj,frame_funs,tensor_fun,frame_index=None,index=None,dt=None)
                 printProgressBar(c+1, len(index), prefix = 'Loading Ref. Frames:', suffix = 'Complete', length = 50) 
         except:
             pass
-                    
-    
-#    SZ=list()        
+                       
     
     for k,v0 in enumerate(v):
         v[k]=np.array(v0)
@@ -1320,22 +1373,9 @@ def ini_vec_load(traj,frame_funs,tensor_fun,frame_index=None,index=None,dt=None)
         (If only one vector, X,Y,Z is the first dimension)
         """
         v[k]=np.moveaxis(v[k],0,-1)
-#        if v[k].ndim==4:
-#            v[k]=((v[k].swapaxes(0,1)).swapaxes(1,2)).swapaxes(2,3)
-#        else:
-#            v[k]=(v[k].swapaxes(0,1)).swapaxes(1,2)
-#        SZ.append(v[k].shape[-2])
+
         
     vT=np.moveaxis(vT,0,-1)
-#        
-#    SZ=np.array(SZ)
-#    SZ=SZ[SZ!=1]
 
-    "Below line causing problems- comment for the moment...means frame_index must be given elsewhere..."    
-#    if np.all(SZ==SZ[0]):
-#        frame_index=np.repeat([np.arange(SZ[0])],nf,axis=0)    
     
-    "Somehow, the above line is required for proper iRED functioning...very strange"
-    "!!!! Fix and understand above line's glitch!!!!"
-    
-    return {'n_frames':nf,'v':v,'vT':vT,'t':t,'index':index,'frame_index':frame_index} 
+    return {'n_frames':nf,'v':v,'vT':vT,'t':t,'index':index,'frame_index':frame_index,'info':info} 
