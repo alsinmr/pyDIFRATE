@@ -19,7 +19,7 @@ should have X,Y,Z as the first dimension (for example, such that we can apply
 X,Y,Z=v). Note this is the transpose of the outputs of MDanalysis positions
 """    
 
-def peptide_plane(molecule,resids=None,segids=None,filter_str=None,full=True):
+def peptide_plane(molecule,resids=None,segids=None,filter_str=None,full=True,sigma=0):
     """
     Aligns the peptide plane motion. Two options exist, full=True performs an
     RMS alignment of the N,H,CA of the given residue and C',O,CA of the previous
@@ -60,7 +60,7 @@ def peptide_plane(molecule,resids=None,segids=None,filter_str=None,full=True):
             vecs=vfun()
             R=[vft.RMSalign(vr,v) for v,vr in zip(vecs,vref)]
             return vft.R2vec(R)
-        return sub
+        return sub,None,{'PPfun':'AvgGauss','sigma':sigma}
     else:
         "Peptide plane motion, defined by C,N,O positions"
         selN,selC,selO=selt.peptide_plane(molecule,resids,segids,filter_str,full)
@@ -73,7 +73,7 @@ def peptide_plane(molecule,resids=None,segids=None,filter_str=None,full=True):
             v2=vft.pbc_corr(v2.T,box)
         
             return v1,v2
-        return sub
+        return sub,None,{'PPfun':'AvgGauss','sigma':sigma}
     
 def bond(molecule,sel1=None,sel2=None,sel3=None,Nuc=None,resids=None,segids=None,filter_str=None):
     """Bond defines the frame. 
@@ -202,7 +202,7 @@ def bond_rotate(molecule,sel1=None,sel2=None,sel3=None,Nuc=None,resids=None,segi
         return v1,v2
     return sub
 
-def superimpose(molecule,sel=None,resids=None,segids=None,filter_str=None):
+def superimpose(molecule,sel=None,resids=None,segids=None,filter_str=None,sigma=0):
     """
     Superimposes a selection of atoms to a reference frame (the first frame)
     
@@ -234,7 +234,7 @@ def superimpose(molecule,sel=None,resids=None,segids=None,filter_str=None):
             R.append(vft.RMSalign(vr,v))    #Get alignment to reference vector
             
         return vft.R2vec(R)     #This converts R back into two vectors
-    return sub        
+    return sub,None,{'PPfun':'AvgGauss','sigma':sigma}
             
 
 def chain_rotate(molecule,sel=None,Nuc=None,resids=None,segids=None,filter_str=None):

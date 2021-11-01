@@ -236,7 +236,10 @@ def append_data(data_in,labels=None,index=None):
     
     for f in flds:
         if len(R[f])!=0:
-            setattr(data,f,np.concatenate(R[f],axis=0))
+            try:
+                setattr(data,f,np.concatenate(R[f],axis=0))
+            except:
+                print('Warning: Data sizes for "{0}" do not match and have been omitted'.format(f))    
     data.label=np.concatenate(label,axis=0)
     
     if index is not None:
@@ -703,7 +706,6 @@ class Strings(object):
         self.include_space=include_space
         self.no_prefix=False
         self._index=-1
-        print('updated')
     def __setattr__(self,name,value):
         if name in ['unit','include_space','no_prefix','_index']:
             super().__setattr__(name,value)

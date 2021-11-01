@@ -18,15 +18,15 @@ from pyDIFRATE.chimera.chimeraX_funs import draw_tensors
 from pyDIFRATE.Struct import FramesPostProc as FPP
 
 
+flags={'ct_finF':True,'ct_m0_finF':False,'ct_0m_finF':False,'ct_0m_PASinF':False,\
+        'A_m0_finF':False,'A_0m_finF':False,'A_0m_PASinF':False,\
+        'ct_prod':True,'ct':True,'S2':True}
 class ReturnIndex():
-    flags={'ct_finF':True,'ct_m0_finF':False,'ct_0m_finF':False,'ct_0m_PASinF':False,\
-            'A_m0_finF':False,'A_0m_finF':False,'A_0m_PASinF':False,\
-            'ct_prod':True,'ct':True,'S2':True}
     for k in flags.keys():
         locals()[k]=property(lambda self,k=k:self.flags[k]) #Dynamically set these properties
     
     def __init__(self,ret_in=None,**kwargs):
-        flags=self.flags
+        self.flags=flags
                 
 
         if ret_in is not None:

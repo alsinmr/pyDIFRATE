@@ -995,6 +995,7 @@ def spherical_surface(delta,eta=None,euler=None,pos=None,sc=2.09,
     z0=np.cos(b)*np.abs(A0)*sc/2
 
     alpha,beta,gamma=euler
+    alpha,beta,gamma=-alpha,-beta,-gamma    #Added 30.09.21 along with edits to vf_tools>R2euler
     #Rotate by alpha
     x1,y1,z1=x0*np.cos(alpha)+y0*np.sin(alpha),-x0*np.sin(alpha)+y0*np.cos(alpha),z0
     #Rotate by beta

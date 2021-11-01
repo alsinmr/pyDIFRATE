@@ -13,6 +13,7 @@ function calculation, frame definition, etc.
 import MDAnalysis as mda
 import numpy as np
 import numbers
+
   
 def sel0_filter(mol,resids=None,segids=None,filter_str=None):
     """
@@ -132,7 +133,7 @@ def sel_lists(mol,sel=None,resids=None,segids=None,filter_str=None):
             elif len(resids)==n:
                 sel=[sel_simple(s,resids=r) for s,r in zip(sel,resids)]
             else:
-                print('Inconsistent sizes for selections')
+                print('Inconsistent sizes for selections (resids)')
         else:
             if n==1: 
                 sel=sel_simple(sel,resids=resids) 
@@ -141,14 +142,14 @@ def sel_lists(mol,sel=None,resids=None,segids=None,filter_str=None):
             
     "Apply the segids filter"
     if segids is not None:
-        if hasattr(segids,'__iter__') and hasattr(segids[0],'__iter__'):
+        if not(isinstance(segids,str)) and hasattr(segids,'__iter__') and hasattr(segids[0],'__iter__'):
             if n==1:
                 n=len(segids)
                 sel=[sel_simple(sel,segids=si) for si in segids]
             elif len(segids)==n:
                 sel=[sel_simple(s,segids=si) for s,si in zip(sel,segids)]
             else:
-                print('Inconsistent sizes for selections')
+                print('Inconsistent sizes for selections (segids)')
         else:
             if n==1: 
                 sel=sel_simple(sel,segids=segids) 
@@ -164,7 +165,7 @@ def sel_lists(mol,sel=None,resids=None,segids=None,filter_str=None):
             elif len(filter_str)==n:
                 sel=[sel_simple(s,filter_str=f) for s,f in zip(sel,filter_str)]
             else:
-                print('Inconsistent sizes for selections')
+                print('Inconsistent sizes for selections (filter_str)')
         else:
             if n==1:
                 sel=sel_simple(sel,filter_str=filter_str)
@@ -415,9 +416,11 @@ def peptide_plane(mol,resids=None,segids=None,filter_str=None,full=True):
     selm1=sel0_filter(mol,np.array(resids)-1,segids,filter_str)
     
     if full:
-        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.5 name HN H CD) and (around 1.4 (name C and around 1.4 name O))')
+#        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.5 name HN H CD) and (around 1.4 (name C and around 1.4 name O))')
+        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.7 name HN H CD) and (around 1.7 (name C and around 1.7 name O))')
     else:  #We don't need the HN to be present in this case  
-        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.4 (name C and around 1.4 name O))')
+#        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.4 (name C and around 1.4 name O))')
+        selN=(sel0.union(selm1)).select_atoms('protein and (name N and around 1.7 (name C and around 1.7 name O))')
 
     i=np.isin(selN.resids,resids)
     selN=selN[i]    #Maybe we accidently pick up the N in the previous plane? Exclude it here
@@ -426,14 +429,18 @@ def peptide_plane(mol,resids=None,segids=None,filter_str=None,full=True):
     sel0=sel0_filter(sel0,resids)
     selm1=sel0_filter(selm1,np.array(resids)-1)
     if full:
-        selH=sel0.residues.atoms.select_atoms('protein and (name H HN CD and around 1.5 name N)')
+#        selH=sel0.residues.atoms.select_atoms('protein and (name H HN CD and around 1.5 name N)')
+        selH=sel0.residues.atoms.select_atoms('protein and (name H HN CD and around 1.7 name N)')
         selCA=sel0.residues.atoms.select_atoms('protein and (name CA and around 1.7 name N)')
     
 #    i=np.argwhere(np.isin(sel0.residues.resids,sel1.residues.resids-1)).squeeze()
-    selCm1=selm1.residues.atoms.select_atoms('protein and (name C and around 1.4 name O)')
-    selOm1=selm1.residues.atoms.select_atoms('protein and (name O and around 1.4 name C)')
+#    selCm1=selm1.residues.atoms.select_atoms('protein and (name C and around 1.4 name O)')
+    selCm1=selm1.residues.atoms.select_atoms('protein and (name C and around 1.7 name O)')
+#    selOm1=selm1.residues.atoms.select_atoms('protein and (name O and around 1.4 name C)')
+    selOm1=selm1.residues.atoms.select_atoms('protein and (name O and around 1.7 name C)')
     if full:
-        selCAm1=selm1.residues.atoms.select_atoms('protein and (name CA and around 1.6 name C)')
+#        selCAm1=selm1.residues.atoms.select_atoms('protein and (name CA and around 1.6 name C)')
+        selCAm1=selm1.residues.atoms.select_atoms('protein and (name CA and around 1.7 name C)')
     
     if full:
         return selCA,selH,selN,selCm1,selOm1,selCAm1

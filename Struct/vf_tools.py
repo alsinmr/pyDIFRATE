@@ -206,7 +206,7 @@ def getFrame(v1,v2=None,return_angles=False):
     
     if oneD:
         cA,sA,cB,sB,cG,sG=cA[0],sA[0],cB[0],sB[0],cG[0],sG[0]
-        #Recently added. May need removed if errors occur 11.09.2020
+        #Recently added. May need removed if errors occur 11.09.2021
     
     if return_angles:
         return sc2angles(cA,sA,cB,sB,cG,sG)
@@ -415,32 +415,32 @@ def R2euler(R,return_angles=False):
     
     if R.ndim>2:
         cB=R[2,2]
-        cB[cB>1]=1.
+        cB[cB>1]=1.     #Some clean-up to make sure we don't get imaginary terms later (cB cannot exceed 1- only numerical error causes this)
         cB[cB<-1]=-1.
         sB=np.sqrt(1.-cB**2)
         i,ni=sB!=0,sB==0
         cA,sA,cG,sG=np.ones(i.shape),np.zeros(i.shape),np.ones(i.shape),np.zeros(i.shape)
-        cA[i]=-R[2,0,i]/sB[i]
+        cA[i]=R[2,0,i]/sB[i]    #Sign swap, 30.09.21
         sA[i]=R[2,1,i]/sB[i]
-        cG[i]=R[0,2,i]/sB[i]
+        cG[i]=-R[0,2,i]/sB[i]   #Sign swap, 30.09.21
         sG[i]=R[1,2,i]/sB[i]
         
         cG[ni]=R[0,0,ni]
-        sG[ni]=-R[0,1,ni]
+        sG[ni]=-R[1,0,ni]       #Sign swap, 30.09.21
     else:
         cB=R[2,2]
         if cB>1:cB=1
         if cB<-1:cB=-1
         sB=np.sqrt(1-cB**2)
         if sB>0:
-            cA=-R[2,0]/sB
+            cA=R[2,0]/sB        #Sign swap, 30.09.21
             sA=R[2,1]/sB
-            cG=R[0,2]/sB
+            cG=-R[0,2]/sB       #Sign swap, 30.09.21
             sG=R[1,2]/sB
         else:
             cA,sA=1,0
             cG=R[0,0]
-            sG=-R[0,1]
+            sG=-R[1,0]          #Sign swap, 30.09.21
 
     
     if return_angles:

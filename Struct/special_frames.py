@@ -120,9 +120,8 @@ def chi_hop(molecule,n_bonds=1,Nuc=None,resids=None,segids=None,filter_str=None,
         Nuc='ch3'
     selC,_=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)  
     selC=selC[::3]    #Above line returns 3 copies of each carbon. Just take 1 copy
-    
     frame_index=list()
-    sel1,sel2,sel3=None,None,None
+    sel1,sel2,sel3,sel4=None,None,None,None
     k=0
     for s in selC:
         chain=selt.get_chain(s,s.residue.atoms)[2+n_bonds:6+n_bonds]
