@@ -16,9 +16,10 @@ nmr.new_exp(Type=['R2','NOE'],v0=600,Nuc='15N')
 pdb='1d3z.pdb'
 nmr.molecule.load_struct(pdb)
 nmr.molecule.select_atoms(Nuc='15N')
-nmr.new_mdl(Model='AnisoDif',tM=4.84e-9,xi=2,euler=[0,0,0])  #These aren't the right Euler angles
+nmr.new_mdl(Model='AnisoDif',tM=4.84e-9,xi=.2,eta=0,euler=[0,0,0])  
 
 fig=plt.figure('Orientation Dependence for Anisotropic Tumbling')
+fig.clear()
 ax=[fig.add_subplot(2,5,k+1) for k in range(10)]
 for k,a in enumerate(ax):
     for m in range(len(nmr.molecule.sel1)):
@@ -29,6 +30,7 @@ r.r_auto(5)         #This optimizes the average detectors
 r.r_target(bond=-1) #This optimizes the individual bonds
 
 fig=plt.figure('Orientation Dependence for Detector Sensitivities')
+fig.clear()
 ax=[fig.add_subplot(2,3,k+1) for k in range(5)]
 for k,a in enumerate(ax):
     for m in range(len(nmr.molecule.sel1)):
