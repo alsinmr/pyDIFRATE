@@ -543,7 +543,13 @@ def run_chimeraX(mol,disp_mode=None,x=None,chimera_cmds=None,fileout=None,save_o
         WrCC(f,'~display',1)
         WrCC(f,'~ribbon',1)
         
-        
+
+        #Pseudobond groups somehow screw up what I'm doing....
+        py_line(f,'from chimerax.atomic.pbgroup import PseudobondGroup',1)
+        py_line(f,'pbg_list=list()',1)
+        py_line(f,'for mdl in session.models:',1)
+        py_line(f,'if isinstance(mdl,PseudobondGroup):pbg_list.append(mdl)',2)
+        py_line(f,'for mdl in pbg_list:mdl.delete()',1)        
         #Get the atoms to be displayed
         py_line(f,'if len(session.models)>1:',1)
         py_line(f,'atoms=session.models[1].atoms',2)

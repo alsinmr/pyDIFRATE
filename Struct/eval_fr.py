@@ -8,6 +8,7 @@ Created on Tue Oct  6 10:46:10 2020
 
 
 import numpy as np
+from numba import jit
 from copy import deepcopy
 import pyDIFRATE.Struct.vf_tools as vft
 from pyDIFRATE.iRED.fast_index import trunc_t_axis
@@ -203,8 +204,11 @@ class FrameObj():
                     assert frame_index[np.logical_not(np.isnan(frame_index))].max()<nf,'frame_index contains values that exceed the number of frames'
                     self.frame_info['frame_index'].append(frame_index)
                 else:
-                    assert nf==nb,'No frame_index was provided, but the size of the tensor_fun and the frame_fun do not match'
-                    self.frame_info['frame_index'].append(np.arange(nb))
+                    assert nf==nb or nf==1,'No frame_index was provided, but the size of the tensor_fun and the frame_fun do not match'
+                    if nf==1:
+                        self.frame_info['frame_index'].append(np.zeros(nb))
+                    else:
+                        self.frame_info['frame_index'].append(np.arange(nb))
                 self.frame_info['info'].append(info)
                 self._vf.append(fun)    #Append the new function
                 self.__frames_loaded=False
@@ -248,8 +252,8 @@ class FrameObj():
         Sweeps through the trajectory and loads all frame and tensor vectors, 
         storing the result in vecs
         """
-        tf=self.molecule.mda_object.trajectory.n_frames if tf==-1 or tf is None else tf
-        index=trunc_t_axis(tf-t0,n,nr)+t0
+        tf=self.molecule.mda_object.trajectory.n_frames if tf==-1 or tf is None else int(tf)
+        index=trunc_t_axis(int(tf-t0),n,nr)+int(t0)
         if self.__frames_loaded:
             if np.all(self.vecs['index']==index):return
         self.vecs=mol2vec(self,dt=dt,index=index)
@@ -1022,7 +1026,7 @@ def ct_prods(l,n):
         
         
         
-"Generator object to loop over when calculating correlation functions/residual tensors"  
+"Generator object to loop over when calculating correlation functions/residual tensors"
 def loops(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,calc=None):
     """
     Generator that calculates the elements required for the loop over components

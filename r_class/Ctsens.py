@@ -45,7 +45,7 @@ class Ct(mdl.model):
                 if np.size(z)==3:
                     self.__tc=np.logspace(z[0],z[1],z[2])
                 else:
-                    self.__tc=np.power(10,z)
+                    self.__tc=np.power(10.,z)
                 "Allow users to input z instead of tc"
             else:
                 self.__tc=np.logspace(-14,-3,200)
