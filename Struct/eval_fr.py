@@ -40,6 +40,10 @@ from pyDIFRATE.data.data_class import data
 from pyDIFRATE.Struct.vec_funs import new_fun,print_frame_info
 from pyDIFRATE.chimera.chimeraX_funs import draw_tensors
 from pyDIFRATE.Struct import FramesPostProc as FPP
+#from scipy.fft import fft,ifft
+from pyfftw.interfaces.numpy_fft import fft,ifft
+#from pyfftw.interfaces.scipy_fft import fft,ifft
+import os
 
 
 flags={'ct_finF':True,'ct_m0_finF':False,'ct_0m_finF':False,'ct_0m_PASinF':False,\
@@ -152,6 +156,7 @@ class FrameObj():
         self.Ct={}
         self.A={}
         self.S2=None
+        self.__return_index=None
     
     "I'd like to get rid of these in a later iteration. These were hidden as part of the molecule object..."
     @property
@@ -223,7 +228,7 @@ class FrameObj():
             if fun is not None:
                 "Run some checks on the validity of the frame before storing it"
                 if frame_index is not None:
-                    assert frame_index.size==nb,'frame_index size does not match the size of the tensor_fun output'
+                    assert frame_index.size==nb,'frame_index size does not match the size of the tensor_fun output ({0} bonds,{1} elements in frame_index)'.format(nb,frame_index.size)
                     assert frame_index[np.logical_not(np.isnan(frame_index))].max()<nf,'frame_index contains values that exceed the number of frames'
                     self.frame_info['frame_index'].append(frame_index)
                 else:
@@ -959,9 +964,11 @@ def Ct_D2inf(vZ,vXZ=None,nuZ_F=None,nuXZ_F=None,nuZ_f=None,nuXZ_f=None,cmpt='0p'
         N=N[i]
         #We only take values for N!=0, and then normalize by N
         if mmpswap:
-            ct=[None if ct1 is None else (np.fft.ifft(ct1.conj(),axis=-1)[:,:int(n/2)])[:,i]/N for ct1 in ct0]
+            ct=[None if ct1 is None else (ifft(ct1.conj(),axis=-1,threads=os.cpu_count())[:,:n>>1])[:,i]/N for ct1 in ct0]
+#            ct=[None if ct1 is None else (ifft(ct1.conj(),axis=-1)[:,:n>>1])[:,i]/N for ct1 in ct0]
         else:
-            ct=[None if ct1 is None else (np.fft.ifft(ct1,axis=-1)[:,:int(n/2)])[:,i]/N for ct1 in ct0]
+            ct=[None if ct1 is None else (ifft(ct1,axis=-1,threads=os.cpu_count())[:,:n>>1])[:,i]/N for ct1 in ct0]
+#            ct=[None if ct1 is None else (ifft(ct1,axis=-1)[:,:n>>1])[:,i]/N for ct1 in ct0]
 #        ct=[None if ct1 is None else ct1.conj() for ct1 in ct]   #We have the complex conjugate of the correct correlation function
     elif ctDIR:
         ct=[None if ct1 is None else ct1/N[N!=0] for ct1 in ct0]
@@ -1261,7 +1268,6 @@ def Ctsym(A_0m_PASinf,nuZ_f,nuXZ_f=None,nuZ_F=None,nuXZ_F=None,index=None):
     return Ct_D2inf(nuZ_fsym,cmpt='00',mode='ct',index=index)
 
 
-#%% Some functions for calculating correlation functions quickly
 def FT(x,index=None):
     """
     Performs a zero-filled Fourier transform (doubling the size). If an index
@@ -1280,7 +1286,8 @@ def FT(x,index=None):
     else:
         x1=x
     n=x1.shape[-1]
-    return np.fft.fft(x1,2*n,axis=-1)
+    return fft(x1,2*n,axis=-1,threads=os.cpu_count())
+#    return fft(x1,2*n,axis=-1)
 
 def fastCT(x,y,index=None,N=None):
     """

@@ -495,7 +495,7 @@ class detect(mdl.model):
             """
             ntc=Vt.shape[1]
             target=target if target else np.zeros(ntc)
-            x=linprog(Vt.sum(1),-Vt.T,-target,[Vt[:,k]],1,bounds=(-500,500),\
+            x=linprog(Vt.sum(1),A_ub=-Vt.T,b_ub=-target,A_eq=[Vt[:,k]],b_eq=1,bounds=(-500,500),\
                       method='interior-point',options={'disp':False})
             rhoz=(Vt.T@x['x']).T
             maxi=np.argmax(np.abs(rhoz))
@@ -1866,11 +1866,13 @@ def svd0(X,n):
 #        U=U[:,-1::-1]      #svds puts out eigenvalues in opposite order of svd
 #        S=S[-1::-1]
 #        Vt=Vt[-1::-1,:]
+        print('Check1')
         S2,V=eigs(np.dot(np.transpose(X),X),k=n)
         S=np.sqrt(S2.real)
         U=np.dot(np.dot(X,V.real),np.diag(1/S))
         Vt=V.real.T
     else:
+        print('Check2')
         U,S,Vt=svd(X)       #But, typically better results from full calculation
         U=U[:,0:np.size(S)] #Drop all the empty vectors
         Vt=Vt[0:np.size(S),:]
