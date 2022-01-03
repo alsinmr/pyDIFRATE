@@ -491,7 +491,7 @@ def get_chain(atom,sel0,exclude=None):
     connected_atoms = []
     bonded = get_bonded()
     if len(exclude)==0:
-      if np.sum(np.fromiter(["h"==a.type.lower() for a in bonded],dtype=bool)) == 3:
+      if np.sum(np.fromiter(["h"==a.type.lower() or ""==a.type for a in bonded],dtype=bool)) == 3:
         final=True  
         for a in bonded:
           if "h"==a.name[0].lower():

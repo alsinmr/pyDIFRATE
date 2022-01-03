@@ -1866,13 +1866,11 @@ def svd0(X,n):
 #        U=U[:,-1::-1]      #svds puts out eigenvalues in opposite order of svd
 #        S=S[-1::-1]
 #        Vt=Vt[-1::-1,:]
-        print('Check1')
         S2,V=eigs(np.dot(np.transpose(X),X),k=n)
         S=np.sqrt(S2.real)
         U=np.dot(np.dot(X,V.real),np.diag(1/S))
         Vt=V.real.T
     else:
-        print('Check2')
         U,S,Vt=svd(X)       #But, typically better results from full calculation
         U=U[:,0:np.size(S)] #Drop all the empty vectors
         Vt=Vt[0:np.size(S),:]
