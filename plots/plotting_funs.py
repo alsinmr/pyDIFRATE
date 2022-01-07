@@ -278,13 +278,19 @@ def plot_rho(lbl,R,R_std=None,style='plot',color=None,ax=None,split=True,**kwarg
     
     for lbl,R,R_u,R_l in zip(lbl1,R1,R_u1,R_l1):
         if R_l is None:
-            ax.plot(lbl,R,color=color,**kwargs)
+#            hdl=ax.plot(lbl,R,color=color,**kwargs)
+            hdl=ax.plot(lbl,R,color=color)
+            _set_plot_attr(hdl,**kwargs)
         else:
-            ax.errorbar(lbl,R,[R_l,R_u],color=ebar_clr,capsize=3,**kwargs)
+#            ax.errorbar(lbl,R,[R_l,R_u],color=ebar_clr,capsize=3,**kwargs)
+            hdl=ax.errorbar(lbl,R,[R_l,R_u],color=ebar_clr,capsize=3)[0]
+            _set_plot_attr(hdl,**kwargs)
         if style.lower()[0]=='b':
             kw=kwargs.copy()
             if 'linestyle' in kw: kw.pop('linestyle')
-            ax.bar(lbl,R,color=color,**kw)
+#            ax.bar(lbl,R,color=color,**kw)
+            hdl=ax.bar(lbl,R,color=color)
+            _set_plot_attr(hdl,**kw)
         if color is None:
             color=ax.get_children()[0].get_color()
     
@@ -384,15 +390,15 @@ def plot_fit(lbl,Rin,Rc,Rin_std=None,info=None,index=None,exp_index=None,fig=Non
                    np.max(np.concatenate((Rin[:,k],Rc[:,k])))*1.25)
                 i=info[k]
                 string=r'{0} {1}@{2:.0f} MHz'.format(i['Nuc'],i['Type'],i['v0'])
-                a.text(np.min(lbl),a.get_ylim()[1]*0.88,string,FontSize=8)
+                a.text(np.min(lbl),a.get_ylim()[1]*0.88,string,fontsize=8)
             else:
                 a.set_ylim(np.min(np.concatenate(([0],Rin[:,k],Rc[:,k]))),\
                    np.max(np.concatenate((Rin[:,k],Rc[:,k])))*1.45)
                 i=info[k]
                 string=r'{0} {1}@{2:.0f} MHz'.format(i['Nuc'],i['Type'],i['v0'])
-                a.text(np.min(lbl),a.get_ylim()[1]*0.88,string,FontSize=8)
+                a.text(np.min(lbl),a.get_ylim()[1]*0.88,string,fontsize=8)
                 string=r'$\nu_r$={0} kHz, $\nu_1$={1} kHz'.format(i['vr'],i['v1'])
-                a.text(np.min(lbl),a.get_ylim()[1]*0.73,string,FontSize=8)
+                a.text(np.min(lbl),a.get_ylim()[1]*0.73,string,fontsize=8)
 #    fig.show()            
     return ax        
             
@@ -502,6 +508,7 @@ def subplot_setup(nexp,fig=None):
     
     ax=[fig.add_subplot(SZ[0],SZ[1],k+1) for k in range(ntop)]  #Top row plots
     ax.extend([fig.add_subplot(SZ[0],SZ[1],k+1+SZ[1]) for k in range(nexp-ntop)]) #Other plots
+    for a in ax[1:]:a.sharex(ax[0])
     
     xax=np.zeros(nexp,dtype=bool)
     xax[-SZ[1]:]=True
