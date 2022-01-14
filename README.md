@@ -32,4 +32,4 @@ Additionally, for 3D visualization, we use ChimeraX. In order to use the 3D visu
 
 All files are copyrighted under the GNU General Public License. A copy of the license has been provided in the file LICENSE
 
-Copyright 2021 Albert Smith-Penzel
+Copyright 2022 Albert Smith-Penzel, Kai Zumpfe
