@@ -286,10 +286,10 @@ def opt2dist(data,sens=None,parallel=True,return_dist=False,in_place=False,detec
     
     nb=data.R.shape[0]
     
-    if data.S2 is None:
+    if data.S2c is None:
         S2=np.zeros(nb)
     else:
-        S2=data.S2
+        S2=data.S2c
         
     if sens is None:
         sens=data.sens
@@ -318,14 +318,18 @@ def opt2dist(data,sens=None,parallel=True,return_dist=False,in_place=False,detec
     if detect is not None:
         Rc=list()
         if detect.detect_par['inclS2']:
+            S2c=list()
             for k in range(out.R.shape[0]):
                 R0in=np.concatenate((detect.R0in(k),[0]))
                 Rc0=np.dot(detect.r(bond=k),out.R[k,:])+R0in
                 Rc.append(Rc0[:-1])
+                S2c.append(Rc0[-1])
+            out.S2c=1-np.array(S2c)
         else:
             for k in range(out.R.shape[0]):
                 Rc.append(np.dot(detect.r(bond=k),out.R[k,:])+detect.R0in(k))
         out.Rc=np.array(Rc)
+    
     
     
     "Output"

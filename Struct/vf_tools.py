@@ -112,7 +112,7 @@ def norm(v0):
 #    length=np.sqrt(X**2+Y**2+Z**2)
 #    
 #    return v0/length
-    
+    v0=np.array(v0)
     return v0/np.sqrt((v0**2).sum(0))
 
 #%% Reverse rotation direction (passive/active)

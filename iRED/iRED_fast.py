@@ -177,6 +177,20 @@ def Mmat(vec,rank=2):
     
     M=np.eye(nb)
     
+    #Suppose vec in 3xNxNT
+    #rank2
+    # for k in range(3):
+    #     for j in range(k,3):
+    #         M+=(vec[k]@vec[j].T)*(1 if k==j else 2)
+    # M*=3/2/NT
+    # M+=-1/2
+    #rank 1
+    # for k in range(3):
+    #     M+=vec[k]@vec[j].T
+    # M*=1/NT
+            
+    
+    
     for k in range(0,nb-1):
         "These are the x,y,z positions for one bond"
         x0=np.repeat([X[k,:]],nb-k-1,axis=0)

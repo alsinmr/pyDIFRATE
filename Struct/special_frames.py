@@ -349,4 +349,73 @@ def membrane_grid(molecule,grid_pts,sigma=25,sel0=None,sel='type P',resids=None,
     return sub
     
     
+
+def hop(molecule,angle=np.arccos(np.sqrt(1/3)),sel1=None,sel2=None,sel3='auto',Nuc=None,resids=None,segids=None,filter_str=None,step=1):
+    """
+    Frame to separate hops from small motions.
+    Evaluates the orientation of the current frame relative to the previous 
+    frame (or several frames earlier, set step for more than one frame back)
+    If the change in orientation is less more than the given angle (default 54.74),
+    then this motion is registered as a hop, otherwise, the frame remains fixed.
     
+    Note that the size of the hop is not fixed, but instead is set so that motion
+    within the hop frame is 0 at that time step.
+    
+    Warning: as implemented, this frame cannot be used with sparse trajectory 
+    sampling!
+    
+    Thus far, I haven't gotten this frame to perform well - A.S., Jan. 2022
+    """
+    if Nuc is not None:
+        sel2,sel1=selt.protein_defaults(Nuc,molecule,resids,segids,filter_str)
+    else:
+        sel2,sel1=[selt.sel_simple(molecule,s,resids,segids,filter_str) for s in [sel1,sel2]]
+        
+    if isinstance(sel3,str) and sel3=='auto':
+        uni=sel1.universe
+        resids=np.unique(sel2.resids)
+        sel0=uni.residues[np.isin(uni.residues.resids,resids)].atoms
+        sel3=selt.find_bonded(sel2,sel0,exclude=sel1,n=1,sort='cchain')[0]
+    elif sel3 is not None:
+        sel3=selt.sel_simple(molecule,sel3,resids,segids,filter_str)
+    
+    uni=molecule.mda_object
+    uni.trajectory[0]
+    box=uni.dimensions[:3]
+    vZ0=vft.pbc_corr((sel1.positions-sel2.positions).T,box)
+    priorZ=[vZ0 for _ in range(step)] #List to keep track of previous frames
+   
+    vXZ0=vft.pbc_corr((sel3.positions-sel2.positions).T,box) if sel3 else None
+    priorXZ=[vXZ0 for _ in range(step)]
+    
+    threshold=np.cos(angle)
+
+    def sub():                
+        box=uni.dimensions[0:3]
+        vZ=vft.norm(vft.pbc_corr((sel1.positions-sel2.positions).T,box))
+        vXZ=vft.pbc_corr((sel3.positions-sel2.positions).T,box) if sel3 else None
+              
+        "Did a hop occur?"
+        hop=(priorZ[0]*vZ).sum(0)<threshold    
+
+        priorZ.append(vZ)
+        priorXZ.append(vXZ)      
+        
+        if np.any(hop):
+            scp=vft.getFrame(priorZ[-2][:,hop],priorXZ[-2][:,hop] if sel3 else None,return_angles=True)    #Find the frame of the previous orientation
+            vZt,vXZt,vZ,vXZ=[vft.R(v[:,hop],*vft.pass2act(*scp)) for v in [vZ0,vXZ0,vZ,vXZ]] #Apply that frame to the current orientation
+            sc=vft.getFrame(vZ,vXZ,return_angles=True)
+            "Rotate by motion acting on vZ,vXZ, rotate back into lab frame"
+            vZt,vXZt=[vft.R(vft.R(v,*sc),*scp) for v in [vZt,vXZt]]
+            vZ0[:,hop]=vZt 
+            
+        priorZ.pop(0)       #Pop out the earliest entry into priors
+        priorXZ.pop(0)
+        
+        
+        if sel3 is None:
+            return vZ0.copy()
+        if np.any(hop):
+            vXZ0[:,hop]=vXZt
+        return vZ0.copy(),vXZ0.copy()
+    return sub

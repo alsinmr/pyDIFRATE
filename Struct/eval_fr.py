@@ -224,7 +224,7 @@ class FrameObj():
             fun,fi,info=new_fun(Type,mol,**kwargs)
             if frame_index is None:frame_index=fi #Assign fi to frame_index if frame_index not provided
             f=fun()    #Output of the vector function (test its behavior)
-            nf=f[0].shape[1] if len(f)>1 else f.shape[1]
+            nf=f[0].shape[1] if isinstance(f,tuple) or isinstance(f,list) else f.shape[1]
             if fun is not None:
                 "Run some checks on the validity of the frame before storing it"
                 if frame_index is not None:
@@ -275,13 +275,13 @@ class FrameObj():
         self.vf=list()
         self.frame_info={'frame_index':list(),'label':None,'info':list()}
     
-    def load_frames(self,t0=0,tf=-1,n=10,nr=10,dt=None,index=None):
+    def load_frames(self,t0=0,tf=-1,n=10,nr=10,step=None,dt=None,index=None):
         """
         Sweeps through the trajectory and loads all frame and tensor vectors, 
         storing the result in vecs
         """
         tf=self.molecule.mda_object.trajectory.n_frames if tf==-1 or tf is None else int(tf)
-        index=trunc_t_axis(int(tf-t0),n,nr)+int(t0)
+        index=np.arange(t0,tf,step) if step is not None else trunc_t_axis(int(tf-t0),n,nr)+int(t0)
         if self.__frames_loaded:
             if np.all(self.vecs['index']==index):return
         self.vecs=mol2vec(self,dt=dt,index=index)
@@ -701,7 +701,8 @@ def frames2ct(mol=None,v=None,return_index=None,mode='full',n=100,nr=10,t0=0,tf=
             ct_m0_finF.append(a)
             A_m0_finF.append(b)
         ct_m0_finF=np.array(ct_m0_finF)
-        A_m0_finF=np.array(A_m0_finF)
+        if ri.calc_A_m0_finF:
+            A_m0_finF=np.array(A_m0_finF)
 #    elif ri[4] or ri[5]:
     elif ri.calc_A_m0_finF:
         "Calculate A_m0_finF if requested, or A_0m_finF requested"
